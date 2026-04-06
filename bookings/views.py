@@ -39,10 +39,12 @@ class SearchForm(forms.Form):
     pets = forms.BooleanField(required=False, label="Mascotas")
 
 def index(request):
-
     return render(request, "bookings/index.html", {
         "form": SearchForm()
     })
+
+def property(request):
+    return render(request, "bookings/property.html")
 
 def properties(request):
     if request.method != "GET":
