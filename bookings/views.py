@@ -43,8 +43,12 @@ def index(request):
         "form": SearchForm()
     })
 
-def property(request):
-    return render(request, "bookings/property.html")
+def property(request, property_id):
+    property = Property.objects.get(pk=property_id)
+
+    return render(request, "bookings/property.html", {
+        "property": property
+    })
 
 def properties(request):
     if request.method != "GET":

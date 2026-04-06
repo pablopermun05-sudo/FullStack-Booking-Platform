@@ -1,25 +1,81 @@
 {% extends "bookings/layout.html" %}
 
 {% block body %}
-
-<div class="row row-cols-1 row-cols-md-2 g-4">
-    <div class="col">
-        <div class="card">
-            <img src="..." class="card-img-top" alt="...">
-            <div class="card-body">
-                <h5 class="card-title">Card title</h5>
-                <p class="card-text">This is a longer card with supporting text below as a natural lead-in to additional
-                    content. This content is a little bit longer.</p>
+<div class="container pt-5 pb-5">
+    <div class="row g-4">
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="p-3 p-lg-5 pb-4">
+                    <h2 class="card-title fw-bold">{{ property.title }}</h2>
+                    <p class="card-text fw-bold fs-5 text-body-secondary"><i
+                            class="bi bi-geo-alt-fill text-danger pe-1"></i>{{ property.location }}</p>
+                </div>
+                <img src="{{ property.image.url }}" class="img-fluid object-fit-cover"
+                    style="max-height: 500px;">
+                <div class="p-3 p-lg-5">
+                    <h4 class="fw-bold fs-4 pb-3">Sobre este alojamiento</h4>
+                    <p class="card-text fs-6">{{ property.description }}</p>
+                </div>
             </div>
         </div>
-    </div>
-    <div class="col">
-        <div class="card">
-            <img src="..." class="card-img-top" alt="...">
-            <div class="card-body">
-                <h5 class="card-title">Card title</h5>
-                <p class="card-text">This is a longer card with supporting text below as a natural lead-in to additional
-                    content. This content is a little bit longer.</p>
+        <div class="col-lg-4">
+            <div class="card mb-5">
+                <div class="card-header bg-primary fs-5 fw-bold text-white text-center">
+                    Lo que ofrece
+                </div>
+                <div class="card-body">
+                    <ul class="list-group list-group-flush">
+                        <li class="list-group-item d-flex justify-content-between py-3">
+                            <span>Precio noche</span>
+                            <div class="fw-bold">{{ property.price_per_night }}€</div>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between py-4">
+                            <span>Capacidad</span>
+                            <div class="fw-bold">
+                                <div>
+                                    {% if property.adults == 1 %}
+                                        {{ property.adults }} adulto
+                                    {% else %}
+                                        {{ property.adults }} adultos
+                                    {% endif %}
+                                </div>
+                                <div>
+                                    {% if property.children == 1 %}
+                                        {{ property.children }} niño
+                                    {% else %}
+                                        {{ property.children }} niños
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between py-3">
+                            <span>Habitaciones</span>
+                            <div class="fw-bold">{{ property.rooms }}</div>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between py-3">
+                            <span>Mascotas</span>
+                            <div class="fw-bold">
+                            {% if property.pets %} Sí {% else %} No {% endif %}
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-header bg-warning fs-5 fw-bold text-white text-center"><i
+                        class="bi bi-calendar-check"></i> Tu Reserva</div>
+                <div class="card-body text-center">
+                    {% if user.is_authenticated %}
+                    {% else %}
+                    
+                        <i class="bi bi-person-lock fs-1"></i>
+                        <div class="py-3">
+                            <h6 class="fw-bold fs-5">Inicia sesión para reservar</h6>
+                            <p class="text-secondary fw-light small">Necesitas una cuenta para completar el proceso.</p>
+                        </div>
+                        <a href="{% url 'login' %}" class="primary-button d-block w-100 mb-3" id="login-button">Iniciar Sesión</a>    
+                    {% endif %}
+                </div>
             </div>
         </div>
     </div>
