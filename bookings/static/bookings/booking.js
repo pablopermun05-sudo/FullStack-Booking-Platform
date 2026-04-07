@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const alertDiv = document.querySelector('#alert-booking-date');
     const buttonDiv = document.querySelector('#booking-button');
     const datesDiv = document.querySelector('#datesDiv');
+    const occupiedDatesCard = document.querySelector('#occupied-dates-card');
 
     const startDate = document.querySelector('#start-date');
     const endDate = document.querySelector('#end-date');
@@ -53,6 +54,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         buttonDiv.style.display = 'none';
                         alertDiv.style.display = 'none';
                         datesDiv.style.display = 'none';
+                        occupiedDatesCard.style.display = 'none';
                         successBookingDiv.style.display = 'block';
                     }
                 })

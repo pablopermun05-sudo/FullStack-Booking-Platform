@@ -48,9 +48,12 @@ def index(request):
 
 def property(request, property_id):
     property = Property.objects.get(pk=property_id)
+    # Filter bookings that end today or in the future
+    active_bookings = property.bookings.filter(final_date__gte=date.today()).order_by('initial_date')
 
     return render(request, "bookings/property.html", {
-        "property": property
+        "property": property,
+        "active_bookings": active_bookings
     })
 
 def properties(request):
