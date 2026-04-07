@@ -11,6 +11,9 @@ from django.contrib.auth.forms import AuthenticationForm
 from django.http import JsonResponse
 from datetime import date
 from django.core.paginator import Paginator
+from django.contrib.auth.decorators import login_required
+import json
+from django.core.exceptions import ValidationError
 
 # Create your views here.
 class SearchForm(forms.Form):
@@ -133,6 +136,7 @@ def properties(request):
 
     return JsonResponse(properties, safe=False)
 
+@login_required
 def booking(request, property_id):
     initial_date = request.GET.get('start')
     final_date = request.GET.get('end')
@@ -166,6 +170,35 @@ def booking(request, property_id):
         
     except ValueError:
         return JsonResponse({"error": "Formato de fecha inválido."}, status=400)
+
+@login_required
+def confirm_booking(request, property_id):
+    if request.method == "POST":
+        try:
+            data = json.loads(request.body)
+            
+            initial_date = date.fromisoformat(data.get('start'))
+            final_date = date.fromisoformat(data.get('end'))
+
+            booking = Booking(
+                property_id=property_id,
+                tenant=request.user,
+                initial_date=initial_date,
+                final_date=final_date
+            )
+
+            try:
+                # Execute clean() method to control booking restrictions
+                booking.full_clean() 
+                booking.save()
+                return JsonResponse({"success": True})
+            except ValidationError as e:
+                print(e.message_dict)
+                return JsonResponse({"error": e.message_dict}, status=400)
+            
+        except json.JSONDecodeError:
+            print("ERROR:", e)
+            return JsonResponse({"error": "JSON inválido"}, status=400)
 
 class LoginForm(AuthenticationForm):
     error_messages = {

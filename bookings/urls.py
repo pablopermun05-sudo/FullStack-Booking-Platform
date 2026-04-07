@@ -9,5 +9,6 @@ urlpatterns = [
     path("property/<int:property_id>", views.property, name="property"),
     #API ROUTES
     path("properties/", views.properties, name="properties"),
-    path("booking/<int:property_id>/", views.booking, name="booking")
+    path("booking/<int:property_id>/", views.booking, name="booking"),
+    path("confirm_booking/<int:property_id>", views.confirm_booking, name="confirm_booking")
 ]
