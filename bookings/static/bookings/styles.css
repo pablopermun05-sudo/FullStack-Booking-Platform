@@ -89,8 +89,7 @@ button.primary-button {
     font-weight: 700;
     color: #495057;
 }
-
-#alert-form {
+.no-display {
     display: none;
 }
 

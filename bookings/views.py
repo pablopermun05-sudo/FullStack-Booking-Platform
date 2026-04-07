@@ -4,13 +4,16 @@ from django.http import HttpResponse, HttpResponseRedirect
 from django.contrib.auth import authenticate, login, logout
 from django.views.decorators.csrf import csrf_exempt
 from django.db import IntegrityError
-from .models import User, Property
+from .models import User, Property, Booking
 from django import forms
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.forms import AuthenticationForm
 from django.http import JsonResponse
 from datetime import date
 from django.core.paginator import Paginator
+from django.contrib.auth.decorators import login_required
+import json
+from django.core.exceptions import ValidationError
 
 # Create your views here.
 class SearchForm(forms.Form):
@@ -39,9 +42,18 @@ class SearchForm(forms.Form):
     pets = forms.BooleanField(required=False, label="Mascotas")
 
 def index(request):
-
     return render(request, "bookings/index.html", {
         "form": SearchForm()
+    })
+
+def property(request, property_id):
+    property = Property.objects.get(pk=property_id)
+    # Filter bookings that end today or in the future
+    active_bookings = property.bookings.filter(final_date__gte=date.today()).order_by('initial_date')
+
+    return render(request, "bookings/property.html", {
+        "property": property,
+        "active_bookings": active_bookings
     })
 
 def properties(request):
@@ -126,6 +138,70 @@ def properties(request):
         properties = []
 
     return JsonResponse(properties, safe=False)
+
+@login_required
+def booking(request, property_id):
+    initial_date = request.GET.get('start')
+    final_date = request.GET.get('end')
+
+    if not initial_date or not final_date:
+            return JsonResponse({"error": "Ambas fechas deben ser seleccionadas."}, status=400)
+
+    try:
+        # Convert dates from String into actual dates
+        initial_date = date.fromisoformat(initial_date)
+        final_date = date.fromisoformat(final_date)
+
+        if initial_date >= final_date:
+            return JsonResponse({"error": "La fecha de salida debe ser posterior a la de entrada."}, status=400)
+        elif initial_date < date.today():
+            return JsonResponse({"error": "La fecha de entrada no puede ser anterior al día de hoy."}, status=400)
+        else:
+            # Check for any overlapping bookings in the database
+            is_occupied = Booking.objects.filter(
+                property_id=property_id,
+                initial_date__lt=final_date,
+                final_date__gt=initial_date
+            ).exists()
+
+            if is_occupied:
+                return JsonResponse({"error": "El alojamiento ya está reservado en esas fechas."}, status=400)
+
+            return JsonResponse({
+                "available": True
+            })
+        
+    except ValueError:
+        return JsonResponse({"error": "Formato de fecha inválido."}, status=400)
+
+@login_required
+def confirm_booking(request, property_id):
+    if request.method == "POST":
+        try:
+            data = json.loads(request.body)
+            
+            initial_date = date.fromisoformat(data.get('start'))
+            final_date = date.fromisoformat(data.get('end'))
+
+            booking = Booking(
+                property_id=property_id,
+                tenant=request.user,
+                initial_date=initial_date,
+                final_date=final_date
+            )
+
+            try:
+                # Execute clean() method to control booking restrictions
+                booking.full_clean() 
+                booking.save()
+                return JsonResponse({"success": True})
+            except ValidationError as e:
+                print(e.message_dict)
+                return JsonResponse({"error": e.message_dict}, status=400)
+            
+        except json.JSONDecodeError:
+            print("ERROR:", e)
+            return JsonResponse({"error": "JSON inválido"}, status=400)
 
 class LoginForm(AuthenticationForm):
     error_messages = {

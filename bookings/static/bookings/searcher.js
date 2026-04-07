@@ -185,6 +185,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const aLink = document.createElement("a");
         aLink.classList.add("primary-button", "text-nowrap", "d-inline-flex", "justify-content-center", "fw-bold");
         aLink.textContent = "Ver Disponibilidad ";
+        aLink.href = PROPERTY_URL_BASE.replace("0", property.id);
         const iLink = document.createElement("i");
         iLink.classList.add("bi", "bi-chevron-right", "ms-1");
         aLink.appendChild(iLink);

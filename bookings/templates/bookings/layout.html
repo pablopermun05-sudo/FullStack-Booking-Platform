@@ -15,13 +15,13 @@
 <body>
     <nav class="navbar navbar-expand-xl fixed-top">
         <div class="container-fluid">
-            <a class="navbar-brand d-flex align-items-center" href="#">
+            <a class="navbar-brand d-flex align-items-center" href="{% url 'index' %}">
                 <img src="{% static 'bookings/alojamientovacacional.png' %}" alt="Logo" class="logo-custom">
             </a>
             <div class="offcanvas offcanvas-end" tabindex="-1" id="offcanvasNavbar"
                 aria-labelledby="offcanvasNavbarLabel">
                 <div class="offcanvas-header">
-                    <a class="navbar-brand d-flex align-items-center" href="#">
+                    <a class="navbar-brand d-flex align-items-center" href="{% url 'index' %}">
                         <img src="{% static 'bookings/alojamientovacacional.png' %}" alt="Logo" class="logo-custom-display">
                     </a>
                     <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
@@ -38,7 +38,7 @@
                             {% endif %}
                         </div>
                         <li class="nav-item">
-                            <a class="nav-link mx-lg-2 active" aria-current="page" href="#">Home</a>
+                            <a class="nav-link mx-lg-2 active" aria-current="page" href="{% url 'index' %}">Home</a>
                         </li>
                         <li class="nav-item">
                             <a class="nav-link mx-lg-2" href="#">Viviendas</a>
