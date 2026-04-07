@@ -4,7 +4,7 @@ from django.http import HttpResponse, HttpResponseRedirect
 from django.contrib.auth import authenticate, login, logout
 from django.views.decorators.csrf import csrf_exempt
 from django.db import IntegrityError
-from .models import User, Property
+from .models import User, Property, Booking
 from django import forms
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.forms import AuthenticationForm
@@ -132,6 +132,40 @@ def properties(request):
         properties = []
 
     return JsonResponse(properties, safe=False)
+
+def booking(request, property_id):
+    initial_date = request.GET.get('start')
+    final_date = request.GET.get('end')
+
+    if not initial_date or not final_date:
+            return JsonResponse({"error": "Ambas fechas deben ser seleccionadas."}, status=400)
+
+    try:
+        # Convert dates from String into actual dates
+        initial_date = date.fromisoformat(initial_date)
+        final_date = date.fromisoformat(final_date)
+
+        if initial_date >= final_date:
+            return JsonResponse({"error": "La fecha de salida debe ser posterior a la de entrada."}, status=400)
+        elif initial_date < date.today():
+            return JsonResponse({"error": "La fecha de entrada no puede ser anterior al día de hoy."}, status=400)
+        else:
+            # Check for any overlapping bookings in the database
+            is_occupied = Booking.objects.filter(
+                property_id=property_id,
+                initial_date__lt=final_date,
+                final_date__gt=initial_date
+            ).exists()
+
+            if is_occupied:
+                return JsonResponse({"error": "El alojamiento ya está reservado en esas fechas."}, status=400)
+
+            return JsonResponse({
+                "available": True
+            })
+        
+    except ValueError:
+        return JsonResponse({"error": "Formato de fecha inválido."}, status=400)
 
 class LoginForm(AuthenticationForm):
     error_messages = {
