@@ -90,7 +90,7 @@ button.primary-button {
     color: #495057;
 }
 
-#alert-form {
+#alert-form, #alert-booking-date {
     display: none;
 }
 
