@@ -56,6 +56,17 @@ def property(request, property_id):
         "active_bookings": active_bookings
     })
 
+def manage_property(request, property_id=None):
+    if property_id is None:
+        property = None
+    else :
+        property = Property.objects.get(pk=property_id)
+
+    return render(request, "bookings/propertyForm.html", {
+        "property": property
+    })
+    
+
 def properties(request):
     if request.method != "GET":
         return JsonResponse({"error": "Petición GET necesaria."}, status=400)
