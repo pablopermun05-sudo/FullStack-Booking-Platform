@@ -1,0 +1,31 @@
+{% extends "bookings/layout.html" %}
+{% load crispy_forms_tags %}
+
+{% block body %}
+<div class="d-flex justify-content-center mt-5">
+    <div class="card text-bg-light shadow-sm" style="width: 100%; max-width: 500px; margin-bottom: 30px;">
+        <div class="card-header text-center py-3">
+            <h2 class="mb-0">
+                {% if property %}
+                    Editar Vivienda
+                {% else %}
+                    Crear Vivienda
+                {% endif %}
+            </h2>
+        </div>
+        <div class="card-body p-4">
+            {% if property %}
+            <form action="{% url 'edit_property' property.id %}" method="post" enctype="multipart/form-data">
+            {% else %}
+            <form action="{% url 'create_property' %}" method="post" enctype="multipart/form-data">
+            {% endif %}
+                {% csrf_token %}
+                {{ form|crispy }}
+                <div class="d-grid gap-2 mb-3">
+                    <button class="primary-button" type="submit">Confirmar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
