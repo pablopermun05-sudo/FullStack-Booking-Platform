@@ -75,20 +75,25 @@ def manage_property(request, property_id=None):
         form = PropertyForm(instance=property)
 
     if request.method == "POST":
-        form = PropertyForm(request.POST, request.FILES, instance=property)
-        if form.is_valid():
-            # Create the object instance without saving to the database yet
-            property = form.save(commit=False)
-            property.owner = request.user
-            # Now we can save it
-            property.save()
-            
+        delete = request.POST.get('delete')
+        if property is not None and delete is not None:
+            property.delete()
             return HttpResponseRedirect(reverse("index"))
         else:
-            return render(request, "bookings/propertyForm.html", {
-                "property": property,
-                "form": form
-            })
+            form = PropertyForm(request.POST, request.FILES, instance=property)
+            if form.is_valid():
+                # Create the object instance without saving to the database yet
+                property = form.save(commit=False)
+                property.owner = request.user
+                # Now we can save it
+                property.save()
+                
+                return HttpResponseRedirect(reverse("index"))
+            else:
+                return render(request, "bookings/propertyForm.html", {
+                    "property": property,
+                    "form": form
+                })
     else:
         return render(request, "bookings/propertyForm.html", {
             "property": property,
