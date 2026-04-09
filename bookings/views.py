@@ -6,6 +6,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.db import IntegrityError
 from .models import User, Property, Booking
 from django import forms
+from django.forms import ModelForm
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.forms import AuthenticationForm
 from django.http import JsonResponse
@@ -56,6 +57,11 @@ def property(request, property_id):
         "active_bookings": active_bookings
     })
 
+class PropertyForm(ModelForm):
+    class Meta:
+        model = Property
+        fields = ("title", "description", "location", "image", "price_per_night", "children", "adults", "rooms", "allow_pets")
+
 def manage_property(request, property_id=None):
     if property_id is None:
         property = None
@@ -63,7 +69,8 @@ def manage_property(request, property_id=None):
         property = Property.objects.get(pk=property_id)
 
     return render(request, "bookings/propertyForm.html", {
-        "property": property
+        "property": property,
+        "form": PropertyForm()
     })
     
 
@@ -248,7 +255,7 @@ class RegisterForm(UserCreationForm):
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Elimina los textos de ayuda
+        # Delete help texts
         self.fields['username'].help_text = ""
         self.fields['password1'].help_text = ""
         self.fields['password2'].help_text = ""
