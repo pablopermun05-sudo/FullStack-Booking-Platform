@@ -15,18 +15,14 @@
         </div>
         <div class="card-body p-4">
             {% if property %}
-            <form action="{% url 'edit_property' property.id %}" method="post">
+            <form action="{% url 'edit_property' property.id %}" method="post" enctype="multipart/form-data">
             {% else %}
-            <form action="{% url 'create_property' %}" method="post">
+            <form action="{% url 'create_property' %}" method="post" enctype="multipart/form-data">
             {% endif %}
                 {% csrf_token %}
                 {{ form|crispy }}
                 <div class="d-grid gap-2 mb-3">
-                    {% if property %}
-                    <button class="primary-button" name="action" type="submit" value="edit">Confirmar</button>
-                    {% else %}
-                    <button class="primary-button" name="action" type="submit" value="create">Confirmar</button>
-                    {% endif %}
+                    <button class="primary-button" type="submit">Confirmar</button>
                 </div>
             </form>
         </div>

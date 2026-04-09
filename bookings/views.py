@@ -15,6 +15,7 @@ from django.core.paginator import Paginator
 from django.contrib.auth.decorators import login_required
 import json
 from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied
 
 # Create your views here.
 class SearchForm(forms.Form):
@@ -62,16 +63,37 @@ class PropertyForm(ModelForm):
         model = Property
         fields = ("title", "description", "location", "image", "price_per_night", "children", "adults", "rooms", "allow_pets")
 
+@login_required
 def manage_property(request, property_id=None):
     if property_id is None:
         property = None
+        form = PropertyForm()
     else :
         property = Property.objects.get(pk=property_id)
+        if property.owner != request.user:
+            raise PermissionDenied
+        form = PropertyForm(instance=property)
 
-    return render(request, "bookings/propertyForm.html", {
-        "property": property,
-        "form": PropertyForm()
-    })
+    if request.method == "POST":
+        form = PropertyForm(request.POST, request.FILES, instance=property)
+        if form.is_valid():
+            # Create the object instance without saving to the database yet
+            property = form.save(commit=False)
+            property.owner = request.user
+            # Now we can save it
+            property.save()
+            
+            return HttpResponseRedirect(reverse("index"))
+        else:
+            return render(request, "bookings/propertyForm.html", {
+                "property": property,
+                "form": form
+            })
+    else:
+        return render(request, "bookings/propertyForm.html", {
+            "property": property,
+            "form": form
+        })
     
 
 def properties(request):
