@@ -322,18 +322,46 @@ class RegisterForm(UserCreationForm):
         self.fields['password1'].help_text = ""
         self.fields['password2'].help_text = ""
 
-def register(request):
+class UserForm(ModelForm):
+    class Meta:
+        model = User
+        fields = ("first_name", "last_name", "username", "email", "phone_number")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Delete help texts
+        self.fields['username'].help_text = ""
+
+
+def manage_profile(request):
+    # If an authenticated user tries to access the registration URL, redirect them to edit profile
+    if request.user.is_authenticated and request.resolver_match.url_name == 'register':
+        return HttpResponseRedirect(reverse("edit_profile"))
+
+    # If an unauthenticated user tries to access the edit profile URL, redirect them to login
+    if not request.user.is_authenticated and request.resolver_match.url_name == 'edit_profile':
+        return HttpResponseRedirect(reverse("login"))
+
+    if request.user.is_authenticated:
+        form = UserForm(instance=request.user)
+    else:
+        form = RegisterForm()
+
     if request.method == "POST":
-        form = RegisterForm(request.POST)
+        if request.user.is_authenticated:
+            form = UserForm(request.POST, instance=request.user)
+        else:
+            form = RegisterForm(request.POST)
         if form.is_valid():
-            user = form.save() 
-            login(request, user)
+            user = form.save()
+            if not request.user.is_authenticated:
+                login(request, user)
             return HttpResponseRedirect(reverse("index"))
         else:
-            return render(request, "bookings/register.html", {
+            return render(request, "bookings/userForm.html", {
                 "form": form
             })
     else:
-        return render(request, "bookings/register.html", {
-            "form": RegisterForm()
+        return render(request, "bookings/userForm.html", {
+            "form": form
         })
