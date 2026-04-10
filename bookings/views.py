@@ -61,17 +61,27 @@ def property(request, property_id):
 @login_required
 def my_properties(request):
     properties = Property.objects.filter(owner=request.user)
+    
+    paginator = Paginator(properties, 6)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
 
     return render(request, "bookings/my_properties.html", {
-        "properties": properties
+        "properties": properties,
+        "page_obj": page_obj
     })
 
 @login_required
 def my_bookings(request):
     bookings = Booking.objects.filter(tenant=request.user)
 
+    paginator = Paginator(bookings, 6)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
     return render(request, "bookings/my_bookings.html", {
-        "bookings": bookings
+        "bookings": bookings,
+        "page_obj": page_obj
     })
 
 class PropertyForm(ModelForm):
