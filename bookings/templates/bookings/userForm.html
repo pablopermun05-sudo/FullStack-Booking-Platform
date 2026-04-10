@@ -5,19 +5,33 @@
 <div class="d-flex justify-content-center mt-5">
     <div class="card text-bg-light shadow-sm" style="width: 100%; max-width: 500px; margin-bottom: 30px;">
         <div class="card-header text-center py-3">
+            {% if request.user.is_authenticated %}
+            <h2 class="mb-0">Editar Perfil</h2>
+            {% else %}
             <h2 class="mb-0">Registrarse</h2>
+            {% endif %}
         </div>
         <div class="card-body p-4">
+            {% if request.user.is_authenticated %}
+            <form action="{% url 'edit_profile' %}" method="post">
+            {% else %}
             <form action="{% url 'register' %}" method="post">
+            {% endif %}
                 {% csrf_token %}
                 {{ form|crispy }}
                 <div class="d-grid gap-2 mb-3">
+                    {% if request.user.is_authenticated %}
+                    <button class="primary-button" type="submit" value="Edit">Confirmar</button>
+                    {% else %}
                     <button class="primary-button" type="submit" value="Register">Registrarse</button>
+                    {% endif %}
                 </div>
             </form>
+            {% if not request.user.is_authenticated %}
             <p class="text-center mb-0">
                 ¿Ya tienes cuenta? <a href="{% url 'login' %}">Inicia sesión aquí.</a>
             </p>
+            {% endif %}
         </div>
     </div>
 </div>

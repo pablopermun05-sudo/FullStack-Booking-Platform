@@ -40,14 +40,17 @@
                         <li class="nav-item">
                             <a class="nav-link mx-lg-2 active" aria-current="page" href="{% url 'index' %}">Home</a>
                         </li>
-                        <li class="nav-item">
-                            <a class="nav-link mx-lg-2" href="#">Viviendas</a>
+                        <li class="nav-item dropdown">
+                            <button class="nav-link dropdown-toggle mx-lg-2" data-bs-toggle="dropdown" aria-expanded="false">
+                                Viviendas
+                            </button>
+                            <ul class="dropdown-menu">
+                                <li><a class="dropdown-item" href="{% url 'create_property' %}">Registrar Vivienda</a></li>
+                                <li><a class="dropdown-item" href="{% url 'my_properties' %}">Mis Viviendas</a></li>
+                            </ul>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link mx-lg-2" href="#">Reservas</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link mx-lg-2" href="#">Sobre</a>
+                            <a class="nav-link mx-lg-2" href="{% url 'my_bookings' %}">Mis Reservas</a>
                         </li>
                     </ul>
                 </div>
@@ -55,7 +58,7 @@
             <div class="d-flex align-items-center buttons-container">
                 <div class="solo-pc">
                     {% if user.is_authenticated %}
-                        <a href="#" class="primary-button text-nowrap" id="edit-button">Editar Perfil</a>
+                        <a href="{% url 'edit_profile' %}" class="primary-button text-nowrap" id="edit-button">Editar Perfil</a>
                         <a href="{% url 'logout' %}" class="primary-button text-nowrap" id="log-out-button">Cerrar Sesión</a>
                     {% else %}
                         <a href="{% url 'login' %}" class="primary-button text-nowrap" id="login-button">Iniciar Sesión</a>

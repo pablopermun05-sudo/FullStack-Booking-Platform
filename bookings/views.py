@@ -58,6 +58,32 @@ def property(request, property_id):
         "active_bookings": active_bookings
     })
 
+@login_required
+def my_properties(request):
+    properties = Property.objects.filter(owner=request.user)
+    
+    paginator = Paginator(properties, 6)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    return render(request, "bookings/my_properties.html", {
+        "properties": properties,
+        "page_obj": page_obj
+    })
+
+@login_required
+def my_bookings(request):
+    bookings = Booking.objects.filter(tenant=request.user)
+
+    paginator = Paginator(bookings, 6)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    return render(request, "bookings/my_bookings.html", {
+        "bookings": bookings,
+        "page_obj": page_obj
+    })
+
 class PropertyForm(ModelForm):
     class Meta:
         model = Property
@@ -99,7 +125,16 @@ def manage_property(request, property_id=None):
             "property": property,
             "form": form
         })
-    
+
+@login_required   
+def delete_booking(request, booking_id):
+    if request.method == "POST":
+        booking = Booking.objects.get(pk=booking_id)
+        if booking.tenant != request.user:
+            raise PermissionDenied
+        else:
+            booking.delete()
+            return HttpResponseRedirect(reverse("my_bookings"))
 
 def properties(request):
     if request.method != "GET":
@@ -287,18 +322,46 @@ class RegisterForm(UserCreationForm):
         self.fields['password1'].help_text = ""
         self.fields['password2'].help_text = ""
 
-def register(request):
+class UserForm(ModelForm):
+    class Meta:
+        model = User
+        fields = ("first_name", "last_name", "username", "email", "phone_number")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Delete help texts
+        self.fields['username'].help_text = ""
+
+
+def manage_profile(request):
+    # If an authenticated user tries to access the registration URL, redirect them to edit profile
+    if request.user.is_authenticated and request.resolver_match.url_name == 'register':
+        return HttpResponseRedirect(reverse("edit_profile"))
+
+    # If an unauthenticated user tries to access the edit profile URL, redirect them to login
+    if not request.user.is_authenticated and request.resolver_match.url_name == 'edit_profile':
+        return HttpResponseRedirect(reverse("login"))
+
+    if request.user.is_authenticated:
+        form = UserForm(instance=request.user)
+    else:
+        form = RegisterForm()
+
     if request.method == "POST":
-        form = RegisterForm(request.POST)
+        if request.user.is_authenticated:
+            form = UserForm(request.POST, instance=request.user)
+        else:
+            form = RegisterForm(request.POST)
         if form.is_valid():
-            user = form.save() 
-            login(request, user)
+            user = form.save()
+            if not request.user.is_authenticated:
+                login(request, user)
             return HttpResponseRedirect(reverse("index"))
         else:
-            return render(request, "bookings/register.html", {
+            return render(request, "bookings/userForm.html", {
                 "form": form
             })
     else:
-        return render(request, "bookings/register.html", {
-            "form": RegisterForm()
+        return render(request, "bookings/userForm.html", {
+            "form": form
         })

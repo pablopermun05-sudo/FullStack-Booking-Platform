@@ -1,0 +1,65 @@
+{% extends "bookings/layout.html" %}
+
+{% block body %}
+{% for property in page_obj %}
+<div class="d-flex justify-content-center mt-5">
+   <div class="card border-light mb-3">
+      <div class="row g-0">
+         <div class="col-md-4">
+            <img src="{{ property.image.url }}" class="img-fluid rounded-start h-100 object-fit-cover"
+               alt="...">
+         </div>
+         <div class="col-md-8">
+            <div class="card-body">
+               <h4 class="card-title fw-bold">{{ property.title|truncatechars:50 }}</h4>
+               <p class="card-text"><i class="bi bi-geo-alt-fill text-danger"></i><small class="text-body-secondary">{{ property.location }}</small></p>
+               <p class="card-text mb-3">{{ property.description|truncatechars:160 }}</p>
+               <hr class="mt-1 mb-1">
+               <div class="d-flex flex-column flex-sm-row justify-content-between align-items-center align-items-sm-end gap-3 mt-3">
+                  <div class="text-center text-sm-start">
+                     <p class="card-text mb-0"><small class="text-body-secondary">Precio por noche</small></p>
+                     <p class="card-text fs-4 fw-bold text-primary mb-0">{{ property.price_per_night }}€</p>
+                  </div>
+                  <div class="d-flex flex-wrap gap-2 justify-content-center justify-content-sm-end">
+                     <a href="{% url 'edit_property' property.id %}" class="btn btn-secondary fw-bold rounded-pill">Editar</a>
+                     <form action="{% url 'edit_property' property.id %}" class="d-inline m-0" method="post">
+                        {% csrf_token %}
+                        <button class="btn btn-outline-danger fw-bold rounded-pill" type="submit" name="delete">Borrar</button>
+                    </form>
+                     <a href="{% url 'property' property.id %}" class="primary-button text-nowrap d-inline-flex justify-content-center fw-bold">Ver detalles <i class="bi bi-chevron-right ms-1"></i></a>
+                  </div>
+               </div>
+            </div>
+         </div>
+      </div>
+   </div>
+</div>
+{% endfor %}
+{% if page_obj.paginator.num_pages > 1 %}
+    <nav aria-label="Page navigation example" class="mt-2 mb-3">
+        <ul class="pagination justify-content-center">
+            {% if page_obj.has_previous %}
+                <li class="page-item">
+                    <a href="?page={{ page_obj.previous_page_number }}" class="page-link">Previous</a>
+                </li>
+            {% endif %}
+            {% for num in page_obj.paginator.page_range %}
+                {% if page_obj.number == num %}
+                    <li class="page-item active">
+                        <a class="page-link">{{ num }}</a>
+                    </li>
+                {% elif num > page_obj.number|add:'-3' and  num < page_obj.number|add:'3' %}
+                    <li class="page-item">
+                        <a href="?page={{ num }}" class="page-link">{{ num }}</a>
+                    </li>
+                {% endif %}
+            {% endfor %}
+            {% if page_obj.has_next %}
+                <li class="page-item">
+                    <a href="?page={{ page_obj.next_page_number }}" class="page-link">Next</a>
+                </li>
+            {% endif %}
+        </ul>
+    </nav>
+{% endif %}
+{% endblock %}
