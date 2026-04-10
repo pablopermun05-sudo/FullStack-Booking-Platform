@@ -58,6 +58,22 @@ def property(request, property_id):
         "active_bookings": active_bookings
     })
 
+@login_required
+def my_properties(request):
+    properties = Property.objects.filter(owner=request.user)
+
+    return render(request, "bookings/my_properties.html", {
+        "properties": properties
+    })
+
+@login_required
+def my_bookings(request):
+    bookings = Booking.objects.filter(tenant=request.user)
+
+    return render(request, "bookings/my_bookings.html", {
+        "bookings": bookings
+    })
+
 class PropertyForm(ModelForm):
     class Meta:
         model = Property
