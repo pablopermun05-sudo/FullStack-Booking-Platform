@@ -115,7 +115,16 @@ def manage_property(request, property_id=None):
             "property": property,
             "form": form
         })
-    
+
+@login_required   
+def delete_booking(request, booking_id):
+    if request.method == "POST":
+        booking = Booking.objects.get(pk=booking_id)
+        if booking.tenant != request.user:
+            raise PermissionDenied
+        else:
+            booking.delete()
+            return HttpResponseRedirect(reverse("my_bookings"))
 
 def properties(request):
     if request.method != "GET":

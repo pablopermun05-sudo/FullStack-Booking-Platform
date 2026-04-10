@@ -9,6 +9,7 @@ urlpatterns = [
     path("property/<int:property_id>", views.property, name="property"),
     path("property/create", views.manage_property, name="create_property"),
     path("property/edit/<int:property_id>", views.manage_property, name="edit_property"),
+    path("booking/delete/<int:booking_id>", views.delete_booking, name="delete_booking"),
     path("my_properties", views.my_properties, name="my_properties"),
     path("my_bookings", views.my_bookings, name="my_bookings"),
     #API ROUTES

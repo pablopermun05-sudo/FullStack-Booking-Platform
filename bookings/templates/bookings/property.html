@@ -9,23 +9,7 @@
             <div class="card">
                 <div class="p-3 p-lg-5 pb-4">
                     <h2 class="card-title fw-bold">{{ property.title }}</h2>
-                    {% if property.owner == request.user %}
-                    <div class="row">
-                        <div class="list-group-item d-flex justify-content-between">
-                            <div>
-                                <p class="card-text fw-bold fs-5 text-body-secondary"><i class="bi bi-geo-alt-fill text-danger pe-1"></i>{{ property.location }}</p>
-                            </div>
-                            <div>
-                                <form action="{% url 'edit_property' property.id %}" method="post">
-                                    {% csrf_token %}
-                                    <button class="btn btn-danger rounded-pill fw-bold" type="submit" name="delete">Borrar</button>
-                                </form>
-                            </div>
-                        </div>
-                    </div>
-                    {% else %}
-                        <p class="card-text fw-bold fs-5 text-body-secondary"><i class="bi bi-geo-alt-fill text-danger pe-1"></i>{{ property.location }}</p>
-                    {% endif %}
+                    <p class="card-text fw-bold fs-5 text-body-secondary"><i class="bi bi-geo-alt-fill text-danger pe-1"></i>{{ property.location }}</p>
                 </div>
                 <img src="{{ property.image.url }}" class="img-fluid object-fit-cover">
                 <div class="p-3 p-lg-5">

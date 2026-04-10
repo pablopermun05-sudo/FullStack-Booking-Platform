@@ -36,10 +36,13 @@
                         <span class="text-muted">Total reserva</span>
                         <span class="fw-bold">{{ booking.property.price_per_night }}€ / noche</span>
                     </div>
-
-                    <button class="btn btn-outline-danger w-100 fw-bold rounded-pill">
-                        Cancelar Reserva
-                    </button>
+                    <form action="{% url 'delete_booking' booking.id %}" method="post">
+                        {% csrf_token %}
+                        <button class="btn btn-outline-danger w-100 fw-bold rounded-pill">
+                            Cancelar Reserva
+                        </button>
+                    </form>
+                    
                 </div>
 
             </div>
