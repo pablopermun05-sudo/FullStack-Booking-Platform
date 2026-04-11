@@ -28,7 +28,11 @@
                     <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
                 </div>
                 <div class="offcanvas-body">
+                    {% if user.is_authenticated %}
                     <ul class="navbar-nav justify-content-center flex-grow-1 pe-3">
+                    {% else %}
+                    <ul class="navbar-nav justify-content-start ms-5 flex-grow-1 pe-3">
+                    {% endif %}
                         <div class="solo-movil mt-0">
                             {% if user.is_authenticated %}
                                 <a href="{% url 'edit_profile' %}" class="primary-button text-nowrap" id="edit-button" style="margin-bottom: 10px;">Editar Perfil</a>
@@ -41,6 +45,7 @@
                         <li class="nav-item">
                             <a class="nav-link mx-lg-2 active" aria-current="page" href="{% url 'index' %}">Home</a>
                         </li>
+                        {% if user.is_authenticated %}
                         <li class="nav-item dropdown">
                             <button class="nav-link dropdown-toggle mx-lg-2" data-bs-toggle="dropdown" aria-expanded="false">
                                 Viviendas
@@ -53,6 +58,7 @@
                         <li class="nav-item">
                             <a class="nav-link mx-lg-2" href="{% url 'my_bookings' %}">Mis Reservas</a>
                         </li>
+                        {% endif %}
                     </ul>
                 </div>
             </div>
