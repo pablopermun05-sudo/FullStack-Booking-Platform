@@ -1,6 +1,9 @@
 {% extends "bookings/layout.html" %}
 
 {% block body %}
+<div class="mt-3">
+   <h2 class="h2Views">Tus Viviendas:</h2>
+</div>
 {% for property in page_obj %}
 <div class="d-flex justify-content-center mt-5">
    <div class="card border-light mb-3">
@@ -33,6 +36,14 @@
          </div>
       </div>
    </div>
+</div>
+{% empty %}
+<div class="text-center mt-5 p-5 bg-dark bg-opacity-25 rounded-4 text-white">
+    <h3 class="fw-bold">¡Vaya! No tienes viviendas registradas</h3>
+    <p class="mb-4">Parece que aún no has compartido ninguna propiedad con nosotros.</p>
+    <a href="{% url 'create_property' %}" class="btn btn-primary rounded-pill px-4 fw-bold">
+        Registrar mi primera vivienda
+    </a>
 </div>
 {% endfor %}
 {% if page_obj.paginator.num_pages > 1 %}

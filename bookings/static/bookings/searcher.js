@@ -90,7 +90,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             })
             .catch(error => {
-                alertDiv.textContent = error.error;
+                alertDiv.textContent = error.error || "Error inesperado.";
                 alertDiv.style.display = 'block';
             })
             .finally(() => {
