@@ -16,6 +16,7 @@ from django.contrib.auth.decorators import login_required
 import json
 from django.core.exceptions import ValidationError
 from django.core.exceptions import PermissionDenied
+from django.shortcuts import get_object_or_404
 
 # Create your views here.
 class SearchForm(forms.Form):
@@ -49,7 +50,7 @@ def index(request):
     })
 
 def property(request, property_id):
-    property = Property.objects.get(pk=property_id)
+    property = get_object_or_404(Property, pk=property_id)
     # Filter bookings that end today or in the future
     active_bookings = property.bookings.filter(final_date__gte=date.today()).order_by('initial_date')
 
@@ -95,7 +96,7 @@ def manage_property(request, property_id=None):
         property = None
         form = PropertyForm()
     else :
-        property = Property.objects.get(pk=property_id)
+        property = get_object_or_404(Property, pk=property_id)
         if property.owner != request.user:
             raise PermissionDenied
         form = PropertyForm(instance=property)
@@ -129,7 +130,7 @@ def manage_property(request, property_id=None):
 @login_required   
 def delete_booking(request, booking_id):
     if request.method == "POST":
-        booking = Booking.objects.get(pk=booking_id)
+        booking = get_object_or_404(Booking, pk=booking_id)
         if booking.tenant != request.user:
             raise PermissionDenied
         else:
