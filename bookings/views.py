@@ -281,7 +281,6 @@ def confirm_booking(request, property_id):
                 return JsonResponse({"error": e.message_dict}, status=400)
             
         except json.JSONDecodeError:
-            print("ERROR:", e)
             return JsonResponse({"error": "JSON inválido"}, status=400)
 
 class LoginForm(AuthenticationForm):

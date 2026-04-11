@@ -3,7 +3,6 @@ let successBooking = false;
 document.addEventListener('DOMContentLoaded', () => {
     const propertyId = document.querySelector('#property-id').value;
 
-    const successBookingDiv = document.querySelector('#success-confirm-booking');
     const alertDiv = document.querySelector('#alert-booking-date');
     const buttonDiv = document.querySelector('#booking-button');
     const datesDiv = document.querySelector('#datesDiv');
@@ -50,12 +49,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 })
                 .then(data => {
                     if(data.success) {
-                        successBooking = true;
-                        buttonDiv.style.display = 'none';
-                        alertDiv.style.display = 'none';
-                        datesDiv.style.display = 'none';
-                        occupiedDatesCard.style.display = 'none';
-                        successBookingDiv.style.display = 'block';
+                        window.location.href = "/my_bookings";
                     }
                 })
                 .catch(error => {
@@ -67,8 +61,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function validateBooking() {
-
-        if (!successBooking && startDate.value != "" && endDate.value != "") {
+        if (startDate.value != "" && endDate.value != "") {
             const initialDate = new Date(startDate.value);
             const finalDate = new Date(endDate.value);
             const today = new Date();
@@ -104,6 +97,8 @@ document.addEventListener('DOMContentLoaded', () => {
                             button.textContent = "Confirmar Reserva";
                             button.className = "btn btn-dark w-100 rounded-pill mt-3 mb-3 py-2";
                             button.addEventListener('click', () => {
+                                button.disabled = true;
+                                button.textContent = "Procesando...";
                                 confirmBooking(startDate.value, endDate.value);
                             });
                             buttonDiv.appendChild(button);
@@ -112,7 +107,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     })
                     .catch(error => {
                         buttonDiv.style.display = 'none';
-                        alertDiv.textContent = error.error;
+                        alertDiv.textContent = error.error || "Error inesperado.";
                         alertDiv.style.display = 'block';
                     })
             }
