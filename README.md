@@ -145,3 +145,10 @@ python manage.py test
 * Advanced analytics dashboard for property owners
 
 ---
+
+---
+
+## Demo Video
+
+You can watch a full demonstration of the project at the following link:
+https://www.youtube.com/watch?v=J4eDWVUwl0I
