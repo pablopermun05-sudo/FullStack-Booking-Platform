@@ -146,8 +146,6 @@ python manage.py test
 
 ---
 
----
-
 ## Demo Video
 
 You can watch a full demonstration of the project at the following link:
