@@ -10,6 +10,9 @@ body {
 .navbar {
     background-color: white;
     height: 100px;
+    margin: 20px;
+    border-radius: 16px;
+    padding: 0.5rem;
 }
 
 .primary-button {
@@ -138,17 +141,23 @@ button.primary-button {
 .solo-movil { display: none; }
 .solo-pc { display: flex; }
 
-@media (max-width: 750px) {
+@media (max-width: 770px) {
     .solo-pc { display: none; }
     .solo-movil { display: flex; flex-direction: row; flex-wrap: wrap; }
     .login-button { padding: 8px 15px; font-size: 13px; }
     .offcanvas-body { padding-top: 0 !important; }
 }
 
-@media (max-width: 465px) {
+@media (max-width: 518px) {
     .logo-custom { height: 43px; }
 }
 
 @media (max-width: 400px) {
     .logo-custom-display { height: 50px; }
+}
+
+@media (max-width: 380px) {
+    .navbar {
+        height: 120px;
+    }
 }
