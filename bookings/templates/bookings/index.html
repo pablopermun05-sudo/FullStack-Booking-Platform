@@ -3,7 +3,7 @@
 {% load crispy_forms_tags %}
 
 {% block body %}
-<div class="mt-3">
+<div class="mt-5">
    <h1 class="text-center" id="h1Index">RESERVA TU ALQUILER VACACIONAL</h1>
 </div>
 
@@ -17,12 +17,15 @@
             <div class="col-6 col-md-4 col-lg-2">
                {{ form.location|as_crispy_field }}
             </div>
-            <div class="col-6 col-md-4 col-lg-2">
-               {{ form.initial_date|as_crispy_field }}
+            <div class="col-11 col-md-4 col-lg-3">
+            <div class="mb-3">
+                  <label for="booking-dates" class="form-label requiredField">Fechas (Entrada - Salida)</label>
+                  <input type="text" id="booking-dates" class="form-control" placeholder="Selecciona las fechas" readonly>
+               </div>
             </div>
-            <div class="col-6 col-md-4 col-lg-2">
-               {{ form.final_date|as_crispy_field }}
-            </div>
+
+            <input type="hidden" name="initial_date" id="id_initial_date">
+            <input type="hidden" name="final_date" id="id_final_date">
             <div class="col-4 col-md-2 col-lg-1">
                {{ form.adults|as_crispy_field }}
             </div>
@@ -51,6 +54,32 @@
 
 {% endblock %}
 {% block script %}
+<script src="https://cdn.jsdelivr.net/npm/litepicker/dist/litepicker.js"></script>
+
+<script>
+
+document.addEventListener("DOMContentLoaded", function() {
+    const picker = new Litepicker({
+        element: document.getElementById('booking-dates'),
+        singleMode: false,
+        numberOfMonths: 2,
+        numberOfColumns: 2,
+        format: 'DD/MM/YYYY',
+        minDate: new Date(),
+        tooltipText: {
+            one: 'noche',
+            other: 'noches'
+        },
+        setup: (picker) => {
+            picker.on('selected', (date1, date2) => {
+                document.getElementById('id_initial_date').value = date1.format('YYYY-MM-DD');
+                document.getElementById('id_final_date').value = date2.format('YYYY-MM-DD');
+            });
+        }
+    });
+});
+</script>
+
 <script>const PROPERTY_URL_BASE = "/property/0";</script>
 <script src="{% static 'bookings/searcher.js' %}"></script>
 {% endblock %}
