@@ -165,8 +165,8 @@ def properties(request):
         initial_date = date.fromisoformat(initial_date)
         final_date = date.fromisoformat(final_date)
 
-        if initial_date >= final_date:
-            return JsonResponse({"error": "La fecha de salida debe ser posterior a la de entrada."}, status=400)
+        if initial_date > final_date:
+            return JsonResponse({"error": "La fecha de salida debe ser igual o posterior a la de entrada."}, status=400)
         elif initial_date < date.today():
             return JsonResponse({"error": "La fecha de entrada no puede ser anterior al día de hoy."}, status=400)
 
