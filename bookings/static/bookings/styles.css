@@ -10,47 +10,106 @@ body {
 .navbar {
     background-color: white;
     height: 100px;
+    margin: 20px;
+    border-radius: 16px;
+    padding: 0.5rem;
 }
 
+/* Clase base para todos los botones del header */
 .primary-button {
-    background-color: #0078D7;
-    color: #fff;
+    font-family: 'Arial', sans-serif;
     font-size: 14px;
+    font-weight: 700;
     padding: 8px 20px;
     border-radius: 50px;
     text-decoration: none;
-    transition: 0.3s background-color;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.3s ease;
+    border: none;
+    cursor: pointer;
     margin-right: 10px;
 }
 
-button.primary-button {
-    border: none;
-    font: inherit;
-    cursor: pointer;
-    outline: none;
-    appearance: none;
-}
-
+/* Botón Iniciar Sesión / Editar Perfil */
 #login-button, #edit-button {
-    background-color: black;
+    background-color: #111111;
+    color: #ffffff !important;
 }
 
-#log-out-button {
-    background-color: #ff4d4d;
+#login-button:hover, #edit-button:hover {
+    background-color: #333333;
 }
 
-.login-button:hover {
+/* Botón Registrarse */
+#sign-up-button {
+    background-color: #0078D7;
+    color: #ffffff !important;
+}
+
+#sign-up-button:hover {
     background-color: #005A9E;
 }
 
+/* Botón Cerrar Sesión */
+#log-out-button {
+    background-color: #fee2e2;
+    color: #dc2626 !important;
+    border: 1px solid #fca5a5;
+}
+
 #log-out-button:hover {
-    background-color: #e60000;
+    background-color: #dc2626;
+    color: #ffffff !important;
+    border-color: #dc2626;
 }
 
 .nav-link {
     color: #666777;
     font-weight: 500;
     font-family: 'Arial', sans-serif;
+}
+
+/* Estilo para el texto en negrita */
+.navbar-nav .nav-link {
+    color: #666777 !important;
+    font-weight: 700 !important; /* Fuerza la negrita en todos los textos */
+    font-family: 'Arial', sans-serif;
+    position: relative;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    padding-bottom: 6px !important;
+    margin-left: 18px;
+    margin-right: 18px;
+    display: inline-block;
+}
+
+/* Cambia a negro al pasar el cursor o estar activo manteniendo la negrita */
+.navbar-nav .nav-link:hover, 
+.navbar-nav .nav-link.active {
+    color: #000000 !important;
+    font-weight: 700 !important;
+}
+
+/* Mantiene línea dorada con el tamaño correcto del texto */
+.navbar-nav .nav-link::before {
+    content: "";
+    position: absolute;
+    align-items: center;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 2px;
+    background-color: goldenrod;
+    transform: scaleX(0);
+    transform-origin: center;
+    transition: transform 0.3s ease-in-out;
+}
+
+.navbar-nav .nav-link:hover::before, 
+.navbar-nav .nav-link.active::before {
+    transform: scaleX(1);
 }
 
 .alert ul {
@@ -98,17 +157,23 @@ button.primary-button {
 .solo-movil { display: none; }
 .solo-pc { display: flex; }
 
-@media (max-width: 750px) {
+@media (max-width: 792px) {
     .solo-pc { display: none; }
     .solo-movil { display: flex; flex-direction: row; flex-wrap: wrap; }
     .login-button { padding: 8px 15px; font-size: 13px; }
     .offcanvas-body { padding-top: 0 !important; }
 }
 
-@media (max-width: 465px) {
+@media (max-width: 518px) {
     .logo-custom { height: 43px; }
 }
 
 @media (max-width: 400px) {
     .logo-custom-display { height: 50px; }
+}
+
+@media (max-width: 380px) {
+    .navbar {
+        height: 120px;
+    }
 }
