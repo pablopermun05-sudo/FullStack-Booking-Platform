@@ -67,8 +67,8 @@ class Booking(models.Model):
 
     def clean(self):
         # Primero validamos que las fechas tengan sentido
-        if self.initial_date >= self.final_date:
-            raise ValidationError("La fecha de salida debe ser posterior a la de entrada.")
+        if self.initial_date > self.final_date:
+            raise ValidationError("La fecha de salida debe ser igual o posterior a la de entrada.")
 
         # Comprobamos que la fecha inicial sea igual o posterior al día de hoy
         if self.initial_date < date.today():

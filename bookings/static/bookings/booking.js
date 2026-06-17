@@ -71,9 +71,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 buttonDiv.style.display = 'none';
                 alertDiv.textContent = "La fecha de entrada no puede ser anterior al día de hoy.";
                 alertDiv.style.display = 'block';
-            } else if (initialDate >= finalDate) {
+            } else if (initialDate > finalDate) {
                 buttonDiv.style.display = 'none';
-                alertDiv.textContent = "La fecha de salida debe ser posterior a la de entrada.";
+                alertDiv.textContent = "La fecha de salida debe ser igual o posterior a la de entrada.";
                 alertDiv.style.display = 'block';
             } else {
                 alertDiv.style.display = 'none';

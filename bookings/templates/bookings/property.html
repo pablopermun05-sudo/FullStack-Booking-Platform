@@ -69,20 +69,18 @@
                         <div id="datesDiv">
                             <div class="py-3">
                                 <h6 class="fw-bold fs-5">Selecciona la fecha de tu estancia</h6>
-                                <p class="text-secondary fw-light small">Elige tus fechas para comprobar la disponibilidad y
-                                    reservar.</p>
+                                <p class="text-secondary fw-light small">Elige tus fechas para comprobar la disponibilidad y reservar.</p>
                             </div>
-                            <div class="d-flex flex-wrap gap-2 justify-content-center">
-                                <div class="text-center flex-fill" style="min-width: 150px;">
-                                    <p class="text-secondary fw-light small mb-1">Fecha de inicio</p>
-                                    <input type="date" id="start-date" class="form-control">
-                                </div>
-                                <div class="text-center flex-fill" style="min-width: 150px;">
-                                    <p class="text-secondary fw-light small mb-1">Fecha de fin</p>
-                                    <input type="date" id="end-date" class="form-control">
-                                </div>
+                            <div class="mb-3">
+                                <input type="text" id="booking-range" class="form-control text-center fw-bold" placeholder="Selecciona el rango de fechas" readonly>
                             </div>
                         </div>
+
+                        <input type="hidden" id="start-date">
+                        <input type="hidden" id="end-date">
+
+                        <input type="hidden" id="booked-dates-raw" value="{% for booking in active_bookings %}{{ booking.initial_date|date:'Y-m-d' }},{{ booking.final_date|date:'Y-m-d' }}{% if not forloop.last %},{% endif %}{% endfor %}">
+                            
                         <div class="alert alert-danger mt-3 mb-0 no-display" id="alert-booking-date" role="alert"></div>
                         <div class="mt-3 mb-0 no-display" id="booking-button"></div>
                         {% else %}
@@ -95,32 +93,56 @@
                         {% endif %}
                     </div>
                 </div>
-                <div class="card" id="occupied-dates-card">
-                    <div class="card-header bg-dark fs-5 fw-bold text-white text-center">
-                        Fechas ocupadas
-                    </div>
-                    <div class="card-body">
-                        <ul class="list-group list-group-flush">
-                            {% for booking in active_bookings %}
-                            <li class="list-group-item d-flex justify-content-between align-items-center px-0 py-2">
-                                <span class="small text-muted">{{ booking.initial_date|date:"d/m/Y" }} - {{ booking.final_date|date:"d/m/Y" }}</span>
-                                <span class="badge rounded-pill bg-danger">Reservado</span>
-                            </li>
-                            {% empty %}
-                            <li class="list-group-item px-0 py-2 border-0 text-center fs-6 fw-bold">
-                                Sin reservas próximas. ¡Aprovecha!
-                            </li>
-                            {% endfor %}
-                        </ul>
-                    </div>
-                </div>
             {% endif %}
         </div>
     </div>
 </div>
 {% endblock %}
+
 {% block script %}
 {% if request.user != property.owner %}
+<script src="https://cdn.jsdelivr.net/npm/litepicker/dist/litepicker.js"></script>
+
+<script>
+const rawData = document.getElementById('booked-dates-raw').value;
+const bookedDates = [];
+
+if (rawData) {
+    const datesArray = rawData.split(',');
+    for (let i = 0; i < datesArray.length; i += 2) {
+        if (datesArray[i] && datesArray[i+1]) {
+            bookedDates.push([datesArray[i], datesArray[i+1]]);
+        }
+    }
+}
+
+const picker = new Litepicker({
+    element: document.getElementById('booking-range'),
+    singleMode: false,
+    numberOfMonths: 1,
+    numberOfColumns: 1,
+    format: 'DD/MM/YYYY',
+    minDate: new Date(),
+    lockDays: bookedDates, // Parámetro nativo correcto para bloquear e impedir selección
+    disallowedDatesRanges: bookedDates, 
+    selectForward: false,
+    lockDaysInversed: false, // Cambiado a false para bloquear estrictamente dentro del rango de reservas
+    setup: (picker) => {
+        picker.on('selected', (date1, date2) => {
+            const startInput = document.getElementById('start-date');
+            const endInput = document.getElementById('end-date');
+            
+            startInput.value = date1.format('YYYY-MM-DD');
+            endInput.value = date2.format('YYYY-MM-DD');
+
+            // Notifica de forma limpia a tu archivo booking.js
+            startInput.dispatchEvent(new Event('change'));
+            endInput.dispatchEvent(new Event('change'));
+        });
+    }
+});
+</script>
+
 <script src="{% static 'bookings/booking.js' %}"></script>
 {% endif %}
 {% endblock %}
