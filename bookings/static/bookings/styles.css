@@ -157,6 +157,21 @@ body {
 .solo-movil { display: none; }
 .solo-pc { display: flex; }
 
+/* Estilo base para todos los días bloqueados */
+.litepicker .container__days .day-item.is-locked {
+    background-color: #dc3545 !important;
+    color: #ffffff !important;
+    opacity: 0.8;
+    cursor: not-allowed !important;
+    border-radius: 0;
+}
+
+/* Mantener consistencia visual al pasar el ratón */
+.litepicker .container__days .day-item.is-locked:hover {
+    background-color: #bd2130 !important;
+    color: #ffffff !important;
+}
+
 @media (max-width: 792px) {
     .solo-pc { display: none; }
     .solo-movil { display: flex; flex-direction: row; flex-wrap: wrap; }
