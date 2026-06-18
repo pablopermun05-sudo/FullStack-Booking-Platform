@@ -27,6 +27,7 @@ class PropertyTestCase(TestCase):
             children=2,
             adults=2,
             rooms=2,
+            notice_period_days=0,
             owner=self.u1
         )
 
@@ -39,6 +40,7 @@ class PropertyTestCase(TestCase):
             children=0,
             adults=1,
             rooms=1,
+            notice_period_days=3,
             owner=self.u1
         )
 
@@ -51,6 +53,7 @@ class PropertyTestCase(TestCase):
             children=0,
             adults=1,
             rooms=1,
+            notice_period_days=0,
             owner=self.u1
         )
 
@@ -63,6 +66,7 @@ class PropertyTestCase(TestCase):
             children=0,
             adults=1,
             rooms=1,
+            notice_period_days=0,
             owner=self.u1
         )
 
@@ -75,6 +79,7 @@ class PropertyTestCase(TestCase):
             children=0,
             adults=0,
             rooms=1,
+            notice_period_days=0,
             owner=self.u1
         )
 
@@ -87,6 +92,21 @@ class PropertyTestCase(TestCase):
             children=0,
             adults=2,
             rooms=0,
+            notice_period_days=0,
+            owner=self.u1
+        )
+        
+        # Nueva propiedad de prueba para validar que no sea negativa la antelación
+        self.p_negative_notice = Property(
+            title="Error Antelación Negativa",
+            description="Desc",
+            location="Madrid",
+            image="test.jpg",
+            price_per_night=50,
+            children=0,
+            adults=2,
+            rooms=1,
+            notice_period_days=-5,  # Valor inválido
             owner=self.u1
         )
 
@@ -98,32 +118,25 @@ class PropertyTestCase(TestCase):
             self.fail("Should not raise ValidationError")
 
     def test_invalid_property_free_price(self):
-        try:
+        with self.assertRaises(ValidationError):
             self.p_free.full_clean()
-            self.fail("Should raise ValidationError")
-        except ValidationError:
-            pass
 
     def test_invalid_property_negative_price(self):
-        try:
+        with self.assertRaises(ValidationError):
             self.p_negative.full_clean()
-            self.fail("Should raise ValidationError")
-        except ValidationError:
-            pass
 
     def test_invalid_property_adults(self):
-        try:
+        with self.assertRaises(ValidationError):
             self.p_no_adults.full_clean()
-            self.fail("Should raise ValidationError")
-        except ValidationError:
-            pass
 
     def test_invalid_property_rooms(self):
-        try:
+        with self.assertRaises(ValidationError):
             self.p_no_rooms.full_clean()
-            self.fail("Should raise ValidationError")
-        except ValidationError:
-            pass
+
+    #Verifica que la base de datos o el validador rechacen antelaciones negativas
+    def test_invalid_property_negative_notice_days(self):
+        with self.assertRaises(ValidationError):
+            self.p_negative_notice.full_clean()
 
 class BookingTestCase(TestCase):
 
@@ -180,3 +193,70 @@ class BookingTestCase(TestCase):
             self.fail("Should raise ValidationError")
         except ValidationError:
             pass
+
+    # Test que verifica que una reserva puede empezar el mismo día que otra termina
+    def test_overlap_booking_sharing_checkout_day(self):
+        self.booking1.save()
+
+        # Esta reserva empieza justo el día que la anterior se va
+        booking_same_day = Booking(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=self.booking1.final_date,
+            final_date=self.booking1.final_date + timedelta(days=2),
+        )
+        try:
+            booking_same_day.full_clean()
+        except ValidationError:
+            self.fail(
+                "Debería permitir reservar si el check-in coincide con el check-out de otra reserva."
+            )
+
+    # Test que verifica que se respeta el periodo de antelación de la propiedad
+    def test_booking_notice_period_error(self):
+        # Forzamos que la propiedad pida 3 días de antelación
+        self.property.notice_period_days = 3
+        self.property.save()
+
+        # Intentamos reservar para mañana (solo 1 día de antelación)
+        invalid_booking = Booking(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=date.today() + timedelta(days=1),
+            final_date=date.today() + timedelta(days=3),
+        )
+
+        with self.assertRaises(ValidationError):
+            invalid_booking.full_clean()
+
+    def test_owner_cannot_book_own_property(self):
+        booking_by_owner = Booking(
+            tenant=self.owner,  # El propietario intenta reservar
+            property=self.property,
+            initial_date=date.today() + timedelta(days=5),
+            final_date=date.today() + timedelta(days=7),
+        )
+        with self.assertRaises(ValidationError):
+            booking_by_owner.full_clean()
+
+    def test_invalid_booking_dates(self):
+        booking = Booking(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=date.today() + timedelta(days=5),
+            final_date=date.today() + timedelta(days=3),
+        )
+
+        with self.assertRaises(ValidationError):
+            booking.full_clean()
+
+    def test_booking_same_checkin_checkout_date(self):
+        booking = Booking(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=date.today() + timedelta(days=5),
+            final_date=date.today() + timedelta(days=5),
+        )
+
+        with self.assertRaises(ValidationError):
+            booking.full_clean()

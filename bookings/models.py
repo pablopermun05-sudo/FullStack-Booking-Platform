@@ -3,7 +3,7 @@ from django.conf import settings
 from django.db import models
 from phonenumber_field.modelfields import PhoneNumberField
 from django.core.exceptions import ValidationError
-from datetime import date
+from datetime import date, timedelta
 
 class User(AbstractUser):
     first_name = models.CharField("Nombre", max_length=150, blank=False)
@@ -27,6 +27,7 @@ class Property(models.Model):
     children = models.PositiveIntegerField()
     adults = models.PositiveIntegerField()
     rooms = models.PositiveIntegerField()
+    notice_period_days = models.PositiveIntegerField(default=0)
     allow_pets = models.BooleanField(default=False)
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="properties")
     
@@ -67,16 +68,20 @@ class Booking(models.Model):
 
     def clean(self):
         # Primero validamos que las fechas tengan sentido
-        if self.initial_date > self.final_date:
-            raise ValidationError("La fecha de salida debe ser igual o posterior a la de entrada.")
+        if self.initial_date >= self.final_date:
+            raise ValidationError("La fecha de salida debe ser posterior a la de entrada.")
+        
+        min_allowed_date = date.today() + timedelta(
+            days=self.property.notice_period_days
+        )
 
-        # Comprobamos que la fecha inicial sea igual o posterior al día de hoy
-        if self.initial_date < date.today():
-            raise ValidationError("La fecha de entrada no puede ser anterior al día de hoy.")
+        # Comprobamos que la fecha inicial cumpla con la antelación exigida por el propietario de la vivienda
+        if self.initial_date < min_allowed_date:
+            raise ValidationError("La fecha de entrada debe cumplir con la antelación exigida por el propietario de la vivienda.")
 
-         # El dueño no puede reservar su propiedad
+        # El dueño no puede reservar su propiedad
         if self.tenant == self.property.owner:
-             raise ValidationError("No puedes reservar tu propia vivienda.")
+            raise ValidationError("No puedes reservar tu propia vivienda.")
 
         # Buscamos reservas existentes que choquen
         bookings = Booking.objects.filter(
