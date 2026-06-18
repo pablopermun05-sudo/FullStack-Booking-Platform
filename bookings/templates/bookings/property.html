@@ -108,11 +108,27 @@
 const rawData = document.getElementById('booked-dates-raw').value;
 const bookedDates = [];
 
+const arrivalDates = [];
+const departureDates = [];
+
 if (rawData) {
     const datesArray = rawData.split(',');
     for (let i = 0; i < datesArray.length; i += 2) {
         if (datesArray[i] && datesArray[i+1]) {
-            bookedDates.push([datesArray[i], datesArray[i+1]]);
+            arrivalDates.push(datesArray[i]);
+            departureDates.push(datesArray[i + 1]);
+
+            const start = new Date(datesArray[i]);
+            start.setDate(start.getDate() + 1);
+
+            const startStr = start.toISOString().split('T')[0];
+
+            const end = new Date(datesArray[i + 1]);
+            end.setDate(end.getDate() - 1);
+
+            const endStr = end.toISOString().split('T')[0];
+
+            bookedDates.push([startStr, endStr]);
         }
     }
 }
@@ -124,6 +140,21 @@ const minBookingDate = new Date();
 minBookingDate.setDate(minBookingDate.getDate() + noticePeriodDays);
 const minBookingDateStr = minBookingDate.toLocaleDateString('en-CA'); // Formato "YYYY-MM-DD"
 
+// Fechas que son salida de una reserva y entrada de otra
+const changeoverDates = departureDates.filter(
+    date => arrivalDates.includes(date)
+);
+
+// si el primer día reservable coincide con una entrada, también debe mostrarse como ocupado
+if (arrivalDates.includes(minBookingDateStr) && !changeoverDates.includes(minBookingDateStr)) {
+    changeoverDates.push(minBookingDateStr);
+}
+
+// Añadir las fechas especiales como bloqueadas
+changeoverDates.forEach(date => {
+    bookedDates.push([date, date]);
+});
+
 const picker = new Litepicker({
     element: document.getElementById('booking-range'),
     singleMode: false,
@@ -131,15 +162,26 @@ const picker = new Litepicker({
     numberOfColumns: 1,
     format: 'DD/MM/YYYY',
     minDate: minBookingDateStr,
+    minDays: 2,
     lockDays: bookedDates, // Parámetro nativo correcto para bloquear e impedir selección
     disallowedDatesRanges: bookedDates, 
     selectForward: false,
     lockDaysInversed: false, // Cambiado a false para bloquear estrictamente dentro del rango de reservas
+
+    tooltipText: {
+        one: 'noche',
+        other: 'noches'
+    },
+
+    tooltipNumber: (totalDays) => {
+        return totalDays - 1;
+    },
+
     setup: (picker) => {
         picker.on('selected', (date1, date2) => {
             const startInput = document.getElementById('start-date');
             const endInput = document.getElementById('end-date');
-            
+
             startInput.value = date1.format('YYYY-MM-DD');
             endInput.value = date2.format('YYYY-MM-DD');
 

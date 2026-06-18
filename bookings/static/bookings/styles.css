@@ -157,8 +157,8 @@ body {
 .solo-movil { display: none; }
 .solo-pc { display: flex; }
 
-/* Estilo base para todos los días bloqueados */
-.litepicker .container__days .day-item.is-locked {
+/* Pintar de rojo los días bloqueados que NO pertenezcan al rango seleccionado ni a los extremos */
+.litepicker .container__days .day-item.is-locked:not(.is-in-range):not(.is-start-date):not(.is-end-date) {
     background-color: #dc3545 !important;
     color: #ffffff !important;
     opacity: 0.8;
@@ -166,10 +166,24 @@ body {
     border-radius: 0;
 }
 
-/* Mantener consistencia visual al pasar el ratón */
-.litepicker .container__days .day-item.is-locked:hover {
+/* Efecto hover solo para los días bloqueados reales */
+.litepicker .container__days .day-item.is-locked:not(.is-in-range):not(.is-start-date):not(.is-end-date):hover {
     background-color: #bd2130 !important;
     color: #ffffff !important;
+}
+
+/* Forzar estilos del rango seleccionado en azul */
+.litepicker .container__days .day-item.is-in-range {
+    background-color: #a1caff !important;
+    color: #000000 !important;
+    opacity: 1 !important;
+}
+
+.litepicker .container__days .day-item.is-start-date,
+.litepicker .container__days .day-item.is-end-date {
+    background-color: #0d6efd !important;
+    color: #ffffff !important;
+    opacity: 1 !important;
 }
 
 @media (max-width: 792px) {
