@@ -59,13 +59,15 @@
 <script>
 
 document.addEventListener("DOMContentLoaded", function() {
+   const todayStr = new Date().toLocaleDateString('en-CA'); // Genera "YYYY-MM-DD"
+
     const picker = new Litepicker({
         element: document.getElementById('booking-dates'),
         singleMode: false,
         numberOfMonths: 2,
         numberOfColumns: 2,
         format: 'DD/MM/YYYY',
-        minDate: new Date(),
+        minDate: todayStr,
         tooltipText: {
             one: 'noche',
             other: 'noches'

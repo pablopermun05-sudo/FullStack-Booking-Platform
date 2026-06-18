@@ -3,6 +3,7 @@
 
 {% block body %}
 <input type="hidden" id="property-id" value="{{ property.id }}">
+<input type="hidden" id="notice-period-days" value="{{ property.notice_period_days }}">
 <div class="container pt-5 pb-5">
     <div class="row g-4">
         <div class="col-lg-8">
@@ -116,13 +117,20 @@ if (rawData) {
     }
 }
 
+const noticePeriodDays = parseInt(document.getElementById('notice-period-days').value) || 0;
+
+// Calcular hoy + días de antelación en hora local
+const minBookingDate = new Date();
+minBookingDate.setDate(minBookingDate.getDate() + noticePeriodDays);
+const minBookingDateStr = minBookingDate.toLocaleDateString('en-CA'); // Formato "YYYY-MM-DD"
+
 const picker = new Litepicker({
     element: document.getElementById('booking-range'),
     singleMode: false,
     numberOfMonths: 1,
     numberOfColumns: 1,
     format: 'DD/MM/YYYY',
-    minDate: new Date(),
+    minDate: minBookingDateStr,
     lockDays: bookedDates, // Parámetro nativo correcto para bloquear e impedir selección
     disallowedDatesRanges: bookedDates, 
     selectForward: false,
