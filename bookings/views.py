@@ -88,7 +88,7 @@ def my_bookings(request):
 class PropertyForm(ModelForm):
     class Meta:
         model = Property
-        fields = ("title", "description", "location", "image", "price_per_night", "children", "adults", "rooms", "allow_pets")
+        fields = ("title", "description", "location", "image", "notice_period_days", "price_per_night", "children", "adults", "rooms", "allow_pets")
 
 @login_required
 def manage_property(request, property_id=None):
