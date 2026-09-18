@@ -157,16 +157,21 @@ body {
 .solo-movil { display: none; }
 .solo-pc { display: flex; }
 
-/* Pintar de rojo los días bloqueados que NO pertenezcan al rango seleccionado ni a los extremos */
+/* Eliminar márgenes, bordes redondeados y huecos blancos entre celdas */
+.litepicker .container__days .day-item {
+    margin: 0 !important;
+    border-radius: 0 !important;
+}
+
+/* Días 100% bloqueados */
 .litepicker .container__days .day-item.is-locked:not(.is-in-range):not(.is-start-date):not(.is-end-date) {
     background-color: #dc3545 !important;
     color: #ffffff !important;
-    opacity: 0.8;
+    opacity: 0.7 !important;
     cursor: not-allowed !important;
-    border-radius: 0;
 }
 
-/* Efecto hover solo para los días bloqueados reales */
+/* Hover en días bloqueados completos */
 .litepicker .container__days .day-item.is-locked:not(.is-in-range):not(.is-start-date):not(.is-end-date):hover {
     background-color: #bd2130 !important;
     color: #ffffff !important;
@@ -179,10 +184,37 @@ body {
     opacity: 1 !important;
 }
 
+/* Extremos del rango (fecha de inicio y fin en azul fuerte) */
 .litepicker .container__days .day-item.is-start-date,
 .litepicker .container__days .day-item.is-end-date {
     background-color: #0d6efd !important;
     color: #ffffff !important;
+    opacity: 1 !important;
+}
+
+/* SOLO LLEGADA */
+.litepicker .container__days .day-item.solo-entrada:not(.is-locked) {
+    background: linear-gradient(
+        to bottom right,
+        #e7727d 0%,
+        #e7727d calc(50% - 0.5px),
+        #ffffff calc(50% + 0.5px),
+        #ffffff 100%
+    ) !important;
+    color: #333333 !important;
+    opacity: 1 !important;
+}
+
+/* SOLO SALIDA */
+.litepicker .container__days .day-item.solo-salida:not(.is-locked) {
+    background: linear-gradient(
+        to bottom right,
+        #ffffff 0%,
+        #ffffff calc(50% - 0.5px),
+        #e7727d calc(50% + 0.5px),
+        #e7727d 100%
+    ) !important;
+    color: #333333 !important;
     opacity: 1 !important;
 }
 

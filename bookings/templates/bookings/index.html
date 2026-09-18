@@ -68,10 +68,17 @@ document.addEventListener("DOMContentLoaded", function() {
         numberOfColumns: 2,
         format: 'DD/MM/YYYY',
         minDate: todayStr,
+        minDays: 2,
+
         tooltipText: {
             one: 'noche',
             other: 'noches'
         },
+
+        tooltipNumber: (totalDays) => {
+            return totalDays - 1;
+      },
+
         setup: (picker) => {
             picker.on('selected', (date1, date2) => {
                 document.getElementById('id_initial_date').value = date1.format('YYYY-MM-DD');

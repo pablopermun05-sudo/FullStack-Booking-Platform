@@ -145,9 +145,27 @@ const changeoverDates = departureDates.filter(
     date => arrivalDates.includes(date)
 );
 
+// Salida "simple": alguien se va ese día y nadie llega ese mismo día
+//   ese día SOLO puede usarse como LLEGADA de la nueva reserva
+const soloEntradaDates = departureDates.filter(
+    date => !changeoverDates.includes(date)
+);
+
+// Llegada "simple": alguien llega ese día y nadie se va ese mismo día
+//   ese día SOLO puede usarse como SALIDA de la nueva reserva
+const soloSalidaDates = arrivalDates.filter(
+    date => !changeoverDates.includes(date)
+);
+
 // si el primer día reservable coincide con una entrada, también debe mostrarse como ocupado
 if (arrivalDates.includes(minBookingDateStr) && !changeoverDates.includes(minBookingDateStr)) {
     changeoverDates.push(minBookingDateStr);
+}
+
+// Si el primer día reservable no está ya bloqueado del todo, solo puede ser LLEGADA
+// (no puede existir una salida anterior a la antelación mínima)
+if (!changeoverDates.includes(minBookingDateStr) && !soloEntradaDates.includes(minBookingDateStr)) {
+    soloEntradaDates.push(minBookingDateStr);
 }
 
 // Añadir las fechas especiales como bloqueadas
@@ -178,12 +196,36 @@ const picker = new Litepicker({
     },
 
     setup: (picker) => {
+        // Pinta en diagonal los días "solo entrada" / "solo salida"
+        picker.on('render:day', (dayElement, date) => {
+            const dStr = date.format('YYYY-MM-DD');
+            if (soloEntradaDates.includes(dStr)) {
+                dayElement.classList.add('solo-entrada');
+            } else if (soloSalidaDates.includes(dStr)) {
+                dayElement.classList.add('solo-salida');
+            }
+        });
+
         picker.on('selected', (date1, date2) => {
+            const startStr = date1.format('YYYY-MM-DD');
+            const endStr = date2.format('YYYY-MM-DD');
+            const alertBox = document.getElementById('alert-booking-date');
+
+            // Un día "solo salida" no puede ser llegada, y un día "solo entrada" no puede ser salida
+            if (soloSalidaDates.includes(startStr) || soloEntradaDates.includes(endStr)) {
+                alertBox.textContent = 'La combinación de fechas no es válida: revisa el día marcado en rojo en diagonal.';
+                alertBox.classList.remove('no-display');
+                picker.clearSelection();
+                return;
+            }
+
+            alertBox.classList.add('no-display');
+
             const startInput = document.getElementById('start-date');
             const endInput = document.getElementById('end-date');
 
-            startInput.value = date1.format('YYYY-MM-DD');
-            endInput.value = date2.format('YYYY-MM-DD');
+            startInput.value = startStr;
+            endInput.value = endStr;
 
             // Notifica de forma limpia a tu archivo booking.js
             startInput.dispatchEvent(new Event('change'));
