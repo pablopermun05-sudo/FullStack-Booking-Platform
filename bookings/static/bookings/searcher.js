@@ -80,7 +80,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     lastProperty = false;
                 }
 
-                // Calling Observer to pay attetion when the las property is on the viewport
+                // Calling Observer to pay attetion when the last property is on the viewport
                 const propertiesOnScreen = document.querySelectorAll('.property');
                 lastProperty = propertiesOnScreen[propertiesOnScreen.length - 1];
 

@@ -170,6 +170,13 @@ def properties(request):
         elif initial_date < date.today():
             return JsonResponse({"error": "La fecha de entrada no puede ser anterior al día de hoy."}, status=400)
 
+        # Check that the selected arrival date satisfies the property's
+        # minimum notice period.
+        days_until_booking = (initial_date - date.today()).days
+        properties = properties.filter(
+            notice_period_days__lte=days_until_booking
+        )
+
         # Using "__" to filter data across related models.
         # Using "distinct" to prevent from duplicated properties when join
         properties = properties.exclude(
