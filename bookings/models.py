@@ -146,15 +146,38 @@ class PropertyAvailability(models.Model):
 
     @classmethod
     def get_for_range(cls, property, start_date, end_date):
+        overrides = cls.objects.filter(
+            property=property,
+            date__gte=start_date,
+            date__lt=end_date,
+        )
+
+        overrides_by_date = {
+            availability.date: availability
+            for availability in overrides
+        }
+
         availability = []
 
         current_date = start_date
 
         while current_date < end_date:
-            availability.append({
-                "date": current_date,
-                **cls.get_for_date(property, current_date),
-            })
+            override = overrides_by_date.get(current_date)
+
+            if override:
+                availability.append({
+                    "date": current_date,
+                    "price_per_night": override.price_per_night,
+                    "status": override.status,
+                    "min_nights": override.min_nights,
+                })
+            else:
+                availability.append({
+                    "date": current_date,
+                    "price_per_night": property.default_price_per_night,
+                    "status": "OPEN",
+                    "min_nights": property.default_min_nights,
+                })
 
             current_date += timedelta(days=1)
 
