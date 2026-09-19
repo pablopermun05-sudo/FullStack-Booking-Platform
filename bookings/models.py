@@ -24,6 +24,7 @@ class Property(models.Model):
     location = models.CharField(max_length=255)
     image = models.ImageField(upload_to='properties/')
     default_price_per_night = models.DecimalField(max_digits=7, decimal_places=2)
+    default_min_nights = models.PositiveIntegerField(default=1)
     children = models.PositiveIntegerField()
     adults = models.PositiveIntegerField()
     rooms = models.PositiveIntegerField()
