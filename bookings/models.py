@@ -124,6 +124,26 @@ class PropertyAvailability(models.Model):
     )
     min_nights = models.PositiveIntegerField()
 
+    @classmethod
+    def get_for_date(cls, property, date):
+        availability = cls.objects.filter(
+            property=property,
+            date=date,
+        ).first()
+
+        if availability:
+            return {
+                "price_per_night": availability.price_per_night,
+                "status": availability.status,
+                "min_nights": availability.min_nights,
+            }
+
+        return {
+            "price_per_night": property.default_price_per_night,
+            "status": "OPEN",
+            "min_nights": property.default_min_nights,
+        }
+
     def clean(self):
         if self.price_per_night <= 0:
             raise ValidationError(
