@@ -171,6 +171,11 @@ class PropertyAvailability(models.Model):
                 "El número mínimo de noches debe ser al menos 1"
             )
 
+        if self.date < date.today():
+            raise ValidationError(
+                "No se puede configurar la disponibilidad de una fecha pasada"
+            )
+
     class Meta:
         constraints = [
             models.UniqueConstraint(
