@@ -101,3 +101,33 @@ class Booking(models.Model):
     def save(self, *args, **kwargs):
         self.full_clean()
         super().save(*args, **kwargs)
+
+class PropertyAvailability(models.Model):
+    STATUS_CHOICES = [
+        ("OPEN", "Open"),
+        ("CLOSED", "Closed"),
+    ]
+
+    property = models.ForeignKey(
+        Property,
+        on_delete=models.CASCADE,
+        related_name="availability",
+    )
+    date = models.DateField()
+    price_per_night = models.DecimalField(
+        max_digits=7,
+        decimal_places=2,
+    )
+    status = models.CharField(
+        max_length=6,
+        choices=STATUS_CHOICES,
+    )
+    min_nights = models.PositiveIntegerField()
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["property", "date"],
+                name="unique_property_availability_date",
+            ),
+        ]
