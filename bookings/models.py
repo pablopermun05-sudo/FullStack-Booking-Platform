@@ -40,10 +40,8 @@ class Property(models.Model):
         return self.title
 
     def clean(self):
-        if self.price_per_night < 0:
-            raise ValidationError("El precio por noche no puede ser negativo")
-        if self.price_per_night == 0:
-            raise ValidationError("El precio por noche no puede ser 0")
+        if self.default_price_per_night <= 0:
+            raise ValidationError("El precio por noche debe ser mayor que 0")
         if self.adults == 0:
             raise ValidationError("El número máximos de adultos no puede ser 0")
         if self.rooms == 0:
