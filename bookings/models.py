@@ -144,6 +144,22 @@ class PropertyAvailability(models.Model):
             "min_nights": property.default_min_nights,
         }
 
+    @classmethod
+    def get_for_range(cls, property, start_date, end_date):
+        availability = []
+
+        current_date = start_date
+
+        while current_date < end_date:
+            availability.append({
+                "date": current_date,
+                **cls.get_for_date(property, current_date),
+            })
+
+            current_date += timedelta(days=1)
+
+        return availability
+
     def clean(self):
         if self.price_per_night <= 0:
             raise ValidationError(
