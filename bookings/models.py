@@ -23,7 +23,7 @@ class Property(models.Model):
     description = models.TextField()
     location = models.CharField(max_length=255)
     image = models.ImageField(upload_to='properties/')
-    price_per_night = models.DecimalField(max_digits=7, decimal_places=2)
+    default_price_per_night = models.DecimalField(max_digits=7, decimal_places=2)
     children = models.PositiveIntegerField()
     adults = models.PositiveIntegerField()
     rooms = models.PositiveIntegerField()
