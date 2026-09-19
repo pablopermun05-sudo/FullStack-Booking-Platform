@@ -124,6 +124,17 @@ class PropertyAvailability(models.Model):
     )
     min_nights = models.PositiveIntegerField()
 
+    def clean(self):
+        if self.price_per_night <= 0:
+            raise ValidationError(
+                "El precio por noche debe ser mayor que 0"
+            )
+
+        if self.min_nights < 1:
+            raise ValidationError(
+                "El número mínimo de noches debe ser al menos 1"
+            )
+
     class Meta:
         constraints = [
             models.UniqueConstraint(
