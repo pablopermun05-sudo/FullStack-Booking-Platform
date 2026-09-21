@@ -270,6 +270,16 @@ body {
     color: white;
 }
 
+.availability-calendar-day {
+    flex-direction: column;
+}
+
+.availability-calendar-day-status {
+    font-size: 0.75rem;
+    line-height: 1;
+    margin-top: 6px;
+}
+
 @media (max-width: 792px) {
     .solo-pc { display: none; }
     .solo-movil { display: flex; flex-direction: row; flex-wrap: wrap; }

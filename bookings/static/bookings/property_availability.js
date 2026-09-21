@@ -284,6 +284,15 @@ function renderCalendar() {
             element.dataset.status = availability.status;
         }
 
+        if (availability && availability.status === "CLOSED") {
+            const label = document.createElement("span");
+
+            label.classList.add("availability-calendar-day-status");
+            label.textContent = "Cerrado";
+
+            element.appendChild(label);
+        }
+
         if (isDateSelected(dateString)) {
             element.classList.add("selected");
         }
