@@ -250,6 +250,11 @@ body {
     justify-content: flex-start;
 }
 
+.availability-calendar-day.selected {
+    background: #a8cbff;
+    color: white;
+}
+
 .availability-calendar-day-empty {
     box-sizing: border-box;
     aspect-ratio: 1 / 1;
