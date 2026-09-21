@@ -22,11 +22,33 @@ const nextYearButton = document.getElementById(
     "availability-next-year"
 );
 
+const availabilityStartDate = document.getElementById(
+    "availability-start-date"
+);
+
+const availabilityEndDate = document.getElementById(
+    "availability-end-date"
+);
+
+const availabilityStatus = document.getElementById(
+    "availability-status"
+);
+
+const availabilityMinNights = document.getElementById(
+    "availability-min-nights"
+);
+
+const availabilityPrice = document.getElementById(
+    "availability-price"
+);
+
 let currentDate = new Date();
 
 let selectionStart = null;
 let selectionEnd = null;
+
 let isDragging = false;
+let hasDragged = false;
 
 const monthFormatter = new Intl.DateTimeFormat("es-ES", {
     month: "long",
@@ -46,14 +68,15 @@ function isDateSelected(dateString) {
         return false;
     }
 
-    if (!selectionEnd) {
-        return dateString === selectionStart;
-    }
+    const start = selectionEnd && selectionEnd < selectionStart
+        ? selectionEnd
+        : selectionStart;
 
-    return (
-        dateString >= selectionStart &&
-        dateString <= selectionEnd
-    );
+    const end = selectionEnd && selectionEnd < selectionStart
+        ? selectionStart
+        : selectionEnd || selectionStart;
+
+    return dateString >= start && dateString <= end;
 }
 
 function normalizeSelection() {
@@ -69,18 +92,50 @@ function normalizeSelection() {
     }
 }
 
+function updateSelectionDates() {
+    if (!selectionStart) {
+        availabilityStartDate.value = "";
+        availabilityEndDate.value = "";
+        return;
+    }
+
+    const start = selectionEnd && selectionEnd < selectionStart
+        ? selectionEnd
+        : selectionStart;
+
+    const end = selectionEnd && selectionEnd < selectionStart
+        ? selectionStart
+        : selectionEnd || selectionStart;
+
+    availabilityStartDate.value = start;
+    availabilityEndDate.value = end;
+}
+
+function clearAvailabilityEditor() {
+    availabilityStartDate.value = "";
+    availabilityEndDate.value = "";
+
+    availabilityStatus.value = "";
+    availabilityMinNights.value = "";
+    availabilityPrice.value = "";
+}
+
 function selectSingleDay(dateString) {
     selectionStart = dateString;
     selectionEnd = null;
 
+    updateSelectionDates();
     renderCalendar();
 }
 
 function startRangeSelection(dateString) {
     selectionStart = dateString;
     selectionEnd = dateString;
-    isDragging = true;
 
+    isDragging = true;
+    hasDragged = false;
+
+    updateSelectionDates();
     renderCalendar();
 }
 
@@ -89,8 +144,13 @@ function updateRangeSelection(dateString) {
         return;
     }
 
+    if (dateString !== selectionStart) {
+        hasDragged = true;
+    }
+
     selectionEnd = dateString;
 
+    updateSelectionDates();
     renderCalendar();
 }
 
@@ -101,8 +161,13 @@ function finishRangeSelection() {
 
     isDragging = false;
 
-    normalizeSelection();
+    if (!hasDragged) {
+        selectionEnd = null;
+    } else {
+        normalizeSelection();
+    }
 
+    updateSelectionDates();
     renderCalendar();
 }
 
@@ -186,7 +251,7 @@ function renderCalendar() {
         });
 
         element.addEventListener("click", () => {
-            if (!isDragging) {
+            if (!isDragging && !hasDragged) {
                 selectSingleDay(dateString);
             }
         });
@@ -197,6 +262,57 @@ function renderCalendar() {
 
 document.addEventListener("mouseup", () => {
     finishRangeSelection();
+});
+
+availabilityStartDate.addEventListener("change", () => {
+    if (!availabilityStartDate.value) {
+        clearAvailabilityEditor();
+        selectionStart = null;
+        selectionEnd = null;
+        renderCalendar();
+        return;
+    }
+
+    selectionStart = availabilityStartDate.value;
+
+    if (
+        availabilityEndDate.value &&
+        availabilityEndDate.value < selectionStart
+    ) {
+        selectionEnd = selectionStart;
+    } else {
+        selectionEnd = availabilityEndDate.value || selectionStart;
+    }
+
+    normalizeSelection();
+    updateSelectionDates();
+    renderCalendar();
+});
+
+availabilityEndDate.addEventListener("change", () => {
+    if (!availabilityEndDate.value) {
+        selectionEnd = null;
+
+        if (selectionStart) {
+            availabilityEndDate.value = selectionStart;
+        }
+
+        renderCalendar();
+        return;
+    }
+
+    selectionEnd = availabilityEndDate.value;
+
+    if (
+        selectionStart &&
+        selectionEnd < selectionStart
+    ) {
+        selectionStart = selectionEnd;
+    }
+
+    normalizeSelection();
+    updateSelectionDates();
+    renderCalendar();
 });
 
 previousYearButton.addEventListener("click", () => {
@@ -238,5 +354,7 @@ nextYearButton.addEventListener("click", () => {
 
     renderCalendar();
 });
+
+clearAvailabilityEditor();
 
 renderCalendar();

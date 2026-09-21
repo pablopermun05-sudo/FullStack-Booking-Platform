@@ -73,6 +73,36 @@
 
                             <div class="mb-3">
                                 <label
+                                    for="availability-start-date"
+                                    class="form-label"
+                                >
+                                    Fecha de inicio
+                                </label>
+
+                                <input
+                                    type="date"
+                                    id="availability-start-date"
+                                    class="form-control"
+                                >
+                            </div>
+
+                            <div class="mb-3">
+                                <label
+                                    for="availability-end-date"
+                                    class="form-label"
+                                >
+                                    Fecha de fin
+                                </label>
+
+                                <input
+                                    type="date"
+                                    id="availability-end-date"
+                                    class="form-control"
+                                >
+                            </div>
+
+                            <div class="mb-3">
+                                <label
                                     for="availability-status"
                                     class="form-label"
                                 >
@@ -83,13 +113,9 @@
                                     id="availability-status"
                                     class="form-select"
                                 >
-                                    <option value="OPEN">
-                                        Abierto
-                                    </option>
-
-                                    <option value="CLOSED">
-                                        Cerrado
-                                    </option>
+                                    <option value="" selected></option>
+                                    <option value="OPEN">Abierto</option>
+                                    <option value="CLOSED">Cerrado</option>
                                 </select>
                             </div>
 
@@ -106,7 +132,6 @@
                                     id="availability-min-nights"
                                     class="form-control"
                                     min="1"
-                                    value="1"
                                 >
                             </div>
 
