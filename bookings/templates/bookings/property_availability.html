@@ -1,4 +1,5 @@
 {% extends "bookings/layout.html" %}
+{% load static %}
 
 {% block body %}
 <div class="container pt-5 pb-5">
@@ -9,9 +10,32 @@
 
         <div class="card-body">
             <div id="property-availability-calendar">
-                <!-- Aquí se mostrará el calendario de disponibilidad -->
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <button type="button" class="btn btn-outline-secondary" id="availability-previous-year">
+                        <i class="bi bi-chevron-double-left"></i>
+                    </button>
+
+                    <button type="button" class="btn btn-outline-secondary" id="availability-previous-month">
+                        <i class="bi bi-chevron-left"></i>
+                    </button>
+
+                    <h3 class="mb-0 fw-bold" id="availability-current-month"></h3>
+
+                    <button type="button" class="btn btn-outline-secondary" id="availability-next-month">
+                        <i class="bi bi-chevron-right"></i>
+                    </button>
+
+                    <button type="button" class="btn btn-outline-secondary" id="availability-next-year">
+                        <i class="bi bi-chevron-double-right"></i>
+                    </button>
+                </div>
+
+                <div id="availability-calendar-grid" class="availability-calendar-grid"></div>
             </div>
         </div>
     </div>
 </div>
+{% endblock %}
+{% block script %}
+<script src="{% static 'bookings/property_availability.js' %}"></script>
 {% endblock %}
