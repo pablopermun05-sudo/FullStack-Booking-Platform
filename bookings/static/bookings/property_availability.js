@@ -73,6 +73,35 @@ function formatDate(date) {
     return `${year}-${month}-${day}`;
 }
 
+async function loadAvailabilityData() {
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+
+    const startDate = formatDate(
+        new Date(year, month, 1)
+    );
+
+    const endDate = formatDate(
+        new Date(year, month + 1, 0)
+    );
+
+    const response = await fetch(
+        `${availabilityCalendar.dataset.dataUrl}?start_date=${startDate}&end_date=${endDate}`
+    );
+
+    if (!response.ok) {
+        return;
+    }
+
+    const data = await response.json();
+
+    availabilityData = {};
+
+    data.availability.forEach(item => {
+        availabilityData[item.date] = item;
+    });
+}
+
 function isDateSelected(dateString) {
     if (!selectionStart) {
         return false;
@@ -332,7 +361,9 @@ previousYearButton.addEventListener("click", () => {
         1
     );
 
-    renderCalendar();
+    loadAvailabilityData().then(() => {
+        renderCalendar();
+    });
 });
 
 previousMonthButton.addEventListener("click", () => {
@@ -342,7 +373,9 @@ previousMonthButton.addEventListener("click", () => {
         1
     );
 
-    renderCalendar();
+    loadAvailabilityData().then(() => {
+        renderCalendar();
+    });
 });
 
 nextMonthButton.addEventListener("click", () => {
@@ -352,7 +385,9 @@ nextMonthButton.addEventListener("click", () => {
         1
     );
 
-    renderCalendar();
+    loadAvailabilityData().then(() => {
+        renderCalendar();
+    });
 });
 
 nextYearButton.addEventListener("click", () => {
@@ -362,7 +397,9 @@ nextYearButton.addEventListener("click", () => {
         1
     );
 
-    renderCalendar();
+    loadAvailabilityData().then(() => {
+        renderCalendar();
+    });
 });
 
 availabilityResetButton.addEventListener("click", async () => {
@@ -422,4 +459,6 @@ availabilityResetButton.addEventListener("click", async () => {
 
 clearAvailabilityEditor();
 
-renderCalendar();
+loadAvailabilityData().then(() => {
+    renderCalendar();
+});

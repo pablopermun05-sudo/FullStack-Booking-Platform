@@ -12,7 +12,7 @@
             <div class="row g-4">
 
                 <div class="col-lg-9">
-                    <div id="property-availability-calendar" data-reset-url="{% url 'property_availability_reset' property.id %}">
+                    <div id="property-availability-calendar" data-reset-url="{% url 'property_availability_reset' property.id %}" data-data-url="{% url 'property_availability_data' property.id %}">
                         <div class="d-flex justify-content-between align-items-center mb-3">
                             <button
                                 type="button"
