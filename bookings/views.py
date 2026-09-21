@@ -184,6 +184,54 @@ def property_availability_reset(request, property_id):
         "deleted_count": deleted_count,
     })
 
+@login_required
+def property_availability_data(request, property_id):
+    property = get_object_or_404(Property, pk=property_id)
+
+    if property.owner != request.user and not request.user.is_staff:
+        raise PermissionDenied
+
+    start_date = request.GET.get("start_date")
+    end_date = request.GET.get("end_date")
+
+    if not start_date or not end_date:
+        return JsonResponse(
+            {"error": "Start and end dates are required"},
+            status=400,
+        )
+
+    try:
+        start_date = date.fromisoformat(start_date)
+        end_date = date.fromisoformat(end_date)
+    except ValueError:
+        return JsonResponse(
+            {"error": "Invalid date format"},
+            status=400,
+        )
+
+    if start_date > end_date:
+        return JsonResponse(
+            {"error": "Start date must be before or equal to end date"},
+            status=400,
+        )
+
+    availability = PropertyAvailability.objects.filter(
+        property=property,
+        date__range=[start_date, end_date],
+    ).order_by("date")
+
+    return JsonResponse({
+        "availability": [
+            {
+                "date": item.date.isoformat(),
+                "price_per_night": str(item.price_per_night),
+                "status": item.status,
+                "min_nights": item.min_nights,
+            }
+            for item in availability
+        ],
+    })
+
 @login_required   
 def delete_booking(request, booking_id):
     if request.method == "POST":
