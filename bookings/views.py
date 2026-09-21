@@ -127,6 +127,17 @@ def manage_property(request, property_id=None):
             "form": form
         })
 
+@login_required
+def property_availability(request, property_id):
+    property = get_object_or_404(Property, pk=property_id)
+
+    if property.owner != request.user and not request.user.is_staff:
+        raise PermissionDenied
+
+    return render(request, "bookings/property_availability.html", {
+        "property": property,
+    })
+
 @login_required   
 def delete_booking(request, booking_id):
     if request.method == "POST":
