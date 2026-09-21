@@ -4,7 +4,7 @@ from django.http import HttpResponse, HttpResponseRedirect
 from django.contrib.auth import authenticate, login, logout
 from django.views.decorators.csrf import csrf_exempt
 from django.db import IntegrityError
-from .models import User, Property, Booking
+from .models import PropertyAvailability, User, Property, Booking
 from django import forms
 from django.forms import ModelForm
 from django.contrib.auth.forms import UserCreationForm
@@ -136,6 +136,52 @@ def property_availability(request, property_id):
 
     return render(request, "bookings/property_availability.html", {
         "property": property,
+    })
+
+@login_required
+def property_availability_reset(request, property_id):
+    property = get_object_or_404(Property, pk=property_id)
+
+    if property.owner != request.user and not request.user.is_staff:
+        raise PermissionDenied
+
+    if request.method != "POST":
+        return JsonResponse(
+            {"error": "Method not allowed"},
+            status=405,
+        )
+
+    start_date = request.POST.get("start_date")
+    end_date = request.POST.get("end_date")
+
+    if not start_date or not end_date:
+        return JsonResponse(
+            {"error": "Start and end dates are required"},
+            status=400,
+        )
+
+    try:
+        start_date = date.fromisoformat(start_date)
+        end_date = date.fromisoformat(end_date)
+    except ValueError:
+        return JsonResponse(
+            {"error": "Invalid date format"},
+            status=400,
+        )
+
+    if start_date > end_date:
+        return JsonResponse(
+            {"error": "Start date must be before or equal to end date"},
+            status=400,
+        )
+
+    deleted_count, _ = PropertyAvailability.objects.filter(
+        property=property,
+        date__range=[start_date, end_date],
+    ).delete()
+
+    return JsonResponse({
+        "deleted_count": deleted_count,
     })
 
 @login_required   
