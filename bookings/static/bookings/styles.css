@@ -220,29 +220,40 @@ body {
 
 .availability-calendar-grid {
     display: grid;
-    grid-template-columns: repeat(7, 1fr);
-    gap: 4px;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 1px;
+    padding: 1px;
+    padding-right: 0.8px;
+    background: #dee2e6;
+    border: 1px solid #dee2e6;
 }
 
 .availability-calendar-weekday {
-    text-align: center;
-    font-weight: bold;
+    box-sizing: border-box;
     padding: 8px;
+    text-align: left;
+    font-weight: normal;
+    background: #f8f9fa;
 }
 
 .availability-calendar-day {
-    min-height: 90px;
-    border: 1px solid #dee2e6;
-    background: white;
+    box-sizing: border-box;
+    width: 100%;
+    aspect-ratio: 1 / 1;
     padding: 8px;
-    text-align: left;
+    margin: 0;
+    border: none;
+    background: white;
     cursor: pointer;
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-start;
 }
 
 .availability-calendar-day-empty {
+    box-sizing: border-box;
+    aspect-ratio: 1 / 1;
     background: transparent;
-    border: none;
-    cursor: default;
 }
 
 @media (max-width: 792px) {
