@@ -2,6 +2,12 @@ const calendarGrid = document.getElementById(
     "availability-calendar-grid"
 );
 
+const availabilityCalendar = document.getElementById(
+    "property-availability-calendar"
+);
+
+const availabilityResetUrl = availabilityCalendar.dataset.resetUrl;
+
 const currentMonthElement = document.getElementById(
     "availability-current-month"
 );
@@ -384,7 +390,7 @@ availabilityResetButton.addEventListener("click", async () => {
     }
 
     const response = await fetch(
-        `/property/{{ property.id }}/availability/reset`,
+        availabilityResetUrl,
         {
             method: "POST",
             headers: {
@@ -399,8 +405,17 @@ availabilityResetButton.addEventListener("click", async () => {
     );
 
     if (!response.ok) {
+        window.alert(
+            "No se pudieron restaurar los valores por defecto."
+        );
         return;
     }
+
+    const data = await response.json();
+
+    window.alert(
+        `Se han eliminado ${data.deleted_count} configuraciones de disponibilidad.`
+    );
 
     renderCalendar();
 });
