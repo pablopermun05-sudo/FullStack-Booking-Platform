@@ -42,6 +42,10 @@ const availabilityPrice = document.getElementById(
     "availability-price"
 );
 
+const availabilityResetButton = document.getElementById(
+    "availability-reset"
+);
+
 let currentDate = new Date();
 
 let selectionStart = null;
@@ -351,6 +355,52 @@ nextYearButton.addEventListener("click", () => {
         currentDate.getMonth(),
         1
     );
+
+    renderCalendar();
+});
+
+availabilityResetButton.addEventListener("click", async () => {
+    if (!selectionStart) {
+        return;
+    }
+
+    const startDate = availabilityStartDate.value;
+    const endDate = availabilityEndDate.value;
+
+    const confirmed = window.confirm(
+        `¿Restaurar los valores por defecto desde ${startDate} hasta ${endDate}?`
+    );
+
+    if (!confirmed) {
+        return;
+    }
+
+    const csrfToken = document.querySelector(
+        "[name=csrfmiddlewaretoken]"
+    );
+
+    if (!csrfToken) {
+        return;
+    }
+
+    const response = await fetch(
+        `/property/{{ property.id }}/availability/reset`,
+        {
+            method: "POST",
+            headers: {
+                "X-CSRFToken": csrfToken.value,
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
+            body: new URLSearchParams({
+                start_date: startDate,
+                end_date: endDate,
+            }),
+        }
+    );
+
+    if (!response.ok) {
+        return;
+    }
 
     renderCalendar();
 });

@@ -152,6 +152,15 @@
                                 >
                             </div>
 
+                            {% csrf_token %}
+                            <button
+                                type="button"
+                                class="btn btn-outline-danger w-100 mb-2"
+                                id="availability-reset"
+                            >
+                                Restaurar valores por defecto
+                            </button>
+
                             <button
                                 type="button"
                                 class="btn btn-primary w-100"
