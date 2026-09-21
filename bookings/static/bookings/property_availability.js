@@ -60,6 +60,8 @@ let selectionEnd = null;
 let isDragging = false;
 let hasDragged = false;
 
+let availabilityData = {};
+
 const monthFormatter = new Intl.DateTimeFormat("es-ES", {
     month: "long",
     year: "numeric"
@@ -275,6 +277,12 @@ function renderCalendar() {
 
         element.textContent = day;
         element.dataset.date = dateString;
+
+        const availability = availabilityData[dateString];
+
+        if (availability) {
+            element.dataset.status = availability.status;
+        }
 
         if (isDateSelected(dateString)) {
             element.classList.add("selected");

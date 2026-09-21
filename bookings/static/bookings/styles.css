@@ -261,6 +261,10 @@ body {
     background: transparent;
 }
 
+.availability-calendar-day[data-status="CLOSED"] {
+    background: #f8d7da;
+}
+
 @media (max-width: 792px) {
     .solo-pc { display: none; }
     .solo-movil { display: flex; flex-direction: row; flex-wrap: wrap; }
