@@ -136,6 +136,8 @@ def property_availability(request, property_id):
 
     return render(request, "bookings/property_availability.html", {
         "property": property,
+        "default_price_per_night": property.default_price_per_night,
+        "default_min_nights": property.default_min_nights,
     })
 
 @login_required

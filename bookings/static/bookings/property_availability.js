@@ -8,6 +8,9 @@ const availabilityCalendar = document.getElementById(
 
 const availabilityResetUrl = availabilityCalendar.dataset.resetUrl;
 
+const defaultPrice = availabilityCalendar.dataset.defaultPrice.replace(",", ".");
+const defaultMinNights = availabilityCalendar.dataset.defaultMinNights;
+
 const currentMonthElement = document.getElementById(
     "availability-current-month"
 );
@@ -166,6 +169,19 @@ function selectSingleDay(dateString) {
     selectionEnd = null;
 
     updateSelectionDates();
+
+    const availability = availabilityData[dateString];
+
+    if (availability) {
+        availabilityStatus.value = availability.status;
+        availabilityMinNights.value = availability.min_nights;
+        availabilityPrice.value = availability.price_per_night;
+    } else {
+        availabilityStatus.value = "OPEN";
+        availabilityMinNights.value = defaultMinNights;
+        availabilityPrice.value = defaultPrice;
+    }
+
     renderCalendar();
 }
 
@@ -204,6 +220,19 @@ function finishRangeSelection() {
 
     if (!hasDragged) {
         selectionEnd = null;
+
+        const dateString = selectionStart;
+        const availability = availabilityData[dateString];
+
+        if (availability) {
+            availabilityStatus.value = availability.status;
+            availabilityMinNights.value = availability.min_nights;
+            availabilityPrice.value = availability.price_per_night;
+        } else {
+            availabilityStatus.value = "OPEN";
+            availabilityMinNights.value = defaultMinNights;
+            availabilityPrice.value = defaultPrice;
+        }
     } else {
         normalizeSelection();
     }
@@ -304,12 +333,6 @@ function renderCalendar() {
 
         element.addEventListener("mouseenter", () => {
             updateRangeSelection(dateString);
-        });
-
-        element.addEventListener("click", () => {
-            if (!isDragging && !hasDragged) {
-                selectSingleDay(dateString);
-            }
         });
 
         calendarGrid.appendChild(element);
