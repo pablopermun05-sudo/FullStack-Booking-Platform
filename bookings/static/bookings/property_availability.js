@@ -55,6 +55,10 @@ const availabilityResetButton = document.getElementById(
     "availability-reset"
 );
 
+const availabilitySaveButton = document.getElementById(
+    "availability-save"
+);
+
 let currentDate = new Date();
 
 let selectionStart = null;
@@ -500,6 +504,59 @@ nextYearButton.addEventListener("click", () => {
     loadAvailabilityData().then(() => {
         renderCalendar();
     });
+});
+
+availabilitySaveButton.addEventListener("click", () => {
+    const startDate = availabilityStartDate.value;
+    const endDate = availabilityEndDate.value;
+    const status = availabilityStatus.value;
+    const minNights = availabilityMinNights.value;
+    const price = availabilityPrice.value;
+
+    if (!startDate || !endDate) {
+        window.alert(
+            "Debes seleccionar un rango de fechas."
+        );
+        return;
+    }
+
+    if (startDate > endDate) {
+        window.alert(
+            "La fecha de inicio debe ser anterior o igual a la fecha de fin."
+        );
+        return;
+    }
+
+    if (!status) {
+        window.alert(
+            "Debes seleccionar un estado."
+        );
+        return;
+    }
+
+    if (!minNights || Number(minNights) < 1) {
+        window.alert(
+            "El número mínimo de noches debe ser al menos 1."
+        );
+        return;
+    }
+
+    if (!price || Number(price) <= 0) {
+        window.alert(
+            "El precio por noche debe ser mayor que 0."
+        );
+        return;
+    }
+
+    const payload = {
+        start_date: startDate,
+        end_date: endDate,
+        status: status,
+        min_nights: Number(minNights),
+        price_per_night: Number(price).toFixed(2),
+    };
+
+    console.log("Availability save payload:", payload);
 });
 
 availabilityResetButton.addEventListener("click", async () => {
