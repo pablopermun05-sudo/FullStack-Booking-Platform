@@ -138,6 +138,31 @@ function isDatePast(dateString) {
     return dateString < today;
 }
 
+function rangeContainsBookedDate(startDateString, endDateString) {
+    const startDate = new Date(startDateString);
+    const endDate = new Date(endDateString);
+
+    const rangeStart = startDate < endDate
+        ? startDate
+        : endDate;
+
+    const rangeEnd = startDate < endDate
+        ? endDate
+        : startDate;
+
+    for (
+        let date = new Date(rangeStart);
+        date <= rangeEnd;
+        date.setDate(date.getDate() + 1)
+    ) {
+        if (isDateBooked(formatDate(date))) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 function isDateSelected(dateString) {
     if (!selectionStart) {
         return false;
@@ -271,7 +296,15 @@ function updateRangeSelection(dateString) {
         return;
     }
 
-    if (isDateBooked(dateString) || isDatePast(dateString)) {
+    if (isDatePast(dateString)) {
+        return;
+    }
+
+    if (isDateBooked(dateString)) {
+        return;
+    }
+
+    if (rangeContainsBookedDate(selectionStart, dateString)) {
         return;
     }
 
