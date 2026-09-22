@@ -10,7 +10,8 @@ from django.forms import ModelForm
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.forms import AuthenticationForm
 from django.http import JsonResponse
-from datetime import date
+from datetime import date, timedelta
+from decimal import Decimal, InvalidOperation
 from django.core.paginator import Paginator
 from django.contrib.auth.decorators import login_required
 import json
@@ -232,6 +233,107 @@ def property_availability_data(request, property_id):
             }
             for item in availability
         ],
+    })
+
+@login_required
+def property_availability_save(request, property_id):
+    property = get_object_or_404(Property, pk=property_id)
+
+    if property.owner != request.user and not request.user.is_staff:
+        raise PermissionDenied
+
+    if request.method != "POST":
+        return JsonResponse(
+            {"error": "Method not allowed"},
+            status=405,
+        )
+
+    start_date = request.POST.get("start_date")
+    end_date = request.POST.get("end_date")
+    status = request.POST.get("status")
+    min_nights = request.POST.get("min_nights")
+    price_per_night = request.POST.get("price_per_night")
+
+    if not all([
+        start_date,
+        end_date,
+        status,
+        min_nights,
+        price_per_night,
+    ]):
+        return JsonResponse(
+            {"error": "All fields are required"},
+            status=400,
+        )
+
+    if status not in {"OPEN", "CLOSED"}:
+        return JsonResponse(
+            {"error": "Invalid status"},
+            status=400,
+        )
+
+    try:
+        start_date = date.fromisoformat(start_date)
+        end_date = date.fromisoformat(end_date)
+    except ValueError:
+        return JsonResponse(
+            {"error": "Invalid date format"},
+            status=400,
+        )
+
+    if start_date > end_date:
+        return JsonResponse(
+            {"error": "Start date must be before or equal to end date"},
+            status=400,
+        )
+
+    try:
+        min_nights = int(min_nights)
+    except ValueError:
+        return JsonResponse(
+            {"error": "Invalid minimum nights"},
+            status=400,
+        )
+
+    if min_nights < 1:
+        return JsonResponse(
+            {"error": "Minimum nights must be at least 1"},
+            status=400,
+        )
+
+    try:
+        price_per_night = Decimal(price_per_night)
+    except (InvalidOperation, ValueError):
+        return JsonResponse(
+            {"error": "Invalid price"},
+            status=400,
+        )
+
+    if price_per_night <= 0:
+        return JsonResponse(
+            {"error": "Price must be greater than 0"},
+            status=400,
+        )
+
+    updated_count = 0
+    current_date = start_date
+
+    while current_date <= end_date:
+        PropertyAvailability.objects.update_or_create(
+            property=property,
+            date=current_date,
+            defaults={
+                "status": status,
+                "min_nights": min_nights,
+                "price_per_night": price_per_night,
+            },
+        )
+
+        updated_count += 1
+        current_date += timedelta(days=1)
+
+    return JsonResponse({
+        "updated_count": updated_count,
     })
 
 @login_required   

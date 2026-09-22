@@ -16,6 +16,7 @@ urlpatterns = [
     path("property/<int:property_id>/availability", views.property_availability, name="property_availability"),
     path("property/<int:property_id>/availability/reset", views.property_availability_reset, name="property_availability_reset",),
     path("property/<int:property_id>/availability/data", views.property_availability_data, name="property_availability_data",),
+    path("property/<int:property_id>/availability/save", views.property_availability_save, name="property_availability_save",),
     #API ROUTES
     path("properties/", views.properties, name="properties"),
     path("booking/<int:property_id>/", views.booking, name="booking"),
