@@ -554,6 +554,7 @@ availabilityResetButton.addEventListener("click", async () => {
         `Se han eliminado ${data.deleted_count} configuraciones de disponibilidad.`
     );
 
+    await loadAvailabilityData();
     renderCalendar();
 });
 
