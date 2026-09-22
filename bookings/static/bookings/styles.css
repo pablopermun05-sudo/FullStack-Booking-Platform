@@ -372,6 +372,14 @@ body {
     line-height: 1;
 }
 
+.availability-calendar-day-price {
+    display: block;
+    margin-top: auto;
+    font-size: 0.75rem;
+    line-height: 1.2;
+    font-weight: 600;
+}
+
 .availability-feedback {
     display: none;
     margin-bottom: 1rem;
@@ -448,6 +456,10 @@ body {
     .availability-calendar-day-status {
         font-size: 0.65rem;
         margin-top: 4px;
+    }
+
+    .availability-calendar-day-price {
+        font-size: 0.65rem;
     }
 }
 

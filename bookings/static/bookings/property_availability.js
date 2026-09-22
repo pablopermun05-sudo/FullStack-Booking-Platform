@@ -494,6 +494,17 @@ function renderCalendar() {
             label.textContent = "Cerrado";
 
             element.appendChild(label);
+        } else if (!isBooked) {
+            const priceLabel = document.createElement("span");
+
+            priceLabel.classList.add(
+                "availability-calendar-day-price"
+            );
+
+            priceLabel.textContent =
+                `${availability ? availability.price_per_night : defaultPrice} €`;
+
+            element.appendChild(priceLabel);
         }
 
         if (isBooked) {
