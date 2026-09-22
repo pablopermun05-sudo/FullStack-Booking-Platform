@@ -284,6 +284,33 @@ body {
         transform 0.1s ease;
 }
 
+.availability-calendar-day.booked {
+    position: relative;
+    cursor: not-allowed;
+    background: #ffffff !important;
+    color: #212529 !important;
+    border-color: #dee2e6 !important;
+}
+
+.availability-calendar-day.booked:hover {
+    border-color: #dee2e6 !important;
+}
+
+.availability-calendar-day-booking {
+    display: block;
+    width: 100%;
+    margin-top: auto;
+    padding: 3px 4px;
+    background: #0d6efd;
+    color: #ffffff;
+    border-radius: 3px;
+    font-size: 0.7rem;
+    line-height: 1.2;
+    text-align: center;
+    font-weight: 600;
+    pointer-events: none;
+}
+
 .availability-calendar-day:hover {
     border-color: #34495e !important;
 }

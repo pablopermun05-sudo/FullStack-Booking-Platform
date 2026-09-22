@@ -82,6 +82,8 @@ let hasDragged = false;
 
 let availabilityData = {};
 
+let bookedDates = new Set();
+
 const monthFormatter = new Intl.DateTimeFormat("es-ES", {
     month: "long",
     year: "numeric"
@@ -122,6 +124,12 @@ async function loadAvailabilityData() {
     data.availability.forEach(item => {
         availabilityData[item.date] = item;
     });
+
+    bookedDates = new Set(data.booked_dates || []);
+}
+
+function isDateBooked(dateString) {
+    return bookedDates.has(dateString);
 }
 
 function isDateSelected(dateString) {
@@ -203,6 +211,11 @@ function selectSingleDay(dateString) {
 }
 
 function startRangeSelection(dateString) {
+
+    if (isDateBooked(dateString)) {
+        return;
+    }
+
     selectionStart = dateString;
     selectionEnd = dateString;
 
@@ -214,6 +227,10 @@ function startRangeSelection(dateString) {
 
 function updateRangeSelection(dateString) {
     if (!isDragging || !selectionStart) {
+        return;
+    }
+
+    if (isDateBooked(dateString)) {
         return;
     }
 
@@ -385,9 +402,21 @@ function renderCalendar() {
         element.dataset.date = dateString;
 
         const availability = availabilityData[dateString];
+        const isBooked = isDateBooked(dateString);
 
         if (availability) {
             element.dataset.status = availability.status;
+        }
+
+        if (isBooked) {
+            element.classList.add("booked");
+
+            const label = document.createElement("span");
+
+            label.classList.add("availability-calendar-day-booking");
+            label.textContent = "Reservado";
+
+            element.appendChild(label);
         }
 
         if (availability && availability.status === "CLOSED") {
@@ -403,14 +432,18 @@ function renderCalendar() {
             element.classList.add("selected");
         }
 
-        element.addEventListener("mousedown", event => {
-            event.preventDefault();
-            startRangeSelection(dateString);
-        });
+        if (isBooked) {
+            element.disabled = true;
+        } else {
+            element.addEventListener("mousedown", event => {
+                event.preventDefault();
+                startRangeSelection(dateString);
+            });
 
-        element.addEventListener("mouseenter", () => {
-            updateRangeSelection(dateString);
-        });
+            element.addEventListener("mouseenter", () => {
+                updateRangeSelection(dateString);
+            });
+        }
 
         calendarGrid.appendChild(element);
     }

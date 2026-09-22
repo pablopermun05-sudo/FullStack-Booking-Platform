@@ -178,6 +178,18 @@ def property_availability_reset(request, property_id):
             status=400,
         )
 
+    has_bookings = Booking.objects.filter(
+        property=property,
+        initial_date__lte=end_date,
+        final_date__gt=start_date,
+    ).exists()
+
+    if has_bookings:
+        return JsonResponse(
+            {"error": "No se pueden restaurar días que tienen reservas."},
+            status=400,
+        )
+
     deleted_count, _ = PropertyAvailability.objects.filter(
         property=property,
         date__range=[start_date, end_date],
@@ -223,6 +235,29 @@ def property_availability_data(request, property_id):
         date__range=[start_date, end_date],
     ).order_by("date")
 
+    bookings = Booking.objects.filter(
+        property=property,
+        initial_date__lte=end_date,
+        final_date__gt=start_date,
+    ).order_by("initial_date")
+
+    booked_dates = set()
+
+    for booking in bookings:
+        current_date = max(
+            booking.initial_date,
+            start_date,
+        )
+
+        booking_end = min(
+            booking.final_date,
+            end_date + timedelta(days=1),
+        )
+
+        while current_date < booking_end:
+            booked_dates.add(current_date.isoformat())
+            current_date += timedelta(days=1)
+
     return JsonResponse({
         "availability": [
             {
@@ -233,6 +268,7 @@ def property_availability_data(request, property_id):
             }
             for item in availability
         ],
+        "booked_dates": sorted(booked_dates),
     })
 
 @login_required
@@ -284,6 +320,18 @@ def property_availability_save(request, property_id):
     if start_date > end_date:
         return JsonResponse(
             {"error": "Start date must be before or equal to end date"},
+            status=400,
+        )
+
+    has_bookings = Booking.objects.filter(
+        property=property,
+        initial_date__lte=end_date,
+        final_date__gt=start_date,
+    ).exists()
+
+    if has_bookings:
+        return JsonResponse(
+            {"error": "No se pueden modificar días que tienen reservas."},
             status=400,
         )
 
