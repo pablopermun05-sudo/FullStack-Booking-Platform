@@ -14,6 +14,16 @@ const availabilityResetUrl = availabilityCalendar.dataset.resetUrl;
 const defaultPrice = availabilityCalendar.dataset.defaultPrice.replace(",", ".");
 const defaultMinNights = availabilityCalendar.dataset.defaultMinNights;
 
+const availabilityFeedback = document.getElementById(
+    "availability-feedback"
+);
+
+function showFeedback(message, type) {
+    availabilityFeedback.textContent = message;
+    availabilityFeedback.className =
+        `availability-feedback show ${type}`;
+}
+
 const currentMonthElement = document.getElementById(
     "availability-current-month"
 );
@@ -517,36 +527,41 @@ availabilitySaveButton.addEventListener("click", () => {
     const price = availabilityPrice.value;
 
     if (!startDate || !endDate) {
-        window.alert(
-            "Debes seleccionar un rango de fechas."
+        showFeedback(
+            "Debes seleccionar un rango de fechas.",
+            "error"
         );
         return;
     }
 
     if (startDate > endDate) {
-        window.alert(
-            "La fecha de inicio debe ser anterior o igual a la fecha de fin."
+        showFeedback(
+            "La fecha de inicio debe ser anterior o igual a la fecha de fin.",
+            "error"
         );
         return;
     }
 
     if (!status) {
-        window.alert(
-            "Debes seleccionar un estado."
+        showFeedback(
+            "Debes seleccionar un estado.",
+            "error"
         );
         return;
     }
 
     if (!minNights || Number(minNights) < 1) {
-        window.alert(
-            "El número mínimo de noches debe ser al menos 1."
+        showFeedback(
+            "El número mínimo de noches debe ser al menos 1.",
+            "error"
         );
         return;
     }
 
     if (!price || Number(price) <= 0) {
-        window.alert(
-            "El precio por noche debe ser mayor que 0."
+        showFeedback(
+            "El precio por noche debe ser mayor que 0.",
+            "error"
         );
         return;
     }
@@ -564,8 +579,9 @@ availabilitySaveButton.addEventListener("click", () => {
     );
 
     if (!csrfToken) {
-        window.alert(
-            "No se encontró el token CSRF."
+        showFeedback(
+            "No se encontró el token CSRF.",
+            "error"
         );
         return;
     }
@@ -597,15 +613,16 @@ availabilitySaveButton.addEventListener("click", () => {
             return data;
         })
         .then(async data => {
-            window.alert(
-                `Se han actualizado ${data.updated_count} días de disponibilidad.`
+            showFeedback(
+                `Se han actualizado ${data.updated_count} días de disponibilidad.`,
+                "success"
             );
 
             await loadAvailabilityData();
             renderCalendar();
         })
         .catch(error => {
-            window.alert(error.message);
+            showFeedback(error.message, "error");
         });
 });
 
@@ -630,39 +647,49 @@ availabilityResetButton.addEventListener("click", async () => {
     );
 
     if (!csrfToken) {
-        return;
-    }
-
-    const response = await fetch(
-        availabilityResetUrl,
-        {
-            method: "POST",
-            headers: {
-                "X-CSRFToken": csrfToken.value,
-                "Content-Type": "application/x-www-form-urlencoded",
-            },
-            body: new URLSearchParams({
-                start_date: startDate,
-                end_date: endDate,
-            }),
-        }
-    );
-
-    if (!response.ok) {
-        window.alert(
-            "No se pudieron restaurar los valores por defecto."
+        showFeedback(
+            "No se encontró el token CSRF.",
+            "error"
         );
         return;
     }
 
-    const data = await response.json();
+    try {
+        const response = await fetch(
+            availabilityResetUrl,
+            {
+                method: "POST",
+                headers: {
+                    "X-CSRFToken": csrfToken.value,
+                    "Content-Type": "application/x-www-form-urlencoded",
+                },
+                body: new URLSearchParams({
+                    start_date: startDate,
+                    end_date: endDate,
+                }),
+            }
+        );
 
-    window.alert(
-        `Se han eliminado ${data.deleted_count} configuraciones de disponibilidad.`
-    );
+        const data = await response.json();
 
-    await loadAvailabilityData();
-    renderCalendar();
+        if (!response.ok) {
+            throw new Error(
+                data.error ||
+                "No se pudieron restaurar los valores por defecto."
+            );
+        }
+
+        showFeedback(
+            `Se han eliminado ${data.deleted_count} configuraciones de disponibilidad.`,
+            "success"
+        );
+
+        await loadAvailabilityData();
+        renderCalendar();
+
+    } catch (error) {
+        showFeedback(error.message, "error");
+    }
 });
 
 clearAvailabilityEditor();

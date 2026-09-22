@@ -4,65 +4,42 @@
 {% block body %}
 <div class="container pt-5 pb-5">
     <div class="card">
-        <div class="card-header bg-primary text-white">
+        <div class="availability-page-header">
             <h2 class="mb-0">{{ property.title }} — Disponibilidad</h2>
         </div>
 
         <div class="card-body">
+            <div id="availability-feedback" class="availability-feedback" role="alert" aria-live="polite"></div>
             <div class="row g-4">
 
                 <div class="col-lg-9">
-                    <div
-                        id="property-availability-calendar"
+                    <div id="property-availability-calendar"
                         data-reset-url="{% url 'property_availability_reset' property.id %}"
                         data-data-url="{% url 'property_availability_data' property.id %}"
                         data-default-price="{{ property.default_price_per_night }}"
                         data-default-min-nights="{{ property.default_min_nights }}"
-                        data-save-url="{% url 'property_availability_save' property.id %}"
-                    >
+                        data-save-url="{% url 'property_availability_save' property.id %}">
                         <div class="d-flex justify-content-between align-items-center mb-3">
-                            <button
-                                type="button"
-                                class="btn btn-outline-secondary"
-                                id="availability-previous-year"
-                            >
+                            <button type="button" class="btn btn-outline-secondary" id="availability-previous-year">
                                 <i class="bi bi-chevron-double-left"></i>
                             </button>
 
-                            <button
-                                type="button"
-                                class="btn btn-outline-secondary"
-                                id="availability-previous-month"
-                            >
+                            <button type="button" class="btn btn-outline-secondary" id="availability-previous-month">
                                 <i class="bi bi-chevron-left"></i>
                             </button>
 
-                            <h3
-                                class="mb-0 fw-bold"
-                                id="availability-current-month"
-                            ></h3>
+                            <h3 class="mb-0 fw-bold" id="availability-current-month"></h3>
 
-                            <button
-                                type="button"
-                                class="btn btn-outline-secondary"
-                                id="availability-next-month"
-                            >
+                            <button type="button" class="btn btn-outline-secondary" id="availability-next-month">
                                 <i class="bi bi-chevron-right"></i>
                             </button>
 
-                            <button
-                                type="button"
-                                class="btn btn-outline-secondary"
-                                id="availability-next-year"
-                            >
+                            <button type="button" class="btn btn-outline-secondary" id="availability-next-year">
                                 <i class="bi bi-chevron-double-right"></i>
                             </button>
                         </div>
 
-                        <div
-                            id="availability-calendar-grid"
-                            class="availability-calendar-grid"
-                        ></div>
+                        <div id="availability-calendar-grid" class="availability-calendar-grid"></div>
 
                     </div>
                 </div>
@@ -78,47 +55,27 @@
                         <div class="card-body">
 
                             <div class="mb-3">
-                                <label
-                                    for="availability-start-date"
-                                    class="form-label"
-                                >
+                                <label for="availability-start-date" class="form-label">
                                     Fecha de inicio
                                 </label>
 
-                                <input
-                                    type="date"
-                                    id="availability-start-date"
-                                    class="form-control"
-                                >
+                                <input type="date" id="availability-start-date" class="form-control">
                             </div>
 
                             <div class="mb-3">
-                                <label
-                                    for="availability-end-date"
-                                    class="form-label"
-                                >
+                                <label for="availability-end-date" class="form-label">
                                     Fecha de fin
                                 </label>
 
-                                <input
-                                    type="date"
-                                    id="availability-end-date"
-                                    class="form-control"
-                                >
+                                <input type="date" id="availability-end-date" class="form-control">
                             </div>
 
                             <div class="mb-3">
-                                <label
-                                    for="availability-status"
-                                    class="form-label"
-                                >
+                                <label for="availability-status" class="form-label">
                                     Estado
                                 </label>
 
-                                <select
-                                    id="availability-status"
-                                    class="form-select"
-                                >
+                                <select id="availability-status" class="form-select">
                                     <option value="" selected></option>
                                     <option value="OPEN">Abierto</option>
                                     <option value="CLOSED">Cerrado</option>
@@ -126,59 +83,35 @@
                             </div>
 
                             <div class="mb-3">
-                                <label
-                                    for="availability-min-nights"
-                                    class="form-label"
-                                >
+                                <label for="availability-min-nights" class="form-label">
                                     Número mínimo de noches
                                 </label>
 
-                                <input
-                                    type="number"
-                                    id="availability-min-nights"
-                                    class="form-control"
-                                    min="1"
-                                >
+                                <input type="number" id="availability-min-nights" class="form-control" min="1">
                             </div>
 
                             <div class="mb-3">
-                                <label
-                                    for="availability-price"
-                                    class="form-label"
-                                >
+                                <label for="availability-price" class="form-label">
                                     Precio por noche
                                 </label>
 
-                                <input
-                                    type="number"
-                                    id="availability-price"
-                                    class="form-control"
-                                    min="0.01"
-                                    step="0.01"
-                                >
+                                <input type="number" id="availability-price" class="form-control" min="0.01"
+                                    step="0.01">
                             </div>
 
                             {% csrf_token %}
-                            <button
-                                type="button"
-                                class="btn btn-outline-danger w-100 mb-2"
-                                id="availability-reset"
-                            >
+                            <button type="button" class="btn availability-reset-button w-100 mb-2"
+                                id="availability-reset">
                                 Restaurar valores por defecto
                             </button>
 
-                            <button
-                                type="button"
-                                class="btn btn-primary w-100"
-                                id="availability-save"
-                            >
+                            <button type="button" class="btn availability-save-button w-100" id="availability-save">
                                 Guardar cambios
                             </button>
 
                         </div>
                     </div>
                 </div>
-
             </div>
         </div>
     </div>
