@@ -6,6 +6,9 @@ const availabilityCalendar = document.getElementById(
     "property-availability-calendar"
 );
 
+const availabilitySaveUrl =
+    availabilityCalendar.dataset.saveUrl;
+
 const availabilityResetUrl = availabilityCalendar.dataset.resetUrl;
 
 const defaultPrice = availabilityCalendar.dataset.defaultPrice.replace(",", ".");
@@ -556,7 +559,54 @@ availabilitySaveButton.addEventListener("click", () => {
         price_per_night: Number(price).toFixed(2),
     };
 
-    console.log("Availability save payload:", payload);
+    const csrfToken = document.querySelector(
+        "[name=csrfmiddlewaretoken]"
+    );
+
+    if (!csrfToken) {
+        window.alert(
+            "No se encontró el token CSRF."
+        );
+        return;
+    }
+
+    fetch(availabilitySaveUrl, {
+        method: "POST",
+        headers: {
+            "X-CSRFToken": csrfToken.value,
+            "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({
+            start_date: payload.start_date,
+            end_date: payload.end_date,
+            status: payload.status,
+            min_nights: payload.min_nights,
+            price_per_night: payload.price_per_night,
+        }),
+    })
+        .then(async response => {
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(
+                    data.error ||
+                    "No se pudieron guardar los cambios."
+                );
+            }
+
+            return data;
+        })
+        .then(async data => {
+            window.alert(
+                `Se han actualizado ${data.updated_count} días de disponibilidad.`
+            );
+
+            await loadAvailabilityData();
+            renderCalendar();
+        })
+        .catch(error => {
+            window.alert(error.message);
+        });
 });
 
 availabilityResetButton.addEventListener("click", async () => {
