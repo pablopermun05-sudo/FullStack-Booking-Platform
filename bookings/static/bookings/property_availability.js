@@ -193,7 +193,6 @@ function startRangeSelection(dateString) {
     hasDragged = false;
 
     updateSelectionDates();
-    renderCalendar();
 }
 
 function updateRangeSelection(dateString) {
@@ -209,6 +208,66 @@ function updateRangeSelection(dateString) {
 
     updateSelectionDates();
     renderCalendar();
+}
+
+function updateEditorFromRange() {
+    if (!selectionStart || !selectionEnd) {
+        return;
+    }
+
+    const start = selectionStart < selectionEnd
+        ? selectionStart
+        : selectionEnd;
+
+    const end = selectionStart < selectionEnd
+        ? selectionEnd
+        : selectionStart;
+
+    const startDate = new Date(start);
+    const endDate = new Date(end);
+
+    const values = [];
+
+    for (
+        let date = new Date(startDate);
+        date <= endDate;
+        date.setDate(date.getDate() + 1)
+    ) {
+        const dateString = formatDate(date);
+        const availability = availabilityData[dateString];
+
+        values.push({
+            status: availability
+                ? availability.status
+                : "OPEN",
+            minNights: availability
+                ? availability.min_nights
+                : defaultMinNights,
+            price: availability
+                ? availability.price_per_night
+                : defaultPrice,
+        });
+    }
+
+    const first = values[0];
+
+    availabilityStatus.value = values.every(
+        value => value.status === first.status
+    )
+        ? first.status
+        : "";
+
+    availabilityMinNights.value = values.every(
+        value => value.minNights === first.minNights
+    )
+        ? first.minNights
+        : "";
+
+    availabilityPrice.value = values.every(
+        value => value.price === first.price
+    )
+        ? first.price
+        : "";
 }
 
 function finishRangeSelection() {
@@ -235,6 +294,7 @@ function finishRangeSelection() {
         }
     } else {
         normalizeSelection();
+        updateEditorFromRange();
     }
 
     updateSelectionDates();
