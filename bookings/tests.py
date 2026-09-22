@@ -1,5 +1,5 @@
 from django.test import TestCase
-from .models import User, Property, Booking
+from .models import User, Property, Booking, PropertyAvailability
 from datetime import date, timedelta
 from django.core.exceptions import ValidationError
 
@@ -260,3 +260,167 @@ class BookingTestCase(TestCase):
 
         with self.assertRaises(ValidationError):
             booking.full_clean()
+
+class PropertyAvailabilityTestCase(TestCase):
+
+    def setUp(self):
+        self.owner = User.objects.create_user(
+            username="availability_owner",
+            email="availability_owner@test.com",
+            password="123"
+        )
+
+        self.property = Property.objects.create(
+            title="Casa Disponibilidad",
+            description="Desc",
+            location="Madrid",
+            default_price_per_night=100,
+            image="test.jpg",
+            children=2,
+            adults=2,
+            rooms=2,
+            owner=self.owner
+        )
+
+    # Test that a valid availability configuration passes validation
+    def test_valid_availability(self):
+        availability = PropertyAvailability(
+            property=self.property,
+            date=date.today(),
+            price_per_night=120,
+            status="OPEN",
+            min_nights=2,
+        )
+
+        try:
+            availability.full_clean()
+        except ValidationError:
+            self.fail("Should not raise ValidationError")
+
+    # Test that an availability cannot have a price of zero
+    def test_invalid_availability_price_zero(self):
+        availability = PropertyAvailability(
+            property=self.property,
+            date=date.today(),
+            price_per_night=0,
+            status="OPEN",
+            min_nights=1,
+        )
+
+        with self.assertRaises(ValidationError):
+            availability.full_clean()
+
+    # Test that an availability cannot have a negative price
+    def test_invalid_availability_negative_price(self):
+        availability = PropertyAvailability(
+            property=self.property,
+            date=date.today(),
+            price_per_night=-10,
+            status="OPEN",
+            min_nights=1,
+        )
+
+        with self.assertRaises(ValidationError):
+            availability.full_clean()
+
+    # Test that the minimum number of nights must be at least 1
+    def test_invalid_availability_min_nights(self):
+        availability = PropertyAvailability(
+            property=self.property,
+            date=date.today(),
+            price_per_night=120,
+            status="OPEN",
+            min_nights=0,
+        )
+
+        with self.assertRaises(ValidationError):
+            availability.full_clean()
+
+    # Test that past dates cannot be configured
+    def test_invalid_availability_past_date(self):
+        availability = PropertyAvailability(
+            property=self.property,
+            date=date.today() - timedelta(days=1),
+            price_per_night=120,
+            status="OPEN",
+            min_nights=1,
+        )
+
+        with self.assertRaises(ValidationError):
+            availability.full_clean()
+
+    # Test that the property defaults are returned when there is no override
+    def test_get_for_date_returns_property_defaults(self):
+        availability = PropertyAvailability.get_for_date(
+            self.property,
+            date.today(),
+        )
+
+        self.assertEqual(
+            availability["price_per_night"],
+            self.property.default_price_per_night,
+        )
+        self.assertEqual(availability["status"], "OPEN")
+        self.assertEqual(
+            availability["min_nights"],
+            self.property.default_min_nights,
+        )
+
+    # Test that an override is returned when one exists for the requested date
+    def test_get_for_date_returns_override(self):
+        PropertyAvailability.objects.create(
+            property=self.property,
+            date=date.today(),
+            price_per_night=150,
+            status="CLOSED",
+            min_nights=3,
+        )
+
+        availability = PropertyAvailability.get_for_date(
+            self.property,
+            date.today(),
+        )
+
+        self.assertEqual(availability["price_per_night"], 150)
+        self.assertEqual(availability["status"], "CLOSED")
+        self.assertEqual(availability["min_nights"], 3)
+
+    # Test that a range returns both property defaults and date overrides
+    def test_get_for_range_returns_defaults_and_overrides(self):
+        start_date = date.today()
+        end_date = start_date + timedelta(days=3)
+
+        PropertyAvailability.objects.create(
+            property=self.property,
+            date=start_date + timedelta(days=1),
+            price_per_night=150,
+            status="CLOSED",
+            min_nights=3,
+        )
+
+        availability = PropertyAvailability.get_for_range(
+            self.property,
+            start_date,
+            end_date,
+        )
+
+        self.assertEqual(len(availability), 3)
+
+        # The first day has no override, so property defaults are returned
+        self.assertEqual(
+            availability[0]["price_per_night"],
+            self.property.default_price_per_night,
+        )
+        self.assertEqual(availability[0]["status"], "OPEN")
+
+        # The second day has an override
+        self.assertEqual(availability[1]["price_per_night"], 150)
+        self.assertEqual(availability[1]["status"], "CLOSED")
+        self.assertEqual(availability[1]["min_nights"], 3)
+
+        # The third day has no override, so property defaults are returned
+        self.assertEqual(
+            availability[2]["price_per_night"],
+            self.property.default_price_per_night,
+        )
+        self.assertEqual(availability[2]["status"], "OPEN")
