@@ -294,8 +294,8 @@ function updateEditorFromRange() {
                 ? availability.status
                 : "OPEN",
             minNights: availability
-                ? availability.min_nights
-                : defaultMinNights,
+                ? Number(availability.min_nights)
+                : Number(defaultMinNights),
             price: availability
                 ? availability.price_per_night
                 : defaultPrice,
