@@ -769,6 +769,11 @@ availabilitySaveButton.addEventListener("click", () => {
                 "success"
             );
 
+            selectionStart = null;
+            selectionEnd = null;
+
+            clearAvailabilityEditor();
+
             await loadAvailabilityData();
             renderCalendar();
         })
@@ -834,6 +839,11 @@ availabilityResetButton.addEventListener("click", async () => {
             `Se han eliminado ${data.deleted_count} configuraciones de disponibilidad.`,
             "success"
         );
+
+        selectionStart = null;
+        selectionEnd = null;
+
+        clearAvailabilityEditor();
 
         await loadAvailabilityData();
         renderCalendar();
