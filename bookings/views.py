@@ -363,6 +363,12 @@ def property_availability_save(request, property_id):
             status=400,
         )
 
+    if price_per_night > Decimal("99999.99"):
+        return JsonResponse(
+            {"error": "Price must not exceed 99999.99"},
+            status=400,
+        )
+
     updated_count = 0
     current_date = start_date
 
