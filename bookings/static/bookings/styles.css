@@ -284,16 +284,42 @@ body {
         transform 0.1s ease;
 }
 
+.availability-calendar-day-empty {
+    box-sizing: border-box;
+    aspect-ratio: 1 / 1;
+    background: #dee2e6 !important;
+    border: none !important;
+    border-radius: 0 !important;
+    cursor: default;
+}
+
 .availability-calendar-day.booked {
     position: relative;
-    cursor: not-allowed;
+    cursor: default;
     background: #ffffff !important;
     color: #212529 !important;
     border-color: #dee2e6 !important;
 }
 
-.availability-calendar-day.booked:hover {
-    border-color: #dee2e6 !important;
+.availability-calendar-day.past {
+    background: #e9ecef !important;
+    border-color: #ced4da !important;
+    color: #6c757d !important;
+    cursor: default;
+    opacity: 0.75;
+}
+
+.availability-calendar-day.past[data-status="CLOSED"] {
+    background: #e9ecef !important;
+    border-color: #ced4da !important;
+    color: #6c757d !important;
+    cursor: default;
+    opacity: 0.75;
+}
+
+.availability-calendar-day.past:hover {
+    background: #e9ecef !important;
+    border-color: #ced4da !important;
 }
 
 .availability-calendar-day-booking {
@@ -337,12 +363,6 @@ body {
     background: #a8cbff !important;
     border-color: #34495e !important;
     color: #ffffff !important;
-}
-
-.availability-calendar-day-empty {
-    box-sizing: border-box;
-    aspect-ratio: 1 / 1;
-    background: transparent;
 }
 
 .availability-calendar-day-status {

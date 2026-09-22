@@ -132,6 +132,12 @@ function isDateBooked(dateString) {
     return bookedDates.has(dateString);
 }
 
+function isDatePast(dateString) {
+    const today = formatDate(new Date());
+
+    return dateString < today;
+}
+
 function isDateSelected(dateString) {
     if (!selectionStart) {
         return false;
@@ -212,7 +218,20 @@ function selectSingleDay(dateString) {
 
 function startRangeSelection(dateString) {
 
-    if (isDateBooked(dateString)) {
+    if (isDateBooked(dateString) || isDatePast(dateString)) {
+        return;
+    }
+
+    if (
+        selectionStart === dateString &&
+        selectionEnd === null
+    ) {
+        selectionStart = null;
+        selectionEnd = null;
+
+        clearAvailabilityEditor();
+        renderCalendar();
+
         return;
     }
 
@@ -230,7 +249,7 @@ function updateRangeSelection(dateString) {
         return;
     }
 
-    if (isDateBooked(dateString)) {
+    if (isDateBooked(dateString) || isDatePast(dateString)) {
         return;
     }
 
@@ -403,20 +422,14 @@ function renderCalendar() {
 
         const availability = availabilityData[dateString];
         const isBooked = isDateBooked(dateString);
+        const isPast = isDatePast(dateString);
 
         if (availability) {
             element.dataset.status = availability.status;
         }
 
-        if (isBooked) {
-            element.classList.add("booked");
-
-            const label = document.createElement("span");
-
-            label.classList.add("availability-calendar-day-booking");
-            label.textContent = "Reservado";
-
-            element.appendChild(label);
+        if (isPast) {
+            element.classList.add("past");
         }
 
         if (availability && availability.status === "CLOSED") {
@@ -428,11 +441,25 @@ function renderCalendar() {
             element.appendChild(label);
         }
 
+        if (isBooked) {
+            element.classList.add("booked");
+
+            const bookingLabel = document.createElement("span");
+
+            bookingLabel.classList.add(
+                "availability-calendar-day-booking"
+            );
+
+            bookingLabel.textContent = "Reservado";
+
+            element.appendChild(bookingLabel);
+        }
+
         if (isDateSelected(dateString)) {
             element.classList.add("selected");
         }
 
-        if (isBooked) {
+        if (isBooked || isPast) {
             element.disabled = true;
         } else {
             element.addEventListener("mousedown", event => {
