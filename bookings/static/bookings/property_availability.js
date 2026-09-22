@@ -167,6 +167,28 @@ function normalizeSelection() {
     }
 }
 
+function rangeContainsBlockedDate(startDateString, endDateString) {
+    const startDate = new Date(startDateString);
+    const endDate = new Date(endDateString);
+
+    for (
+        let date = new Date(startDate);
+        date <= endDate;
+        date.setDate(date.getDate() + 1)
+    ) {
+        const dateString = formatDate(date);
+
+        if (
+            isDatePast(dateString) ||
+            isDateBooked(dateString)
+        ) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 function updateSelectionDates() {
     if (!selectionStart) {
         availabilityStartDate.value = "";
@@ -489,7 +511,24 @@ availabilityStartDate.addEventListener("change", () => {
         return;
     }
 
-    selectionStart = availabilityStartDate.value;
+    const startDate = availabilityStartDate.value;
+    const endDate = availabilityEndDate.value || startDate;
+
+    if (rangeContainsBlockedDate(startDate, endDate)) {
+        clearAvailabilityEditor();
+        selectionStart = null;
+        selectionEnd = null;
+
+        showFeedback(
+            "No se pueden seleccionar fechas pasadas o reservadas.",
+            "error"
+        );
+
+        renderCalendar();
+        return;
+    }
+
+    selectionStart = startDate;
 
     if (
         availabilityEndDate.value &&
@@ -517,7 +556,26 @@ availabilityEndDate.addEventListener("change", () => {
         return;
     }
 
-    selectionEnd = availabilityEndDate.value;
+    const startDate = availabilityStartDate.value ||
+        availabilityEndDate.value;
+
+    const endDate = availabilityEndDate.value;
+
+    if (rangeContainsBlockedDate(startDate, endDate)) {
+        clearAvailabilityEditor();
+        selectionStart = null;
+        selectionEnd = null;
+
+        showFeedback(
+            "No se pueden seleccionar fechas pasadas o reservadas.",
+            "error"
+        );
+
+        renderCalendar();
+        return;
+    }
+
+    selectionEnd = endDate;
 
     if (
         selectionStart &&
