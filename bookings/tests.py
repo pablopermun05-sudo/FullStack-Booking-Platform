@@ -262,6 +262,96 @@ class BookingTestCase(TestCase):
         with self.assertRaises(ValidationError):
             booking.full_clean()
 
+    def test_confirm_booking_rejects_non_post_request(self):
+        self.client.force_login(self.tenant)
+
+        response = self.client.get(
+            reverse(
+                "confirm_booking",
+                kwargs={"property_id": self.property.pk},
+            )
+        )
+
+        self.assertEqual(response.status_code, 405)
+        self.assertEqual(response.json()["error"], "Method not allowed")
+
+
+    def test_confirm_booking_rejects_invalid_json(self):
+        self.client.force_login(self.tenant)
+
+        response = self.client.post(
+            reverse(
+                "confirm_booking",
+                kwargs={"property_id": self.property.pk},
+            ),
+            data="{invalid-json",
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["error"], "JSON inválido")
+
+
+    def test_confirm_booking_rejects_invalid_date_format(self):
+        self.client.force_login(self.tenant)
+
+        response = self.client.post(
+            reverse(
+                "confirm_booking",
+                kwargs={"property_id": self.property.pk},
+            ),
+            data={
+                "start": "not-a-date",
+                "end": "2026-10-10",
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json()["error"],
+            "Formato de fecha inválido.",
+        )
+
+
+    def test_confirm_booking_rejects_missing_dates(self):
+        self.client.force_login(self.tenant)
+
+        response = self.client.post(
+            reverse(
+                "confirm_booking",
+                kwargs={"property_id": self.property.pk},
+            ),
+            data={
+                "start": "2026-10-01",
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json()["error"],
+            "Ambas fechas deben ser seleccionadas.",
+        )
+
+
+    def test_confirm_booking_returns_404_for_invalid_property(self):
+        self.client.force_login(self.tenant)
+
+        response = self.client.post(
+            reverse(
+                "confirm_booking",
+                kwargs={"property_id": 999999},
+            ),
+            data={
+                "start": "2026-10-01",
+                "end": "2026-10-05",
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 404)
+
 class PropertyAvailabilityTestCase(TestCase):
 
     def setUp(self):
