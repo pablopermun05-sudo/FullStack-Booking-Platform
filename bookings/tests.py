@@ -266,6 +266,106 @@ class BookingTestCase(TestCase):
         with self.assertRaises(ValidationError):
             booking_by_owner.full_clean()
 
+    def test_booking_rejects_closed_date(self):
+        closed_date = date.today() + timedelta(days=5)
+
+        PropertyAvailability.objects.create(
+            property=self.property,
+            date=closed_date,
+            price_per_night=80,
+            status="CLOSED",
+            min_nights=1,
+        )
+
+        booking = Booking(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=closed_date,
+            final_date=closed_date + timedelta(days=2),
+        )
+
+        with self.assertRaises(ValidationError):
+            booking.full_clean()
+
+    def test_booking_respects_min_nights_on_arrival_date(self):
+        arrival_date = date.today() + timedelta(days=5)
+
+        PropertyAvailability.objects.create(
+            property=self.property,
+            date=arrival_date,
+            price_per_night=80,
+            status="OPEN",
+            min_nights=3,
+        )
+
+        booking = Booking(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=arrival_date,
+            final_date=arrival_date + timedelta(days=2),
+        )
+
+        with self.assertRaises(ValidationError):
+            booking.full_clean()
+
+    def test_booking_accepts_arrival_date_min_nights(self):
+        arrival_date = date.today() + timedelta(days=5)
+
+        PropertyAvailability.objects.create(
+            property=self.property,
+            date=arrival_date,
+            price_per_night=80,
+            status="OPEN",
+            min_nights=3,
+        )
+
+        booking = Booking(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=arrival_date,
+            final_date=arrival_date + timedelta(days=3),
+        )
+
+        try:
+            booking.full_clean()
+        except ValidationError:
+            self.fail("La reserva debería cumplir el mínimo de noches del día de llegada.")
+
+    def test_booking_uses_only_arrival_date_min_nights(self):
+        arrival_date = date.today() + timedelta(days=5)
+        following_date = arrival_date + timedelta(days=1)
+
+        PropertyAvailability.objects.create(
+            property=self.property,
+            date=arrival_date,
+            price_per_night=80,
+            status="OPEN",
+            min_nights=2,
+        )
+
+        PropertyAvailability.objects.create(
+            property=self.property,
+            date=following_date,
+            price_per_night=80,
+            status="OPEN",
+            min_nights=5,
+        )
+
+        booking = Booking(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=arrival_date,
+            final_date=arrival_date + timedelta(days=2),
+        )
+
+        try:
+            booking.full_clean()
+        except ValidationError:
+            self.fail(
+                "El mínimo de noches debe depender únicamente "
+                "del día de llegada."
+            )
+
     def test_invalid_booking_dates(self):
         booking = Booking(
             tenant=self.tenant,

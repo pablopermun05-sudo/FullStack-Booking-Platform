@@ -84,6 +84,36 @@ class Booking(models.Model):
         if self.tenant == self.property.owner:
             raise ValidationError("No puedes reservar tu propia vivienda.")
 
+        total_nights = (self.final_date - self.initial_date).days
+
+        availability = PropertyAvailability.get_for_range(
+            self.property,
+            self.initial_date,
+            self.final_date
+        )
+
+        closed_dates = [
+            day["date"]
+            for day in availability
+            if day["status"] == "CLOSED"
+        ]
+
+        if closed_dates:
+            raise ValidationError(
+                "El alojamiento no está disponible en todas las fechas seleccionadas."
+            )
+
+        arrival_availability = PropertyAvailability.get_for_date(
+            self.property,
+            self.initial_date
+        )
+
+        if total_nights < arrival_availability["min_nights"]:
+            raise ValidationError(
+                f"La estancia debe ser de al menos "
+                f"{arrival_availability['min_nights']} noches."
+            )
+
         # Buscamos reservas existentes que choquen
         bookings = Booking.objects.filter(
             property=self.property,
