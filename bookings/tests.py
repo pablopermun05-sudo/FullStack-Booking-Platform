@@ -1,4 +1,5 @@
 from django.test import TestCase
+from django.urls import reverse
 from .models import User, Property, Booking, PropertyAvailability
 from datetime import date, timedelta
 from django.core.exceptions import ValidationError
@@ -456,3 +457,35 @@ class PropertyAvailabilityTestCase(TestCase):
                 status="CLOSED",
                 min_nights=2,
             )
+
+    def test_save_availability_rejects_past_date(self):
+        self.client.force_login(self.owner)
+
+        past_date = date.today() - timedelta(days=1)
+
+        response = self.client.post(
+            reverse(
+                "property_availability_save",
+                kwargs={"property_id": self.property.pk},
+            ),
+            {
+                "start_date": past_date.isoformat(),
+                "end_date": past_date.isoformat(),
+                "status": "OPEN",
+                "min_nights": "1",
+                "price_per_night": "150",
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json()["error"],
+            "Cannot modify availability for past dates",
+        )
+
+        self.assertFalse(
+            PropertyAvailability.objects.filter(
+                property=self.property,
+                date=past_date,
+            ).exists()
+        )
