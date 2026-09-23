@@ -569,3 +569,19 @@ class PropertyAvailabilityTestCase(TestCase):
                 date=start_date,
             ).exists()
         )
+
+    def test_save_availability_rejects_get_request(self):
+        self.client.force_login(self.owner)
+
+        response = self.client.get(
+            reverse(
+                "property_availability_save",
+                kwargs={"property_id": self.property.pk},
+            )
+        )
+
+        self.assertEqual(response.status_code, 405)
+        self.assertEqual(
+            response.json()["error"],
+            "Method not allowed",
+        )
