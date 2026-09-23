@@ -814,3 +814,62 @@ class PropertyAvailabilityTestCase(TestCase):
             ).count(),
             0,
         )
+
+    def test_invalid_availability_status(self):
+        availability = PropertyAvailability(
+            property=self.property,
+            date=date.today(),
+            price_per_night=120,
+            status="INVALID",
+            min_nights=1,
+        )
+
+        with self.assertRaises(ValidationError):
+            availability.full_clean()
+
+    def test_save_availability_updates_existing_date(self):
+        start_date = date.today() + timedelta(days=5)
+
+        PropertyAvailability.objects.create(
+            property=self.property,
+            date=start_date,
+            price_per_night=100,
+            status="OPEN",
+            min_nights=1,
+        )
+
+        self.client.force_login(self.owner)
+
+        response = self.client.post(
+            reverse(
+                "property_availability_save",
+                kwargs={"property_id": self.property.pk},
+            ),
+            {
+                "start_date": start_date.isoformat(),
+                "end_date": start_date.isoformat(),
+                "status": "CLOSED",
+                "min_nights": "3",
+                "price_per_night": "200",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["updated_count"], 1)
+
+        availability = PropertyAvailability.objects.get(
+            property=self.property,
+            date=start_date,
+        )
+
+        self.assertEqual(availability.price_per_night, 200)
+        self.assertEqual(availability.status, "CLOSED")
+        self.assertEqual(availability.min_nights, 3)
+
+        self.assertEqual(
+            PropertyAvailability.objects.filter(
+                property=self.property,
+                date=start_date,
+            ).count(),
+            1,
+        )
