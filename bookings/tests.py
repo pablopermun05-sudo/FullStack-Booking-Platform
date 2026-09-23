@@ -658,3 +658,35 @@ class PropertyAvailabilityTestCase(TestCase):
         self.assertEqual(availability.status, "CLOSED")
         self.assertEqual(availability.min_nights, 2)
         self.assertEqual(availability.price_per_night, 150)
+
+    def test_save_availability_rejects_invalid_date_range(self):
+        self.client.force_login(self.owner)
+
+        start_date = date.today() + timedelta(days=10)
+        end_date = start_date - timedelta(days=1)
+
+        response = self.client.post(
+            reverse(
+                "property_availability_save",
+                kwargs={"property_id": self.property.pk},
+            ),
+            {
+                "start_date": start_date.isoformat(),
+                "end_date": end_date.isoformat(),
+                "status": "OPEN",
+                "min_nights": "1",
+                "price_per_night": "150",
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json()["error"],
+            "Start date must be before or equal to end date",
+        )
+
+        self.assertFalse(
+            PropertyAvailability.objects.filter(
+                property=self.property,
+            ).exists()
+        )
