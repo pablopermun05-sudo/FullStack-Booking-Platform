@@ -2,7 +2,7 @@ from django.test import TestCase
 from .models import User, Property, Booking, PropertyAvailability
 from datetime import date, timedelta
 from django.core.exceptions import ValidationError
-
+from django.db import IntegrityError
 
 class PropertyTestCase(TestCase):
 
@@ -424,3 +424,35 @@ class PropertyAvailabilityTestCase(TestCase):
             self.property.default_price_per_night,
         )
         self.assertEqual(availability[2]["status"], "OPEN")
+
+    # Test that price cannot exceed the maximum allowed value
+    def test_invalid_availability_price_exceeds_max(self):
+        availability = PropertyAvailability(
+            property=self.property,
+            date=date.today(),
+            price_per_night=100000,
+            status="OPEN",
+            min_nights=1,
+        )
+
+        with self.assertRaises(ValidationError):
+            availability.full_clean()
+
+    # Test that a property cannot have duplicate availability records for the same date
+    def test_unique_property_availability_date(self):
+        PropertyAvailability.objects.create(
+            property=self.property,
+            date=date.today(),
+            price_per_night=120,
+            status="OPEN",
+            min_nights=1,
+        )
+
+        with self.assertRaises(IntegrityError):
+            PropertyAvailability.objects.create(
+                property=self.property,
+                date=date.today(),
+                price_per_night=130,
+                status="CLOSED",
+                min_nights=2,
+            )
