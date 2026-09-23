@@ -428,14 +428,16 @@ def properties(request):
 
     if initial_date or final_date:
         if not initial_date or not final_date:
-             return JsonResponse({"error": "Ambas fechas deben ser seleccionadas."}, status=400)
+            return JsonResponse({"error": "Both dates are required"}, status=400)
 
-        # Convert dates from String into actual dates
-        initial_date = date.fromisoformat(initial_date)
-        final_date = date.fromisoformat(final_date)
+        try:
+            initial_date = date.fromisoformat(initial_date)
+            final_date = date.fromisoformat(final_date)
+        except ValueError:
+            return JsonResponse({"error": "Invalid date format"}, status=400)
 
         if initial_date > final_date:
-            return JsonResponse({"error": "La fecha de salida debe ser igual o posterior a la de entrada."}, status=400)
+            return JsonResponse({"error": "Invalid date range"}, status=400)
         elif initial_date < date.today():
             return JsonResponse({"error": "La fecha de entrada no puede ser anterior al día de hoy."}, status=400)
 
