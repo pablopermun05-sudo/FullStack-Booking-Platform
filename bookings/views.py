@@ -533,31 +533,61 @@ def booking(request, property_id):
 
 @login_required
 def confirm_booking(request, property_id):
-    if request.method == "POST":
-        try:
-            data = json.loads(request.body)
-            
-            initial_date = date.fromisoformat(data.get('start'))
-            final_date = date.fromisoformat(data.get('end'))
+    if request.method != "POST":
+        return JsonResponse(
+            {"error": "Method not allowed"},
+            status=405,
+        )
 
-            booking = Booking(
-                property_id=property_id,
-                tenant=request.user,
-                initial_date=initial_date,
-                final_date=final_date
-            )
+    property = get_object_or_404(Property, pk=property_id)
 
-            try:
-                # Execute clean() method to control booking restrictions
-                booking.full_clean() 
-                booking.save()
-                return JsonResponse({"success": True})
-            except ValidationError as e:
-                print(e.message_dict)
-                return JsonResponse({"error": e.message_dict}, status=400)
-            
-        except json.JSONDecodeError:
-            return JsonResponse({"error": "JSON inválido"}, status=400)
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse(
+            {"error": "JSON inválido"},
+            status=400,
+        )
+
+    if not isinstance(data, dict):
+        return JsonResponse(
+            {"error": "JSON inválido"},
+            status=400,
+        )
+
+    initial_date = data.get("start")
+    final_date = data.get("end")
+
+    if not initial_date or not final_date:
+        return JsonResponse(
+            {"error": "Ambas fechas deben ser seleccionadas."},
+            status=400,
+        )
+
+    try:
+        initial_date = date.fromisoformat(initial_date)
+        final_date = date.fromisoformat(final_date)
+    except ValueError:
+        return JsonResponse(
+            {"error": "Formato de fecha inválido."},
+            status=400,
+        )
+
+    try:
+        booking = Booking(
+            tenant=request.user,
+            property=property,
+            initial_date=initial_date,
+            final_date=final_date,
+        )
+        booking.save()
+    except ValidationError as e:
+        return JsonResponse(
+            {"error": e.message_dict},
+            status=400,
+        )
+
+    return JsonResponse({"message": "Reserva confirmada."})
 
 class LoginForm(AuthenticationForm):
     error_messages = {
