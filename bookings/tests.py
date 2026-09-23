@@ -675,7 +675,7 @@ class PropertyAvailabilityTestCase(TestCase):
             min_nights=1,
         )
 
-        with self.assertRaises(IntegrityError):
+        with self.assertRaises(ValidationError):
             PropertyAvailability.objects.create(
                 property=self.property,
                 date=date.today(),
