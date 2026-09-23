@@ -124,6 +124,14 @@ class PropertyAvailability(models.Model):
     )
     min_nights = models.PositiveIntegerField()
 
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["property", "date"],
+                name="unique_property_availability_date",
+            ),
+        ]
+    
     @classmethod
     def get_for_date(cls, property, date):
         availability = cls.objects.filter(
@@ -199,10 +207,6 @@ class PropertyAvailability(models.Model):
                 "No se puede configurar la disponibilidad de una fecha pasada"
             )
 
-    class Meta:
-        constraints = [
-            models.UniqueConstraint(
-                fields=["property", "date"],
-                name="unique_property_availability_date",
-            ),
-        ]
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
