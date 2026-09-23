@@ -873,3 +873,33 @@ class PropertyAvailabilityTestCase(TestCase):
             ).count(),
             1,
         )
+
+    def test_save_availability_rejects_invalid_date_format(self):
+        self.client.force_login(self.owner)
+
+        response = self.client.post(
+            reverse(
+                "property_availability_save",
+                kwargs={"property_id": self.property.pk},
+            ),
+            {
+                "start_date": "not-a-date",
+                "end_date": "also-not-a-date",
+                "status": "OPEN",
+                "min_nights": "1",
+                "price_per_night": "150",
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json()["error"],
+            "Invalid date format",
+        )
+
+        self.assertEqual(
+            PropertyAvailability.objects.filter(
+                property=self.property,
+            ).count(),
+            0,
+        )
