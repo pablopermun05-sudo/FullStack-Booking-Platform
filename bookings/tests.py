@@ -620,3 +620,41 @@ class PropertyAvailabilityTestCase(TestCase):
             self.assertEqual(item.status, "CLOSED")
             self.assertEqual(item.min_nights, 3)
             self.assertEqual(item.price_per_night, 150)
+
+    def test_save_availability_allows_staff_user(self):
+        staff_user = User.objects.create_user(
+            username="availability_staff",
+            email="availability_staff@test.com",
+            password="123",
+            is_staff=True,
+        )
+
+        self.client.force_login(staff_user)
+
+        start_date = date.today() + timedelta(days=5)
+
+        response = self.client.post(
+            reverse(
+                "property_availability_save",
+                kwargs={"property_id": self.property.pk},
+            ),
+            {
+                "start_date": start_date.isoformat(),
+                "end_date": start_date.isoformat(),
+                "status": "CLOSED",
+                "min_nights": "2",
+                "price_per_night": "150",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["updated_count"], 1)
+
+        availability = PropertyAvailability.objects.get(
+            property=self.property,
+            date=start_date,
+        )
+
+        self.assertEqual(availability.status, "CLOSED")
+        self.assertEqual(availability.min_nights, 2)
+        self.assertEqual(availability.price_per_night, 150)
