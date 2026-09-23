@@ -396,15 +396,21 @@ def property_availability_save(request, property_id):
         "updated_count": updated_count,
     })
 
-@login_required   
+@login_required
 def delete_booking(request, booking_id):
-    if request.method == "POST":
-        booking = get_object_or_404(Booking, pk=booking_id)
-        if booking.tenant != request.user:
-            raise PermissionDenied
-        else:
-            booking.delete()
-            return HttpResponseRedirect(reverse("my_bookings"))
+    booking = get_object_or_404(Booking, pk=booking_id)
+
+    if request.method != "POST":
+        return JsonResponse(
+            {"error": "Method not allowed"},
+            status=405,
+        )
+
+    if booking.tenant != request.user:
+        raise PermissionDenied
+
+    booking.delete()
+    return HttpResponseRedirect(reverse("my_bookings"))
 
 def properties(request):
     if request.method != "GET":
