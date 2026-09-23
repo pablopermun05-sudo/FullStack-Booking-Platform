@@ -203,9 +203,6 @@ def property_availability_reset(request, property_id):
 def property_availability_data(request, property_id):
     property = get_object_or_404(Property, pk=property_id)
 
-    if property.owner != request.user and not request.user.is_staff:
-        raise PermissionDenied
-
     start_date = request.GET.get("start_date")
     end_date = request.GET.get("end_date")
 

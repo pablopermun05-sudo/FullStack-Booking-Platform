@@ -131,10 +131,50 @@ if (rawData) {
 
 const noticePeriodDays = parseInt(document.getElementById('notice-period-days').value) || 0;
 
+const propertyId = document.getElementById('property-id').value;
+
+let availabilityData = {};
+let bookedDatesFromApi = [];
+
+async function loadAvailability(startDate, endDate) {
+    const url = `/property/${propertyId}/availability/data?start_date=${startDate}&end_date=${endDate}`;
+
+    const response = await fetch(url);
+
+    if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Error al cargar la disponibilidad.');
+    }
+
+    const data = await response.json();
+
+    availabilityData = {};
+
+    data.availability.forEach(item => {
+        availabilityData[item.date] = {
+            pricePerNight: Number(item.price_per_night),
+            status: item.status,
+            minNights: item.min_nights
+        };
+    });
+
+    bookedDatesFromApi = data.booked_dates;
+
+    return data;
+}
+
 // Calcular hoy + días de antelación en hora local
 const minBookingDate = new Date();
 minBookingDate.setDate(minBookingDate.getDate() + noticePeriodDays);
 const minBookingDateStr = minBookingDate.toLocaleDateString('en-CA'); // Formato "YYYY-MM-DD"
+
+loadAvailability(minBookingDateStr, minBookingDateStr)
+    .then(data => {
+        console.log('Disponibilidad recibida:', data);
+    })
+    .catch(error => {
+        console.error('Error cargando disponibilidad:', error);
+    });
 
 // Fechas que son salida de una reserva y entrada de otra
 const changeoverDates = departureDates.filter(
