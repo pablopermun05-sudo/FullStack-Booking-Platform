@@ -519,24 +519,68 @@ def booking(request, property_id):
         initial_date = date.fromisoformat(initial_date)
         final_date = date.fromisoformat(final_date)
 
-        if initial_date > final_date:
-            return JsonResponse({"error": "La fecha de salida debe ser igual o posterior a la de entrada."}, status=400)
+        if initial_date >= final_date:
+            return JsonResponse(
+                {
+                    "error": "La fecha de salida debe ser posterior a la fecha de entrada."
+                },
+                status=400,
+            )
         elif initial_date < date.today():
             return JsonResponse({"error": "La fecha de entrada no puede ser anterior al día de hoy."}, status=400)
         else:
+            availability = PropertyAvailability.get_for_range(
+                property,
+                initial_date,
+                final_date,
+            )
+
+            closed_dates = [
+                day["date"]
+                for day in availability
+                if day["status"] == "CLOSED"
+            ]
+
+            if closed_dates:
+                return JsonResponse(
+                    {
+                        "error": "El alojamiento no está disponible en todas las fechas seleccionadas."
+                    },
+                    status=400,
+                )
+
+            arrival_availability = PropertyAvailability.get_for_date(
+                property,
+                initial_date,
+            )
+
+            total_nights = (final_date - initial_date).days
+
+            if total_nights < arrival_availability["min_nights"]:
+                return JsonResponse(
+                    {
+                        "error": (
+                            f"La estancia debe ser de al menos "
+                            f"{arrival_availability['min_nights']} noches."
+                        )
+                    },
+                    status=400,
+                )
+
             # Check for any overlapping bookings in the database
             is_occupied = Booking.objects.filter(
                 property_id=property_id,
                 initial_date__lt=final_date,
-                final_date__gt=initial_date
+                final_date__gt=initial_date,
             ).exists()
 
             if is_occupied:
-                return JsonResponse({"error": "El alojamiento ya está reservado en esas fechas."}, status=400)
+                return JsonResponse(
+                    {"error": "El alojamiento ya está reservado en esas fechas."},
+                    status=400,
+                )
 
-            return JsonResponse({
-                "available": True
-            })
+            return JsonResponse({"available": True})
 
     except ValueError:
         return JsonResponse({"error": "Formato de fecha inválido."}, status=400)

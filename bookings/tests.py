@@ -518,6 +518,109 @@ class BookingTestCase(TestCase):
 
         self.assertEqual(response.status_code, 404)
 
+    def test_booking_endpoint_rejects_closed_date(self):
+        self.client.force_login(self.tenant)
+
+        closed_date = date.today() + timedelta(days=5)
+
+        PropertyAvailability.objects.create(
+            property=self.property,
+            date=closed_date,
+            price_per_night=80,
+            status="CLOSED",
+            min_nights=1,
+        )
+
+        response = self.client.get(
+            reverse("booking", kwargs={"property_id": self.property.pk}),
+            {
+                "start": closed_date.isoformat(),
+                "end": (closed_date + timedelta(days=2)).isoformat(),
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json()["error"],
+            "El alojamiento no está disponible en todas las fechas seleccionadas.",
+        )
+
+    def test_booking_endpoint_allows_closed_checkout_date(self):
+        self.client.force_login(self.tenant)
+        
+        arrival_date = date.today() + timedelta(days=5)
+        checkout_date = arrival_date + timedelta(days=2)
+
+        PropertyAvailability.objects.create(
+            property=self.property,
+            date=checkout_date,
+            price_per_night=80,
+            status="CLOSED",
+            min_nights=1,
+        )
+
+        response = self.client.get(
+            reverse("booking", kwargs={"property_id": self.property.pk}),
+            {
+                "start": arrival_date.isoformat(),
+                "end": checkout_date.isoformat(),
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["available"])
+
+    def test_booking_endpoint_rejects_stay_shorter_than_arrival_min_nights(self):
+        self.client.force_login(self.tenant)
+
+        arrival_date = date.today() + timedelta(days=5)
+
+        PropertyAvailability.objects.create(
+            property=self.property,
+            date=arrival_date,
+            price_per_night=80,
+            status="OPEN",
+            min_nights=3,
+        )
+
+        response = self.client.get(
+            reverse("booking", kwargs={"property_id": self.property.pk}),
+            {
+                "start": arrival_date.isoformat(),
+                "end": (arrival_date + timedelta(days=2)).isoformat(),
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json()["error"],
+            "La estancia debe ser de al menos 3 noches.",
+        )
+
+    def test_booking_endpoint_accepts_valid_availability(self):
+        self.client.force_login(self.tenant)
+        
+        arrival_date = date.today() + timedelta(days=5)
+
+        PropertyAvailability.objects.create(
+            property=self.property,
+            date=arrival_date,
+            price_per_night=80,
+            status="OPEN",
+            min_nights=3,
+        )
+
+        response = self.client.get(
+            reverse("booking", kwargs={"property_id": self.property.pk}),
+            {
+                "start": arrival_date.isoformat(),
+                "end": (arrival_date + timedelta(days=3)).isoformat(),
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["available"])
+
 class PropertySearchTestCase(TestCase):
 
     def test_properties_rejects_invalid_initial_date(self):
