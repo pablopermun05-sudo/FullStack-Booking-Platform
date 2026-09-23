@@ -489,3 +489,49 @@ class PropertyAvailabilityTestCase(TestCase):
                 date=past_date,
             ).exists()
         )
+
+    def test_save_availability_rejects_booked_dates(self):
+        tenant = User.objects.create_user(
+            username="availability_tenant",
+            email="availability_tenant@test.com",
+            password="123",
+        )
+
+        booking_start = date.today() + timedelta(days=5)
+        booking_end = booking_start + timedelta(days=3)
+
+        Booking.objects.create(
+            tenant=tenant,
+            property=self.property,
+            initial_date=booking_start,
+            final_date=booking_end,
+        )
+
+        self.client.force_login(self.owner)
+
+        response = self.client.post(
+            reverse(
+                "property_availability_save",
+                kwargs={"property_id": self.property.pk},
+            ),
+            {
+                "start_date": booking_start.isoformat(),
+                "end_date": booking_start.isoformat(),
+                "status": "CLOSED",
+                "min_nights": "2",
+                "price_per_night": "150",
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json()["error"],
+            "No se pueden modificar días que tienen reservas.",
+        )
+
+        self.assertFalse(
+            PropertyAvailability.objects.filter(
+                property=self.property,
+                date=booking_start,
+            ).exists()
+        )
