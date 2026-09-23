@@ -754,3 +754,35 @@ class PropertyAvailabilityTestCase(TestCase):
                 date=start_date,
             ).exists()
         )
+
+    def test_save_availability_rejects_invalid_price(self):
+        self.client.force_login(self.owner)
+
+        start_date = date.today() + timedelta(days=5)
+
+        response = self.client.post(
+            reverse(
+                "property_availability_save",
+                kwargs={"property_id": self.property.pk},
+            ),
+            {
+                "start_date": start_date.isoformat(),
+                "end_date": start_date.isoformat(),
+                "status": "OPEN",
+                "min_nights": "1",
+                "price_per_night": "invalid",
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json()["error"],
+            "Invalid price",
+        )
+
+        self.assertFalse(
+            PropertyAvailability.objects.filter(
+                property=self.property,
+                date=start_date,
+            ).exists()
+        )
