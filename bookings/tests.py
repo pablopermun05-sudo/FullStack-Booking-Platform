@@ -786,3 +786,31 @@ class PropertyAvailabilityTestCase(TestCase):
                 date=start_date,
             ).exists()
         )
+
+    def test_save_availability_rejects_missing_fields(self):
+        self.client.force_login(self.owner)
+
+        response = self.client.post(
+            reverse(
+                "property_availability_save",
+                kwargs={"property_id": self.property.pk},
+            ),
+            {
+                "start_date": (
+                    date.today() + timedelta(days=5)
+                ).isoformat(),
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json()["error"],
+            "All fields are required",
+        )
+
+        self.assertEqual(
+            PropertyAvailability.objects.filter(
+                property=self.property,
+            ).count(),
+            0,
+        )
