@@ -352,6 +352,33 @@ class BookingTestCase(TestCase):
 
         self.assertEqual(response.status_code, 404)
 
+    def test_delete_booking_rejects_non_post_request(self):
+        self.client.force_login(self.tenant)
+
+        booking = Booking.objects.create(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=date.today() + timedelta(days=5),
+            final_date=date.today() + timedelta(days=7),
+        )
+
+        response = self.client.get(
+            reverse(
+                "delete_booking",
+                kwargs={"booking_id": booking.pk},
+            )
+        )
+
+        self.assertEqual(response.status_code, 405)
+        self.assertEqual(
+            response.json()["error"],
+            "Method not allowed",
+        )
+
+        self.assertTrue(
+            Booking.objects.filter(pk=booking.pk).exists()
+        )
+
 class PropertySearchTestCase(TestCase):
 
     def test_properties_rejects_invalid_initial_date(self):
