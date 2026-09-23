@@ -317,6 +317,12 @@ def property_availability_save(request, property_id):
             status=400,
         )
 
+    if start_date < date.today():
+        return JsonResponse(
+            {"error": "Cannot modify availability for past dates"},
+            status=400,
+        )
+
     if start_date > end_date:
         return JsonResponse(
             {"error": "Start date must be before or equal to end date"},
