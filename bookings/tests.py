@@ -405,6 +405,19 @@ class BookingTestCase(TestCase):
             Booking.objects.filter(pk=booking.pk).exists()
         )
 
+    def test_booking_returns_404_for_invalid_property(self):
+        self.client.force_login(self.tenant)
+
+        response = self.client.get(
+            reverse("booking", kwargs={"property_id": 999999}),
+            {
+                "start": (date.today() + timedelta(days=5)).isoformat(),
+                "end": (date.today() + timedelta(days=7)).isoformat(),
+            },
+        )
+
+        self.assertEqual(response.status_code, 404)
+
 class PropertySearchTestCase(TestCase):
 
     def test_properties_rejects_invalid_initial_date(self):

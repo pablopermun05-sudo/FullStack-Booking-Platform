@@ -506,11 +506,13 @@ def properties(request):
 
 @login_required
 def booking(request, property_id):
+    property = get_object_or_404(Property, pk=property_id)
+
     initial_date = request.GET.get('start')
     final_date = request.GET.get('end')
 
     if not initial_date or not final_date:
-            return JsonResponse({"error": "Ambas fechas deben ser seleccionadas."}, status=400)
+        return JsonResponse({"error": "Ambas fechas deben ser seleccionadas."}, status=400)
 
     try:
         # Convert dates from String into actual dates
@@ -535,7 +537,7 @@ def booking(request, property_id):
             return JsonResponse({
                 "available": True
             })
-        
+
     except ValueError:
         return JsonResponse({"error": "Formato de fecha inválido."}, status=400)
 
