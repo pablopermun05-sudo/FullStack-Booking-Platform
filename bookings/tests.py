@@ -139,6 +139,32 @@ class PropertyTestCase(TestCase):
         with self.assertRaises(ValidationError):
             self.p_negative_notice.full_clean()
 
+class AuthenticationTestCase(TestCase):
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="logout_user",
+            email="logout@test.com",
+            password="testpassword123",
+        )
+
+    def test_logout_rejects_non_post_request(self):
+        self.client.force_login(self.user)
+
+        response = self.client.get(reverse("logout"))
+
+        self.assertEqual(response.status_code, 405)
+        self.assertEqual(response.json()["error"], "Method not allowed")
+        self.assertTrue(response.wsgi_request.user.is_authenticated)
+
+    def test_logout_logs_user_out(self):
+        self.client.force_login(self.user)
+
+        response = self.client.post(reverse("logout"))
+
+        self.assertRedirects(response, reverse("index"))
+        self.assertFalse(response.wsgi_request.user.is_authenticated)
+
 class BookingTestCase(TestCase):
 
     def setUp(self):
