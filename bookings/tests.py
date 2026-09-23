@@ -585,3 +585,38 @@ class PropertyAvailabilityTestCase(TestCase):
             response.json()["error"],
             "Method not allowed",
         )
+
+    def test_save_availability_updates_range(self):
+        self.client.force_login(self.owner)
+
+        start_date = date.today() + timedelta(days=5)
+        end_date = start_date + timedelta(days=2)
+
+        response = self.client.post(
+            reverse(
+                "property_availability_save",
+                kwargs={"property_id": self.property.pk},
+            ),
+            {
+                "start_date": start_date.isoformat(),
+                "end_date": end_date.isoformat(),
+                "status": "CLOSED",
+                "min_nights": "3",
+                "price_per_night": "150",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["updated_count"], 3)
+
+        availability = PropertyAvailability.objects.filter(
+            property=self.property,
+            date__range=[start_date, end_date],
+        ).order_by("date")
+
+        self.assertEqual(availability.count(), 3)
+
+        for item in availability:
+            self.assertEqual(item.status, "CLOSED")
+            self.assertEqual(item.min_nights, 3)
+            self.assertEqual(item.price_per_night, 150)
