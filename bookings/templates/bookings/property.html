@@ -168,7 +168,12 @@ const minBookingDate = new Date();
 minBookingDate.setDate(minBookingDate.getDate() + noticePeriodDays);
 const minBookingDateStr = minBookingDate.toLocaleDateString('en-CA'); // Formato "YYYY-MM-DD"
 
-loadAvailability(minBookingDateStr, minBookingDateStr)
+const availabilityEndDate = new Date(minBookingDate);
+availabilityEndDate.setFullYear(availabilityEndDate.getFullYear() + 1);
+
+const availabilityEndDateStr = availabilityEndDate.toLocaleDateString('en-CA');
+
+loadAvailability(minBookingDateStr, availabilityEndDateStr)
     .then(data => {
         console.log('Disponibilidad recibida:', data);
     })
