@@ -12,7 +12,7 @@ from django.contrib.auth.forms import AuthenticationForm
 from django.http import JsonResponse
 from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
-from django.core.paginator import Paginator
+from django.core.paginator import Paginator, PageNotAnInteger, EmptyPage
 from django.contrib.auth.decorators import login_required
 import json
 from django.core.exceptions import ValidationError
@@ -467,7 +467,7 @@ def properties(request):
             if adults < 1:
                 return JsonResponse({"error": "El número de adultos tiene que ser mayor que 0."}, status=400)
             properties = properties.filter(adults__gte=adults)
-        except:
+        except ValueError:
             return JsonResponse({"error": "Introduce un número válido para indicar el número de adultos."}, status=400)
 
     if children:
@@ -476,7 +476,7 @@ def properties(request):
             if children < 0:
                 return JsonResponse({"error": "El número de niños tiene que ser mayor o igual a 0."}, status=400)
             properties = properties.filter(children__gte=children)
-        except:
+        except ValueError:
             return JsonResponse({"error": "Introduce un número válido para indicar el número de niños."}, status=400)
 
     if rooms:
@@ -485,7 +485,7 @@ def properties(request):
             if rooms < 1:
                 return JsonResponse({"error": "El número de habitaciones tiene que ser mayor que 0."}, status=400)
             properties = properties.filter(rooms__gte=rooms)
-        except:
+        except ValueError:
             return JsonResponse({"error": "Introduce un número válido para indicar el número de habitaciones."}, status=400)
     
     if pets:
@@ -498,7 +498,7 @@ def properties(request):
     try:
         page_properties = paginator.page(page_number)
         properties = list(page_properties.object_list.values())
-    except:
+    except (PageNotAnInteger, EmptyPage):
         # If page doesn`t exist, return empty list
         properties = []
 

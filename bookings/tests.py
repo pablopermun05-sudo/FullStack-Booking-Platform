@@ -450,6 +450,44 @@ class PropertySearchTestCase(TestCase):
             "Invalid date format",
         )
 
+    def test_properties_rejects_invalid_adults(self):
+        response = self.client.get(
+            reverse("properties"),
+            {"adults": "not-a-number"},
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json()["error"],
+            "Introduce un número válido para indicar el número de adultos.",
+        )
+
+
+    def test_properties_rejects_invalid_children(self):
+        response = self.client.get(
+            reverse("properties"),
+            {"children": "not-a-number"},
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json()["error"],
+            "Introduce un número válido para indicar el número de niños.",
+        )
+
+
+    def test_properties_rejects_invalid_rooms(self):
+        response = self.client.get(
+            reverse("properties"),
+            {"rooms": "not-a-number"},
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json()["error"],
+            "Introduce un número válido para indicar el número de habitaciones.",
+        )
+
 class PropertyAvailabilityTestCase(TestCase):
 
     def setUp(self):
