@@ -535,3 +535,37 @@ class PropertyAvailabilityTestCase(TestCase):
                 date=booking_start,
             ).exists()
         )
+
+    def test_save_availability_rejects_non_owner(self):
+        user = User.objects.create_user(
+            username="availability_user",
+            email="availability_user@test.com",
+            password="123",
+        )
+
+        self.client.force_login(user)
+
+        start_date = date.today() + timedelta(days=5)
+
+        response = self.client.post(
+            reverse(
+                "property_availability_save",
+                kwargs={"property_id": self.property.pk},
+            ),
+            {
+                "start_date": start_date.isoformat(),
+                "end_date": start_date.isoformat(),
+                "status": "CLOSED",
+                "min_nights": "2",
+                "price_per_night": "150",
+            },
+        )
+
+        self.assertEqual(response.status_code, 403)
+
+        self.assertFalse(
+            PropertyAvailability.objects.filter(
+                property=self.property,
+                date=start_date,
+            ).exists()
+        )
