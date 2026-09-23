@@ -352,6 +352,38 @@ class BookingTestCase(TestCase):
 
         self.assertEqual(response.status_code, 404)
 
+class PropertySearchTestCase(TestCase):
+
+    def test_properties_rejects_invalid_initial_date(self):
+        response = self.client.get(
+            reverse("properties"),
+            {
+                "initial_date": "not-a-date",
+                "final_date": "2026-10-10",
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json()["error"],
+            "Invalid date format",
+        )
+
+    def test_properties_rejects_invalid_final_date(self):
+        response = self.client.get(
+            reverse("properties"),
+            {
+                "initial_date": "2026-10-01",
+                "final_date": "not-a-date",
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json()["error"],
+            "Invalid date format",
+        )
+
 class PropertyAvailabilityTestCase(TestCase):
 
     def setUp(self):
