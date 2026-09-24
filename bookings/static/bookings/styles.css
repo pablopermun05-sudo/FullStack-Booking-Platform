@@ -205,6 +205,33 @@ body {
     opacity: 1 !important;
 }
 
+/* SOLO LLEGADA: fecha disponible después de una noche no disponible */
+.litepicker .container__days .day-item.availability-check-in-only:not(.is-in-range):not(.is-start-date):not(.is-end-date) {
+    background: linear-gradient(
+        to bottom right,
+        #e7727d 0%,
+        #e7727d calc(50% - 0.5px),
+        #ffffff calc(50% + 0.5px),
+        #ffffff 100%
+    ) !important;
+    color: #333333 !important;
+    opacity: 1 !important;
+}
+
+/* SOLO LLEGADA: fecha incluida en el rango */
+.litepicker .container__days .day-item.availability-check-in-only.is-in-range {
+    background: #a1caff !important;
+    color: #000000 !important;
+    opacity: 1 !important;
+}
+
+/* SOLO LLEGADA: fecha seleccionada como inicio del rango */
+.litepicker .container__days .day-item.availability-check-in-only.is-start-date {
+    background: #0d6efd !important;
+    color: #ffffff !important;
+    opacity: 1 !important;
+}
+
 /* SOLO SALIDA */
 .litepicker .container__days .day-item.solo-salida:not(.is-locked) {
     background: linear-gradient(
@@ -216,6 +243,33 @@ body {
     ) !important;
     color: #333333 !important;
     opacity: 1 !important;
+}
+
+/* CLOSED: solo checkout cuando está fuera de un rango */
+.litepicker .container__days .day-item.closed-checkout:not(.is-in-range):not(.is-start-date):not(.is-end-date) {
+    background: linear-gradient(
+        to bottom right,
+        #ffffff 0%,
+        #ffffff calc(50% - 0.5px),
+        #e7727d calc(50% + 0.5px),
+        #e7727d 100%
+    ) !important;
+    color: #333333 !important;
+    opacity: 1 !important;
+}
+
+/* CLOSED: checkout incluido en el rango */
+.litepicker .container__days .day-item.closed-checkout.is-in-range,
+.litepicker .container__days .day-item.closed-checkout.is-end-date {
+    background: #a1caff !important;
+    color: #000000 !important;
+    opacity: 1 !important;
+}
+
+/* CLOSED: checkout seleccionado como extremo final */
+.litepicker .container__days .day-item.closed-checkout.is-end-date {
+    background: #0d6efd !important;
+    color: #ffffff !important;
 }
 
 .availability-page-header {

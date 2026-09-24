@@ -227,10 +227,11 @@ def property_availability_data(request, property_id):
             status=400,
         )
 
-    availability = PropertyAvailability.objects.filter(
-        property=property,
-        date__range=[start_date, end_date],
-    ).order_by("date")
+    availability = PropertyAvailability.get_for_range(
+        property,
+        start_date,
+        end_date + timedelta(days=1),
+    )
 
     bookings = Booking.objects.filter(
         property=property,
@@ -258,10 +259,10 @@ def property_availability_data(request, property_id):
     return JsonResponse({
         "availability": [
             {
-                "date": item.date.isoformat(),
-                "price_per_night": str(item.price_per_night),
-                "status": item.status,
-                "min_nights": item.min_nights,
+                "date": item["date"].isoformat(),
+                "price_per_night": str(item["price_per_night"]),
+                "status": item["status"],
+                "min_nights": item["min_nights"],
             }
             for item in availability
         ],
