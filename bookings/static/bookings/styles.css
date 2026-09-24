@@ -163,8 +163,37 @@ body {
     border-radius: 0 !important;
 }
 
+/* Esquinas redondeadas en los extremos del rango */
+.litepicker .container__days .day-item.is-start-date {
+    border-top-left-radius: 6px !important;
+    border-bottom-left-radius: 6px !important;
+}
+
+.litepicker .container__days .day-item.is-end-date {
+    border-top-right-radius: 6px !important;
+    border-bottom-right-radius: 6px !important;
+}
+
+.litepicker .container__days .day-item.is-start-date.is-flipped {
+    border-top-left-radius: 0 !important;
+    border-bottom-left-radius: 0 !important;
+    border-top-right-radius: 6px !important;
+    border-bottom-right-radius: 6px !important;
+}
+
+.litepicker .container__days .day-item.is-end-date.is-flipped {
+    border-top-right-radius: 0 !important;
+    border-bottom-right-radius: 0 !important;
+    border-top-left-radius: 6px !important;
+    border-bottom-left-radius: 6px !important;
+}
+
+.litepicker .container__days .day-item.is-start-date.is-end-date {
+    border-radius: 6px !important;
+}
+
 /* Días 100% bloqueados */
-.litepicker .container__days .day-item.is-locked:not(.is-in-range):not(.is-start-date):not(.is-end-date) {
+.litepicker .container__days .day-item.availability-locked:not(.is-in-range):not(.is-start-date):not(.is-end-date) {
     background-color: #dc3545 !important;
     color: #ffffff !important;
     opacity: 0.7 !important;
@@ -172,7 +201,7 @@ body {
 }
 
 /* Hover en días bloqueados completos */
-.litepicker .container__days .day-item.is-locked:not(.is-in-range):not(.is-start-date):not(.is-end-date):hover {
+.litepicker .container__days .day-item.availability-locked:not(.is-in-range):not(.is-start-date):not(.is-end-date):hover {
     background-color: #bd2130 !important;
     color: #ffffff !important;
 }
