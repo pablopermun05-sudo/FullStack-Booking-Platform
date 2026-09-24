@@ -75,9 +75,7 @@
 
                         <input type="hidden" id="start-date">
                         <input type="hidden" id="end-date">
-
-                        <input type="hidden" id="booked-dates-raw" value="{% for booking in active_bookings %}{{ booking.initial_date|date:'Y-m-d' }},{{ booking.final_date|date:'Y-m-d' }}{% if not forloop.last %},{% endif %}{% endfor %}">
-                            
+              
                         <div class="alert alert-danger mt-3 mb-0 no-display" id="alert-booking-date" role="alert"></div>
                         <div class="mt-3 mb-0 no-display" id="booking-button"></div>
                         {% else %}
@@ -101,35 +99,6 @@
 <script src="https://cdn.jsdelivr.net/npm/litepicker/dist/litepicker.js"></script>
 
 <script>
-const rawData = document.getElementById('booked-dates-raw').value;
-const bookedDates = [];
-
-const arrivalDates = [];
-const departureDates = [];
-
-if (rawData) {
-    const datesArray = rawData.split(',');
-
-    for (let i = 0; i < datesArray.length; i += 2) {
-        if (datesArray[i] && datesArray[i+1]) {
-            arrivalDates.push(datesArray[i]);
-            departureDates.push(datesArray[i + 1]);
-
-            const start = new Date(datesArray[i]);
-            start.setDate(start.getDate() + 1);
-
-            const startStr = start.toISOString().split('T')[0];
-
-            const end = new Date(datesArray[i + 1]);
-            end.setDate(end.getDate() - 1);
-
-            const endStr = end.toISOString().split('T')[0];
-
-            bookedDates.push([startStr, endStr]);
-        }
-    }
-}
-
 const noticePeriodDays = parseInt(document.getElementById('notice-period-days').value) || 0;
 
 const propertyId = document.getElementById('property-id').value;
@@ -191,75 +160,56 @@ availabilityEndDate.setFullYear(availabilityEndDate.getFullYear() + 1);
 
 const availabilityEndDateStr = availabilityEndDate.toLocaleDateString('en-CA');
 
-loadAvailability(minBookingDateStr, availabilityEndDateStr)
+const availabilityStartDate = new Date(minBookingDate);
+availabilityStartDate.setDate(availabilityStartDate.getDate() - 1);
+
+const availabilityStartDateStr = availabilityStartDate.toLocaleDateString('en-CA');
+
+loadAvailability(availabilityStartDateStr, availabilityEndDateStr)
     .then(() => {
-        const availabilityCheckInOnlyDates = [];
-        const closedCheckoutOnlyDates = [];
-        const fullyBlockedClosedDates = [];
+        const checkInOnlyDates = [];
+        const checkoutOnlyDates = [];
+        const blockedDates = [];
 
-        Object.keys(availabilityData).forEach(dateStr => {
-            const previousDate = getPreviousDate(dateStr);
+        Object.keys(availabilityData)
+            .filter(dateStr => dateStr >= minBookingDateStr)
+            .forEach(dateStr => {
+                const previousDate = getPreviousDate(dateStr);
 
-            if (isClosed(dateStr)) {
-                if (isAvailableNight(previousDate)) {
-                    closedCheckoutOnlyDates.push(dateStr);
-                } else {
-                    fullyBlockedClosedDates.push(dateStr);
+                const currentNightAvailable = isAvailableNight(dateStr);
+                const previousNightAvailable = isAvailableNight(previousDate);
+
+                if (!currentNightAvailable && previousNightAvailable) {
+                    checkoutOnlyDates.push(dateStr);
+                    return;
                 }
 
-                return;
-            }
+                if (currentNightAvailable && !previousNightAvailable) {
+                    checkInOnlyDates.push(dateStr);
+                    return;
+                }
 
-            if (
-                isAvailableNight(dateStr) &&
-                (isBooked(previousDate) || isClosed(previousDate))
-            ) {
-                availabilityCheckInOnlyDates.push(dateStr);
-            }
-        });
+                if (!currentNightAvailable && !previousNightAvailable) {
+                    blockedDates.push(dateStr);
+                }
+            });
 
         initializePicker(
-            availabilityCheckInOnlyDates,
-            closedCheckoutOnlyDates,
-            fullyBlockedClosedDates
+            checkInOnlyDates,
+            checkoutOnlyDates,
+            blockedDates
         );
     })
     .catch(error => {
         console.error('Error cargando disponibilidad:', error);
     });
 
-const changeoverDates = departureDates.filter(
-    date => arrivalDates.includes(date)
-);
-
-const soloEntradaDates = departureDates.filter(
-    date => !changeoverDates.includes(date)
-);
-
-const soloSalidaDates = arrivalDates.filter(
-    date => !changeoverDates.includes(date)
-);
-
-if (arrivalDates.includes(minBookingDateStr) && !changeoverDates.includes(minBookingDateStr)) {
-    changeoverDates.push(minBookingDateStr);
-}
-
-if (!changeoverDates.includes(minBookingDateStr) && !soloEntradaDates.includes(minBookingDateStr)) {
-    soloEntradaDates.push(minBookingDateStr);
-}
-
-changeoverDates.forEach(date => {
-    bookedDates.push([date, date]);
-});
-
 function initializePicker(
-    availabilityCheckInOnlyDates,
-    closedCheckoutOnlyDates,
-    fullyBlockedClosedDates
+    checkInOnlyDates,
+    checkoutOnlyDates,
+    blockedDates
 ) {
-    fullyBlockedClosedDates.forEach(date => {
-        bookedDates.push([date, date]);
-    });
+    const lockedDates = blockedDates.map(date => [date, date]);
 
     const picker = new Litepicker({
         element: document.getElementById('booking-range'),
@@ -269,9 +219,9 @@ function initializePicker(
         format: 'DD/MM/YYYY',
         minDate: minBookingDateStr,
         minDays: 2,
-        lockDays: bookedDates,
-        bookedDays: closedCheckoutOnlyDates,
-        disallowedDatesRanges: bookedDates,
+        lockDays: lockedDates,
+        bookedDays: checkoutOnlyDates,
+        disallowedDatesRanges: lockedDates,
         selectForward: false,
         lockDaysInversed: false,
 
@@ -292,7 +242,7 @@ function initializePicker(
 
                 const startStr = date1.format('YYYY-MM-DD');
 
-                if (closedCheckoutOnlyDates.includes(startStr)) {
+                if (checkoutOnlyDates.includes(startStr)) {
                     picker.clearSelection();
                 }
             });
@@ -300,14 +250,10 @@ function initializePicker(
             picker.on('render:day', (dayElement, date) => {
                 const dStr = date.format('YYYY-MM-DD');
 
-                if (closedCheckoutOnlyDates.includes(dStr)) {
-                    dayElement.classList.add('closed-checkout');
-                } else if (soloEntradaDates.includes(dStr)) {
-                    dayElement.classList.add('solo-entrada');
-                } else if (availabilityCheckInOnlyDates.includes(dStr)) {
-                    dayElement.classList.add('solo-entrada');
-                } else if (soloSalidaDates.includes(dStr)) {
+                if (checkoutOnlyDates.includes(dStr)) {
                     dayElement.classList.add('solo-salida');
+                } else if (checkInOnlyDates.includes(dStr)) {
+                    dayElement.classList.add('solo-entrada');
                 }
             });
 
@@ -338,9 +284,8 @@ function initializePicker(
                 }
 
                 if (
-                    soloSalidaDates.includes(startStr) ||
-                    soloEntradaDates.includes(endStr) ||
-                    availabilityCheckInOnlyDates.includes(endStr)
+                    checkoutOnlyDates.includes(startStr) ||
+                    checkInOnlyDates.includes(endStr)
                 ) {
                     alertBox.textContent =
                         'La combinación de fechas no es válida: revisa el día marcado en rojo en diagonal.';
