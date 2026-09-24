@@ -481,6 +481,10 @@ function renderCalendar() {
 
         if (availability) {
             element.dataset.status = availability.status;
+
+            if (availability.has_override) {
+                element.classList.add("modified");
+            }
         }
 
         if (isPast) {

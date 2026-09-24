@@ -263,6 +263,10 @@ def property_availability_data(request, property_id):
                 "price_per_night": str(item["price_per_night"]),
                 "status": item["status"],
                 "min_nights": item["min_nights"],
+                "has_override": PropertyAvailability.objects.filter(
+                    property=property,
+                    date=item["date"],
+                ).exists(),
             }
             for item in availability
         ],

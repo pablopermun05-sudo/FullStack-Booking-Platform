@@ -370,7 +370,7 @@ body {
     border-color: #34495e !important;
 }
 
-.availability-calendar-day[data-status="OPEN"] {
+.availability-calendar-day.modified[data-status="OPEN"]:not(.past) {
     background: #d1e7dd !important;
     border-color: #a3cfbb !important;
     color: #0f5132 !important;
