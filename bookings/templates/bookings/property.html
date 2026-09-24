@@ -4,6 +4,7 @@
 {% block body %}
 <input type="hidden" id="property-id" value="{{ property.id }}">
 <input type="hidden" id="notice-period-days" value="{{ property.notice_period_days }}">
+<input type="hidden" id="default-min-nights" value="{{ property.default_min_nights }}">
 <div class="container pt-5 pb-5">
     <div class="row g-4">
         <div class="col-lg-8">
@@ -100,8 +101,8 @@
 
 <script>
 const noticePeriodDays = parseInt(document.getElementById('notice-period-days').value) || 0;
-
 const propertyId = document.getElementById('property-id').value;
+const defaultMinNights = parseInt(document.getElementById('default-min-nights').value) || 1;
 
 let availabilityData = {};
 let bookedDatesFromApi = [];
@@ -218,11 +219,11 @@ function initializePicker(
         numberOfColumns: 1,
         format: 'DD/MM/YYYY',
         minDate: minBookingDateStr,
-        minDays: 2,
+        minDays: defaultMinNights + 1,
         lockDays: lockedDates,
         bookedDays: checkoutOnlyDates,
         disallowedDatesRanges: lockedDates,
-        selectForward: false,
+        selectForward: true,
         lockDaysInversed: false,
 
         tooltipText: {
@@ -244,7 +245,18 @@ function initializePicker(
 
                 if (checkoutOnlyDates.includes(startStr)) {
                     picker.clearSelection();
+                    return;
                 }
+
+                const minNights = availabilityData[startStr]?.minNights || defaultMinNights;
+
+                const selectedDate = date1.toJSDate();
+
+                picker.setOptions({
+                    minDays: minNights + 1
+                });
+
+                picker.gotoDate(selectedDate);
             });
 
             picker.on('render:day', (dayElement, date) => {
