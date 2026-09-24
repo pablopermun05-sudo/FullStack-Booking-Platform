@@ -106,6 +106,7 @@ const defaultMinNights = parseInt(document.getElementById('default-min-nights').
 
 let availabilityData = {};
 let bookedDatesFromApi = [];
+let selectedMinNights = defaultMinNights;
 
 async function loadAvailability(startDate, endDate) {
     const url = `/property/${propertyId}/availability/data?start_date=${startDate}&end_date=${endDate}`;
@@ -219,7 +220,7 @@ function initializePicker(
         numberOfColumns: 1,
         format: 'DD/MM/YYYY',
         minDate: minBookingDateStr,
-        minDays: defaultMinNights + 1,
+        minDays: 2,
         lockDays: lockedDates,
         bookedDays: checkoutOnlyDates,
         disallowedDatesRanges: lockedDates,
@@ -232,12 +233,52 @@ function initializePicker(
         },
 
         tooltipNumber: (totalDays) => {
-            return totalDays - 1;
+            const nights = totalDays - 1;
+
+            if (nights < selectedMinNights) {
+                return selectedMinNights;
+            }
+
+            return nights;
         },
 
         setup: (picker) => {
+            picker.on('tooltip', (tooltip, dayElement) => {
+                if (!selectedMinNights) {
+                    return;
+                }
+
+                if (!picker.datePicked || picker.datePicked.length !== 1) {
+                    return;
+                }
+
+                const start = picker.datePicked[0].toJSDate();
+                const hoveredDate = new Date(Number(dayElement.dataset.time));
+
+                const nights = Math.round((hoveredDate - start) / (1000 * 60 * 60 * 24));
+
+                if (nights < selectedMinNights) {
+                    tooltip.textContent = `Estancia mínima: ${selectedMinNights} noches`;
+                    dayElement.classList.remove('is-end-date', 'is-flipped');
+
+                    const containerRect = picker.ui.getBoundingClientRect();
+                    const tooltipRect = tooltip.getBoundingClientRect();
+                    const dayRect = dayElement.getBoundingClientRect();
+
+                    let top = dayRect.top - containerRect.top;
+                    let left = dayRect.left - containerRect.left;
+
+                    top -= tooltipRect.height;
+                    left -= tooltipRect.width / 2;
+                    left += dayRect.width / 2;
+
+                    tooltip.style.top = `${top}px`;
+                    tooltip.style.left = `${left}px`;
+                }
+            });
+
             picker.on('preselect', (date1, date2) => {
-                if (!date1 || date2) {
+                if (!date1) {
                     return;
                 }
 
@@ -248,19 +289,30 @@ function initializePicker(
                     return;
                 }
 
-                const minNights = availabilityData[startStr]?.minNights || defaultMinNights;
+                if (!date2) {
+                    const minNights = availabilityData[startStr]?.minNights || defaultMinNights;
+                    selectedMinNights = minNights;
+                    const selectedDate = date1.toJSDate();
+                    picker.gotoDate(selectedDate);
 
-                const selectedDate = date1.toJSDate();
+                    return;
+                }
 
-                picker.setOptions({
-                    minDays: minNights + 1
-                });
+                const nights = date2.diff(date1, 'day');
 
-                picker.gotoDate(selectedDate);
+                if (nights < selectedMinNights) {
+                    picker.datePicked.length = 1;
+                    picker.render();
+                    return;
+                }
             });
 
             picker.on('render:day', (dayElement, date) => {
                 const dStr = date.format('YYYY-MM-DD');
+
+                if (blockedDates.includes(dStr)) {
+                    dayElement.classList.add('availability-locked');
+                }
 
                 if (checkoutOnlyDates.includes(dStr)) {
                     dayElement.classList.add('solo-salida');
