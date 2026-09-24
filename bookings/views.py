@@ -639,7 +639,10 @@ def confirm_booking(request, property_id):
             status=400,
         )
 
-    return JsonResponse({"message": "Reserva confirmada."})
+    return JsonResponse({
+            "success": True,
+            "message": "Reserva confirmada.",
+        })
 
 class LoginForm(AuthenticationForm):
     error_messages = {
