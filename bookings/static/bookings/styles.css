@@ -193,21 +193,21 @@ body {
 }
 
 /* Días 100% bloqueados */
-.litepicker .container__days .day-item.availability-locked:not(.is-in-range):not(.is-start-date):not(.is-end-date) {
+.litepicker .container__days .day-item.availability-locked {
+    background: #dc3545 !important;
     background-color: #dc3545 !important;
     color: #ffffff !important;
     opacity: 0.7 !important;
-    cursor: not-allowed !important;
 }
 
 /* Hover en días bloqueados completos */
-.litepicker .container__days .day-item.availability-locked:not(.is-in-range):not(.is-start-date):not(.is-end-date):hover {
+.litepicker .container__days .day-item.availability-locked:not(.is-start-date):not(.is-end-date):hover {
     background-color: #bd2130 !important;
     color: #ffffff !important;
 }
 
 /* Forzar estilos del rango seleccionado en azul */
-.litepicker .container__days .day-item.is-in-range {
+.litepicker .container__days .day-item.is-in-range:not(.solo-salida):not(.solo-entrada) {
     background-color: #a1caff !important;
     color: #000000 !important;
     opacity: 1 !important;
@@ -222,7 +222,7 @@ body {
 }
 
 /* SOLO LLEGADA */
-.litepicker .container__days .day-item.solo-entrada:not(.is-locked) {
+.litepicker .container__days .day-item.solo-entrada {
     background: linear-gradient(
         to bottom right,
         #e7727d 0%,
@@ -234,8 +234,15 @@ body {
     opacity: 1 !important;
 }
 
+/* Mantener azul el inicio SOLO LLEGADA mientras se previsualiza el rango */
+.litepicker .container__days .day-item.solo-entrada.is-start-date {
+    background: #0d6efd !important;
+    color: #ffffff !important;
+    opacity: 1 !important;
+}
+
 /* SOLO SALIDA */
-.litepicker .container__days .day-item.solo-salida:not(.is-locked) {
+.litepicker .container__days .day-item.solo-salida {
     background: linear-gradient(
         to bottom right,
         #ffffff 0%,
@@ -247,7 +254,14 @@ body {
     opacity: 1 !important;
 }
 
-.litepicker .container__days .day-item.min-stay-unavailable {
+/* Un checkout seleccionado debe conservar el azul del extremo del rango */
+.litepicker .container__days .day-item.solo-salida.is-end-date {
+    background: #0d6efd !important;
+    color: #ffffff !important;
+    opacity: 1 !important;
+}
+
+.litepicker .container__days .day-item.min-stay-unavailable:not(.availability-locked):not(.is-in-range):not(.is-start-date):not(.is-end-date):not(.solo-salida):not(.solo-entrada) {
     background: #ffffff !important;
     color: #6c757d !important;
     opacity: 0.75 !important;
@@ -256,7 +270,7 @@ body {
     border: none !important;
 }
 
-.litepicker .container__days .day-item.min-stay-unavailable:hover {
+.litepicker .container__days .day-item.min-stay-unavailable:hover:not(.availability-locked):not(.is-in-range):not(.is-start-date):not(.is-end-date):not(.solo-salida):not(.solo-entrada) {
     background: #ffffff !important;
     color: #6c757d !important;
     box-shadow: none !important;
@@ -471,6 +485,33 @@ body {
     background: #ecf0f1 !important;
     border-color: #7f8c8d !important;
     color: #34495e !important;
+}
+
+/* Hover: mantener la diagonal y mostrar solamente el
+   recuadro azul, igual que el hover normal de Litepicker */
+.litepicker .container__days .day-item.solo-salida:hover,
+.litepicker .container__days .day-item.solo-entrada:hover {
+    box-shadow: inset 0 0 0 1px #0d6efd !important;
+}
+
+/* SOLO LLEGADA seleccionado como inicio:
+   el día pasa de diagonal roja a extremo azul completo */
+.litepicker .container__days .day-item.solo-entrada.is-start-date {
+    background: #0d6efd !important;
+    background-image: none !important;
+    background-color: #0d6efd !important;
+    color: #ffffff !important;
+    opacity: 1 !important;
+}
+
+/* SOLO SALIDA seleccionado como final:
+   el día pasa de diagonal roja a extremo azul completo */
+.litepicker .container__days .day-item.solo-salida.is-end-date {
+    background: #0d6efd !important;
+    background-image: none !important;
+    background-color: #0d6efd !important;
+    color: #ffffff !important;
+    opacity: 1 !important;
 }
 
 @media (max-width: 991px) {
