@@ -373,6 +373,17 @@ function initializePicker(
             picker.on('render:day', (dayElement, date) => {
                 const dStr = date.format('YYYY-MM-DD');
 
+                if (
+                    picker.datePicked &&
+                    picker.datePicked.length > 0 &&
+                    picker.datePicked[0].format('YYYY-MM-DD') === dStr
+                ) {
+                    dayElement.addEventListener('click', (event) => {
+                        event.stopPropagation();
+                        picker.clearSelection();
+                    });
+                }
+
                 if (blockedDates.includes(dStr)) {
                     dayElement.classList.add('availability-locked');
                 }
