@@ -154,6 +154,7 @@ function isAvailableNight(dateStr) {
 }
 
 const minBookingDate = new Date();
+minBookingDate.setHours(0, 0, 0, 0);
 minBookingDate.setDate(minBookingDate.getDate() + noticePeriodDays);
 const minBookingDateStr = minBookingDate.toLocaleDateString('en-CA'); // Formato "YYYY-MM-DD"
 
