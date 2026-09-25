@@ -300,6 +300,10 @@ function initializePicker(
                 }
             });
 
+            picker.on('clear:selection', () => {
+                picker.options.maxDate = null;
+            });
+
             picker.on('preselect', (date1, date2) => {
                 if (!date1) {
                     return;
@@ -340,7 +344,6 @@ function initializePicker(
                 }
 
                 if (minStayUnavailableDates.includes(startStr)) {
-                    const alertBox = document.getElementById('alert-booking-date');
                     const minNights =
                         availabilityData[startStr]?.minNights || defaultMinNights;
 
@@ -355,9 +358,18 @@ function initializePicker(
                 if (!date2) {
                     const minNights = availabilityData[startStr]?.minNights || defaultMinNights;
                     selectedMinNights = minNights;
-                    const selectedDate = date1.toJSDate();
-                    picker.gotoDate(selectedDate);
 
+                    const firstCheckoutOnlyDate = checkoutOnlyDates
+                        .filter(date => date > startStr)
+                        .sort()[0];
+
+                    picker.setOptions({
+                        maxDate: firstCheckoutOnlyDate
+                            ? new Date(`${firstCheckoutOnlyDate}T00:00:00`)
+                            : null
+                    });
+
+                    picker.gotoDate(selectedDate);
                     return;
                 }
 
