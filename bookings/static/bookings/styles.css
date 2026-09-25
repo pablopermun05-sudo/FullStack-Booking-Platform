@@ -247,6 +247,13 @@ body {
     opacity: 1 !important;
 }
 
+.litepicker .container__days .day-item.min-stay-unavailable {
+    background: #ffffff !important;
+    color: #6c757d !important;
+    opacity: 0.75 !important;
+    cursor: default !important;
+}
+
 .availability-page-header {
     background: #34495e;
     color: white;

@@ -172,6 +172,7 @@ loadAvailability(availabilityStartDateStr, availabilityEndDateStr)
         const checkInOnlyDates = [];
         const checkoutOnlyDates = [];
         const blockedDates = [];
+        const minStayUnavailableDates = [];
 
         Object.keys(availabilityData)
             .filter(dateStr => dateStr >= minBookingDateStr)
@@ -180,6 +181,25 @@ loadAvailability(availabilityStartDateStr, availabilityEndDateStr)
 
                 const currentNightAvailable = isAvailableNight(dateStr);
                 const previousNightAvailable = isAvailableNight(previousDate);
+
+                const minNights = availabilityData[dateStr]?.minNights || defaultMinNights;
+                let minStayBlocked = false;
+
+                for (let i = 0; i < minNights; i++) {
+                    const nightDate = new Date(`${dateStr}T00:00:00`);
+                    nightDate.setDate(nightDate.getDate() + i);
+
+                    const nightDateStr = nightDate.toLocaleDateString('en-CA');
+
+                    if (!isAvailableNight(nightDateStr)) {
+                        minStayBlocked = true;
+                        break;
+                    }
+                }
+
+                if (minStayBlocked) {
+                    minStayUnavailableDates.push(dateStr);
+                }
 
                 if (!currentNightAvailable && previousNightAvailable) {
                     checkoutOnlyDates.push(dateStr);
@@ -199,7 +219,8 @@ loadAvailability(availabilityStartDateStr, availabilityEndDateStr)
         initializePicker(
             checkInOnlyDates,
             checkoutOnlyDates,
-            blockedDates
+            blockedDates,
+            minStayUnavailableDates
         );
     })
     .catch(error => {
@@ -209,7 +230,8 @@ loadAvailability(availabilityStartDateStr, availabilityEndDateStr)
 function initializePicker(
     checkInOnlyDates,
     checkoutOnlyDates,
-    blockedDates
+    blockedDates,
+    minStayUnavailableDates
 ) {
     const lockedDates = blockedDates.map(date => [date, date]);
 
@@ -289,6 +311,11 @@ function initializePicker(
                     return;
                 }
 
+                if (minStayUnavailableDates.includes(startStr)) {
+                    picker.clearSelection();
+                    return;
+                }
+
                 if (!date2) {
                     const minNights = availabilityData[startStr]?.minNights || defaultMinNights;
                     selectedMinNights = minNights;
@@ -312,6 +339,10 @@ function initializePicker(
 
                 if (blockedDates.includes(dStr)) {
                     dayElement.classList.add('availability-locked');
+                }
+
+                if (minStayUnavailableDates.includes(dStr)) {
+                    dayElement.classList.add('min-stay-unavailable');
                 }
 
                 if (checkoutOnlyDates.includes(dStr)) {
