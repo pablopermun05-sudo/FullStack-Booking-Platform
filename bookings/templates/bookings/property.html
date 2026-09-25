@@ -387,8 +387,25 @@ function initializePicker(
                     picker.datePicked[0].format('YYYY-MM-DD') === dStr
                 ) {
                     dayElement.addEventListener('click', (event) => {
+                        event.preventDefault();
                         event.stopPropagation();
+
+                        // Guardamos el día que estaba seleccionado
+                        const selectedDate = date.toJSDate();
+
+                        // Cancelar el check-in seleccionado
                         picker.clearSelection();
+
+                        // Restaurar el calendario completo
+                        picker.setOptions({
+                            maxDate: null
+                        });
+
+                        // Restaurar la estancia mínima por defecto
+                        selectedMinNights = defaultMinNights;
+
+                        // Volver al mes donde estaba el usuario
+                        picker.gotoDate(selectedDate);
                     });
                 }
 
