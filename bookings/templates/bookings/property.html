@@ -305,6 +305,33 @@ function initializePicker(
                 }
 
                 const startStr = date1.format('YYYY-MM-DD');
+                const alertBox = document.getElementById('alert-booking-date');
+                const selectedDate = date1.toJSDate();
+                const today = new Date();
+
+                today.setHours(0, 0, 0, 0);
+                selectedDate.setHours(0, 0, 0, 0);
+
+                if (selectedDate < today) {
+                    alertBox.textContent =
+                        'No puedes seleccionar una fecha pasada para realizar una reserva.';
+                    alertBox.classList.remove('no-display');
+
+                    picker.clearSelection();
+                    return;
+                }
+
+                const earliestDate = new Date(today);
+                earliestDate.setDate(earliestDate.getDate() + noticePeriodDays);
+
+                if (selectedDate < earliestDate) {
+                    alertBox.textContent =
+                        `No puedes seleccionar esta fecha porque debes reservar con al menos ${noticePeriodDays} días de antelación.`;
+                    alertBox.classList.remove('no-display');
+
+                    picker.clearSelection();
+                    return;
+                }
 
                 if (checkoutOnlyDates.includes(startStr)) {
                     picker.clearSelection();
@@ -312,6 +339,14 @@ function initializePicker(
                 }
 
                 if (minStayUnavailableDates.includes(startStr)) {
+                    const alertBox = document.getElementById('alert-booking-date');
+                    const minNights =
+                        availabilityData[startStr]?.minNights || defaultMinNights;
+
+                    alertBox.textContent =
+                        `No puedes seleccionar esta fecha como entrada porque la estancia mínima es de ${minNights} noches y no hay disponibilidad suficiente para completar la estancia.`;
+                    alertBox.classList.remove('no-display');
+
                     picker.clearSelection();
                     return;
                 }
@@ -349,6 +384,31 @@ function initializePicker(
                     dayElement.classList.add('solo-salida');
                 } else if (checkInOnlyDates.includes(dStr)) {
                     dayElement.classList.add('solo-entrada');
+                }
+
+                const dayDate = date.toJSDate();
+                const today = new Date();
+
+                today.setHours(0, 0, 0, 0);
+                dayDate.setHours(0, 0, 0, 0);
+
+                if (dayDate < today) {
+                    dayElement.addEventListener('click', () => {
+                        const alertBox = document.getElementById('alert-booking-date');
+
+                        alertBox.textContent =
+                            'No puedes seleccionar una fecha pasada para realizar una reserva.';
+                        alertBox.classList.remove('no-display');
+                    });
+                } else if (dayDate < minBookingDate) {
+                    dayElement.addEventListener('click', () => {
+                        const alertBox = document.getElementById('alert-booking-date');
+                        const dayText = noticePeriodDays === 1 ? 'día' : 'días';
+
+                        alertBox.textContent =
+                            `No puedes seleccionar esta fecha porque debes reservar con al menos ${noticePeriodDays} ${dayText} de antelación.`;
+                        alertBox.classList.remove('no-display');
+                    });
                 }
             });
 

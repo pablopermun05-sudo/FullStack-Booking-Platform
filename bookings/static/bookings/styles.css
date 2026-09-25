@@ -252,6 +252,15 @@ body {
     color: #6c757d !important;
     opacity: 0.75 !important;
     cursor: default !important;
+    box-shadow: none !important;
+    border: none !important;
+}
+
+.litepicker .container__days .day-item.min-stay-unavailable:hover {
+    background: #ffffff !important;
+    color: #6c757d !important;
+    box-shadow: none !important;
+    border: none !important;
 }
 
 .availability-page-header {
