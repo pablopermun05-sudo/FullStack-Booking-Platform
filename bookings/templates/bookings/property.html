@@ -151,6 +151,9 @@
 const noticePeriodDays = parseInt(document.getElementById('notice-period-days').value) || 0;
 const propertyId = document.getElementById('property-id').value;
 const defaultMinNights = parseInt(document.getElementById('default-min-nights').value) || 1;
+const urlParams = new URLSearchParams(window.location.search);
+const initialDate = urlParams.get('initial_date');
+const finalDate = urlParams.get('final_date');
 
 let availabilityData = {};
 let bookedDatesFromApi = [];
@@ -309,6 +312,10 @@ loadAvailability(availabilityStartDateStr, availabilityEndDateStr)
 
         picker.render();
 
+        if (initialDate && finalDate) {
+            picker.setDateRange(initialDate, finalDate);
+        }
+
     })
     .catch(error => {
 
@@ -337,6 +344,9 @@ function initializePicker() {
 
         minDate: minBookingDateStr,
         minDays: 2,
+
+        startDate: initialDate || undefined,
+        endDate: finalDate || undefined,
 
         lockDays: lockedDates,
         bookedDays: checkoutOnlyDates,
