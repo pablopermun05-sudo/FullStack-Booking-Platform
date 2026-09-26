@@ -185,7 +185,22 @@ document.addEventListener('DOMContentLoaded', () => {
         const aLink = document.createElement("a");
         aLink.classList.add("primary-button", "text-nowrap", "d-inline-flex", "justify-content-center", "fw-bold");
         aLink.textContent = "Ver Disponibilidad ";
-        aLink.href = PROPERTY_URL_BASE.replace("0", property.id);
+
+        const propertyUrl = PROPERTY_URL_BASE.replace("0", property.id);
+
+        const initialDate = document.getElementById('id_initial_date').value;
+        const finalDate = document.getElementById('id_final_date').value;
+
+        if (initialDate && finalDate) {
+            const params = new URLSearchParams({
+                initial_date: initialDate,
+                final_date: finalDate
+            });
+
+            aLink.href = `${propertyUrl}?${params.toString()}`;
+        } else {
+            aLink.href = propertyUrl;
+        }
         const iLink = document.createElement("i");
         iLink.classList.add("bi", "bi-chevron-right", "ms-1");
         aLink.appendChild(iLink);
