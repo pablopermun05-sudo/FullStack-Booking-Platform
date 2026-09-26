@@ -573,6 +573,8 @@ def properties(request):
                         property,
                         initial_date
                     )["price_per_night"]
+                    if initial_date
+                    else property.default_price_per_night
                 ),
                 "adults": property.adults,
                 "children": property.children,
