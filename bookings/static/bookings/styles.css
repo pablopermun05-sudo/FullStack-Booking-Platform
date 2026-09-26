@@ -514,6 +514,187 @@ body {
     opacity: 1 !important;
 }
 
+.booking-calendar-wrapper {
+    width: 100%;
+    padding: 0;
+    margin: 0;
+    background: #ffffff;
+    border: none;
+    border-radius: 0;
+}
+
+.booking-calendar {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+/* CONTENEDOR PRINCIPAL DE LITEPICKER */
+.booking-calendar .litepicker {
+    position: relative !important;
+
+    width: 100% !important;
+    max-width: 100% !important;
+
+    min-width: 0 !important;
+
+    margin: 0 !important;
+    padding: 0 !important;
+
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+}
+
+/* CONTENEDOR DE LOS MESES */
+.booking-calendar .litepicker .container__months {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+
+    margin: 0 !important;
+    padding: 0 !important;
+
+    border: none !important;
+    box-shadow: none !important;
+}
+
+/* MES */
+.booking-calendar .litepicker .month-item {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+/* CABECERA */
+.booking-calendar .litepicker .month-item-header {
+    width: 100% !important;
+
+    padding: 5px 0 18px !important;
+
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+}
+
+/* NOMBRES DE LOS DÍAS */
+.booking-calendar .litepicker .month-item-weekdays-row {
+    width: 100% !important;
+
+    display: grid !important;
+    grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
+
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+.booking-calendar .litepicker .month-item-weekdays-row > div {
+    width: 100% !important;
+
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+
+    text-align: center !important;
+
+    font-size: 0.72rem !important;
+    font-weight: 700 !important;
+
+    color: #6c757d !important;
+}
+
+.booking-calendar .litepicker .container__days {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+
+    display: grid !important;
+    grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
+
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+/* CADA DÍA OCUPA 1/7 EXACTO DEL ANCHO */
+.booking-calendar .litepicker .container__days .day-item {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+
+    margin: 0 !important;
+
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+
+    box-sizing: border-box !important;
+
+    font-size: 0.85rem !important;
+}
+
+.booking-calendar .litepicker .button-previous-month,
+.booking-calendar .litepicker .button-next-month {
+    width: 34px !important;
+    height: 34px !important;
+
+    flex: 0 0 34px !important;
+
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+
+    border-radius: 50% !important;
+}
+
+.booking-calendar .litepicker .button-previous-month:hover,
+.booking-calendar .litepicker .button-next-month:hover {
+    background-color: #f1f3f5 !important;
+}
+
+.booking-card {
+    overflow: hidden;
+    border: none !important;
+    border-radius: 16px !important;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.08);
+}
+
+.booking-card .card-header {
+    border: none !important;
+    padding: 16px 20px !important;
+}
+
+.booking-card .card-body {
+    padding: 24px !important;
+}
+
+.booking-intro {
+    margin-bottom: 20px;
+}
+
+.booking-intro h6 {
+    margin-bottom: 6px;
+}
+
+.booking-intro p {
+    margin-bottom: 0;
+}
+
+@media (max-width: 576px) {
+
+    .booking-card .card-body {
+        padding: 18px !important;
+    }
+
+    .booking-calendar .litepicker .container__days .day-item {
+        font-size: 0.8rem !important;
+    }
+
+}
+
 @media (max-width: 991px) {
     .availability-calendar-day {
         padding: 6px !important;

@@ -21,76 +21,124 @@
             </div>
         </div>
         <div class="col-lg-4">
-            <div class="card mb-5">
-                <div class="card-header bg-primary fs-5 fw-bold text-white text-center">
-                    Lo que ofrece
+        {% if request.user != property.owner %}
+            <div class="card booking-card mb-4">
+                <div class="card-header bg-warning fs-5 fw-bold text-white text-center">
+                    <i class="bi bi-calendar-check me-1"></i>
+                    Selecciona tu estancia
                 </div>
+
                 <div class="card-body">
-                    <ul class="list-group list-group-flush">
-                        <li class="list-group-item d-flex justify-content-between py-4">
-                            <span>Capacidad</span>
-                            <div class="fw-bold">
-                                <div>
-                                    {% if property.adults == 1 %}
-                                    {{ property.adults }} adulto
-                                    {% else %}
-                                    {{ property.adults }} adultos
-                                    {% endif %}
-                                </div>
-                                <div>
-                                    {% if property.children == 1 %}
-                                    {{ property.children }} niño
-                                    {% else %}
-                                    {{ property.children }} niños
-                                    {% endif %}
-                                </div>
-                            </div>
-                        </li>
-                        <li class="list-group-item d-flex justify-content-between py-3">
-                            <span>Habitaciones</span>
-                            <div class="fw-bold">{{ property.rooms }}</div>
-                        </li>
-                        <li class="list-group-item d-flex justify-content-between py-3">
-                            <span>Mascotas</span>
-                            <div class="fw-bold">
-                                {% if property.allow_pets %} Sí {% else %} No {% endif %}
-                            </div>
-                        </li>
-                    </ul>
-                </div>
-            </div>
-            {% if request.user != property.owner %}
-                <div class="card mb-5">
-                    <div class="card-header bg-warning fs-5 fw-bold text-white text-center"><i class="bi bi-calendar-check"></i> Tu Reserva</div>
-                    <div class="card-body text-center">
-                        {% if user.is_authenticated %}
-                        <div id="datesDiv">
-                            <div class="py-3">
-                                <h6 class="fw-bold fs-5">Selecciona la fecha de tu estancia</h6>
-                                <p class="text-secondary fw-light small">Elige tus fechas para comprobar la disponibilidad y reservar.</p>
-                            </div>
-                            <div class="mb-3">
-                                <input type="text" id="booking-range" class="form-control text-center fw-bold" placeholder="Selecciona el rango de fechas" readonly>
-                            </div>
+
+                    {% if user.is_authenticated %}
+
+                        <div
+                            class="alert alert-danger mb-0 no-display"
+                            id="alert-booking-date"
+                            role="alert">
+                        </div>
+
+                        <input
+                            type="text"
+                            id="booking-range"
+                            class="d-none"
+                            readonly
+                        >
+
+                        <div class="booking-calendar-wrapper">
+                            <div id="booking-calendar" class="booking-calendar"></div>
                         </div>
 
                         <input type="hidden" id="start-date">
                         <input type="hidden" id="end-date">
-              
-                        <div class="alert alert-danger mt-3 mb-0 no-display" id="alert-booking-date" role="alert"></div>
-                        <div class="mt-3 mb-0 no-display" id="booking-button"></div>
-                        {% else %}
-                        <i class="bi bi-person-lock fs-1"></i>
-                        <div class="py-3">
-                            <h6 class="fw-bold fs-5">Inicia sesión para reservar</h6>
-                            <p class="text-secondary fw-light small">Necesitas una cuenta para completar el proceso.</p>
+
+                        <div
+                            class="mb-0 no-display"
+                            id="booking-button">
                         </div>
-                        <a href="{% url 'login' %}" class="primary-button d-block w-100 mb-3" id="login-button">Iniciar Sesión</a>
-                        {% endif %}
-                    </div>
+
+                    {% else %}
+
+                        <div class="text-center">
+                            <i class="bi bi-person-lock fs-1"></i>
+
+                            <div class="py-3">
+                                <h6 class="fw-bold fs-5">
+                                    Inicia sesión para reservar
+                                </h6>
+
+                                <p class="text-secondary fw-light small">
+                                    Necesitas una cuenta para completar el proceso.
+                                </p>
+                            </div>
+
+                            <a
+                                href="{% url 'login' %}"
+                                class="primary-button d-block w-100 mb-3"
+                                id="login-button">
+                                Iniciar Sesión
+                            </a>
+                        </div>
+
+                    {% endif %}
+
                 </div>
-            {% endif %}
+            </div>
+        {% endif %}
+
+
+        <div class="card mb-5">
+            <div class="card-header bg-primary fs-5 fw-bold text-white text-center">
+                Lo que ofrece
+            </div>
+
+            <div class="card-body">
+                <ul class="list-group list-group-flush">
+
+                    <li class="list-group-item d-flex justify-content-between py-4">
+                        <span>Capacidad</span>
+
+                        <div class="fw-bold">
+                            <div>
+                                {% if property.adults == 1 %}
+                                    {{ property.adults }} adulto
+                                {% else %}
+                                    {{ property.adults }} adultos
+                                {% endif %}
+                            </div>
+
+                            <div>
+                                {% if property.children == 1 %}
+                                    {{ property.children }} niño
+                                {% else %}
+                                    {{ property.children }} niños
+                                {% endif %}
+                            </div>
+                        </div>
+                    </li>
+
+                    <li class="list-group-item d-flex justify-content-between py-3">
+                        <span>Habitaciones</span>
+                        <div class="fw-bold">{{ property.rooms }}</div>
+                    </li>
+
+                    <li class="list-group-item d-flex justify-content-between py-3">
+                        <span>Mascotas</span>
+
+                        <div class="fw-bold">
+                            {% if property.allow_pets %}
+                                Sí
+                            {% else %}
+                                No
+                            {% endif %}
+                        </div>
+                    </li>
+
+                </ul>
+            </div>
         </div>
+
+    </div>
     </div>
 </div>
 {% endblock %}
@@ -107,6 +155,14 @@ const defaultMinNights = parseInt(document.getElementById('default-min-nights').
 let availabilityData = {};
 let bookedDatesFromApi = [];
 let selectedMinNights = defaultMinNights;
+
+let availabilityLoaded = false;
+let picker;
+
+let checkInOnlyDates = [];
+let checkoutOnlyDates = [];
+let blockedDates = [];
+let minStayUnavailableDates = [];
 
 async function loadAvailability(startDate, endDate) {
     const url = `/property/${propertyId}/availability/data?start_date=${startDate}&end_date=${endDate}`;
@@ -168,29 +224,45 @@ availabilityStartDate.setDate(availabilityStartDate.getDate() - 1);
 
 const availabilityStartDateStr = availabilityStartDate.toLocaleDateString('en-CA');
 
+picker = initializePicker();
+
 loadAvailability(availabilityStartDateStr, availabilityEndDateStr)
     .then(() => {
-        const checkInOnlyDates = [];
-        const checkoutOnlyDates = [];
-        const blockedDates = [];
-        const minStayUnavailableDates = [];
+
+        checkInOnlyDates = [];
+        checkoutOnlyDates = [];
+        blockedDates = [];
+        minStayUnavailableDates = [];
 
         Object.keys(availabilityData)
             .filter(dateStr => dateStr >= minBookingDateStr)
             .forEach(dateStr => {
+
                 const previousDate = getPreviousDate(dateStr);
 
-                const currentNightAvailable = isAvailableNight(dateStr);
-                const previousNightAvailable = isAvailableNight(previousDate);
+                const currentNightAvailable =
+                    isAvailableNight(dateStr);
 
-                const minNights = availabilityData[dateStr]?.minNights || defaultMinNights;
+                const previousNightAvailable =
+                    isAvailableNight(previousDate);
+
+                const minNights =
+                    availabilityData[dateStr]?.minNights ||
+                    defaultMinNights;
+
                 let minStayBlocked = false;
 
                 for (let i = 0; i < minNights; i++) {
-                    const nightDate = new Date(`${dateStr}T00:00:00`);
-                    nightDate.setDate(nightDate.getDate() + i);
 
-                    const nightDateStr = nightDate.toLocaleDateString('en-CA');
+                    const nightDate =
+                        new Date(`${dateStr}T00:00:00`);
+
+                    nightDate.setDate(
+                        nightDate.getDate() + i
+                    );
+
+                    const nightDateStr =
+                        nightDate.toLocaleDateString('en-CA');
 
                     if (!isAvailableNight(nightDateStr)) {
                         minStayBlocked = true;
@@ -202,51 +274,74 @@ loadAvailability(availabilityStartDateStr, availabilityEndDateStr)
                     minStayUnavailableDates.push(dateStr);
                 }
 
-                if (!currentNightAvailable && previousNightAvailable) {
+                if (
+                    !currentNightAvailable &&
+                    previousNightAvailable
+                ) {
                     checkoutOnlyDates.push(dateStr);
                     return;
                 }
 
-                if (currentNightAvailable && !previousNightAvailable) {
+                if (
+                    currentNightAvailable &&
+                    !previousNightAvailable
+                ) {
                     checkInOnlyDates.push(dateStr);
                     return;
                 }
 
-                if (!currentNightAvailable && !previousNightAvailable) {
+                if (
+                    !currentNightAvailable &&
+                    !previousNightAvailable
+                ) {
                     blockedDates.push(dateStr);
                 }
             });
 
-        initializePicker(
-            checkInOnlyDates,
-            checkoutOnlyDates,
-            blockedDates,
-            minStayUnavailableDates
-        );
+        availabilityLoaded = true;
+
+        picker.setOptions({
+            lockDays: blockedDates.map(date => [date, date]),
+            bookedDays: checkoutOnlyDates,
+            disallowedDatesRanges:
+                blockedDates.map(date => [date, date])
+        });
+
+        picker.render();
+
     })
     .catch(error => {
-        console.error('Error cargando disponibilidad:', error);
+
+        console.error(
+            'Error cargando disponibilidad:',
+            error
+        );
+
     });
 
-function initializePicker(
-    checkInOnlyDates,
-    checkoutOnlyDates,
-    blockedDates,
-    minStayUnavailableDates
-) {
+function initializePicker() {
+
     const lockedDates = blockedDates.map(date => [date, date]);
 
     const picker = new Litepicker({
         element: document.getElementById('booking-range'),
+        parentEl: document.getElementById('booking-calendar'),
+
+        inlineMode: true,
         singleMode: false,
+
         numberOfMonths: 1,
         numberOfColumns: 1,
+
         format: 'DD/MM/YYYY',
+
         minDate: minBookingDateStr,
         minDays: 2,
+
         lockDays: lockedDates,
         bookedDays: checkoutOnlyDates,
         disallowedDatesRanges: lockedDates,
+
         selectForward: true,
         lockDaysInversed: false,
 
@@ -301,7 +396,14 @@ function initializePicker(
             });
 
             picker.on('preselect', (date1, date2) => {
+
                 if (!date1) {
+                    return;
+                }
+
+                // Esperamos a que la disponibilidad real haya llegado desde la API.
+                if (!availabilityLoaded) {
+                    picker.clearSelection();
                     return;
                 }
 
@@ -499,6 +601,8 @@ function initializePicker(
             });
         }
     });
+
+    return picker;
 }
 </script>
 
