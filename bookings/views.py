@@ -414,6 +414,56 @@ def delete_booking(request, booking_id):
     booking.delete()
     return HttpResponseRedirect(reverse("my_bookings"))
 
+def property_is_available(property, initial_date, final_date):
+    """
+    Devuelve True únicamente si la propiedad puede aceptar
+    toda la estancia indicada.
+    """
+
+    # Comprobar que se cumple el notice period
+    min_allowed_date = date.today() + timedelta(
+        days=property.notice_period_days
+    )
+
+    if initial_date < min_allowed_date:
+        return False
+
+    # Obtener la disponibilidad de todas las noches.
+    # initial_date es inclusiva y final_date exclusiva.
+    availability = PropertyAvailability.get_for_range(
+        property,
+        initial_date,
+        final_date
+    )
+
+    # Ninguna noche puede estar CLOSED
+    for day in availability:
+        if day["status"] == "CLOSED":
+            return False
+
+    # Comprobar estancia mínima aplicable al check-in
+    arrival_availability = PropertyAvailability.get_for_date(
+        property,
+        initial_date
+    )
+
+    total_nights = (final_date - initial_date).days
+
+    if total_nights < arrival_availability["min_nights"]:
+        return False
+
+    # Comprobar que ninguna de las noches está ocupada
+    has_booking = Booking.objects.filter(
+        property=property,
+        initial_date__lt=final_date,
+        final_date__gt=initial_date
+    ).exists()
+
+    if has_booking:
+        return False
+
+    return True
+
 def properties(request):
     if request.method != "GET":
         return JsonResponse({"error": "Petición GET necesaria."}, status=400)
