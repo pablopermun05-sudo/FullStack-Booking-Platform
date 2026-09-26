@@ -568,8 +568,11 @@ def properties(request):
                 "description": property.description,
                 "location": property.location,
                 "image": property.image.name if property.image else "",
-                "default_price_per_night": str(
-                    property.default_price_per_night
+                "price_per_night": str(
+                    PropertyAvailability.get_for_date(
+                        property,
+                        initial_date
+                    )["price_per_night"]
                 ),
                 "adults": property.adults,
                 "children": property.children,
