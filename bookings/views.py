@@ -483,35 +483,6 @@ def properties(request):
 
     if location:
         properties = properties.filter(location=location)
-
-    if initial_date or final_date:
-        if not initial_date or not final_date:
-            return JsonResponse({"error": "Both dates are required"}, status=400)
-
-        try:
-            initial_date = date.fromisoformat(initial_date)
-            final_date = date.fromisoformat(final_date)
-        except ValueError:
-            return JsonResponse({"error": "Invalid date format"}, status=400)
-
-        if initial_date > final_date:
-            return JsonResponse({"error": "Invalid date range"}, status=400)
-        elif initial_date < date.today():
-            return JsonResponse({"error": "La fecha de entrada no puede ser anterior al día de hoy."}, status=400)
-
-        # Check that the selected arrival date satisfies the property's
-        # minimum notice period.
-        days_until_booking = (initial_date - date.today()).days
-        properties = properties.filter(
-            notice_period_days__lte=days_until_booking
-        )
-
-        # Using "__" to filter data across related models.
-        # Using "distinct" to prevent from duplicated properties when join
-        properties = properties.exclude(
-            bookings__initial_date__lt=final_date,
-            bookings__final_date__gt=initial_date
-        ).distinct()
     
     if adults:
         try:
@@ -543,13 +514,71 @@ def properties(request):
     if pets:
         properties = properties.filter(allow_pets=True)
 
-    properties = properties.order_by("id")
+    if initial_date or final_date:
+        if not initial_date or not final_date:
+            return JsonResponse({"error": "Both dates are required"}, status=400)
+
+        try:
+            initial_date = date.fromisoformat(initial_date)
+            final_date = date.fromisoformat(final_date)
+        except ValueError:
+            return JsonResponse({"error": "Invalid date format"}, status=400)
+
+        if initial_date >= final_date:
+            return JsonResponse({"error": "Invalid date range"}, status=400)
+
+        if initial_date < date.today():
+            return JsonResponse(
+                {
+                    "error": (
+                        "La fecha de entrada no puede ser anterior "
+                        "al día de hoy."
+                    )
+                },
+                status=400
+            )
+
+        available_properties = []
+
+        for property in properties:
+            if property_is_available(
+                property,
+                initial_date,
+                final_date
+            ):
+                available_properties.append(property)
+
+        properties = available_properties
+
+    properties = sorted(
+        properties,
+        key=lambda property: property.id
+    )
+
     paginator = Paginator(properties, 6)
-    page_number = request.GET.get('page')
+    page_number = request.GET.get("page")
 
     try:
         page_properties = paginator.page(page_number)
-        properties = list(page_properties.object_list.values())
+
+        properties = [
+            {
+                "id": property.id,
+                "title": property.title,
+                "description": property.description,
+                "location": property.location,
+                "image": property.image.name if property.image else "",
+                "default_price_per_night": str(
+                    property.default_price_per_night
+                ),
+                "adults": property.adults,
+                "children": property.children,
+                "rooms": property.rooms,
+                "allow_pets": property.allow_pets,
+            }
+            for property in page_properties.object_list
+        ]
+
     except (PageNotAnInteger, EmptyPage):
         # If page doesn`t exist, return empty list
         properties = []
