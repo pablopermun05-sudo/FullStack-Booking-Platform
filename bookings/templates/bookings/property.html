@@ -2,6 +2,7 @@
 {% load static %}
 
 {% block body %}
+<input type="hidden" id="property-id" value="{{ property.id }}">
 <input type="hidden" id="notice-period-days" value="{{ property.notice_period_days }}">
 <input type="hidden" id="default-min-nights" value="{{ property.default_min_nights }}">
 {{ availability_data|json_script:"availability-data" }}
