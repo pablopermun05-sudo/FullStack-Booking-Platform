@@ -538,6 +538,9 @@ function initializePicker() {
                     dayElement.addEventListener('click', () => {
                         const alertBox = document.getElementById('alert-booking-date');
 
+                        picker.clearSelection();
+                        window.clearBookingSelection();
+
                         alertBox.textContent = 'Fecha pasada.';
                         alertBox.classList.remove('no-display');
                     });
@@ -545,6 +548,9 @@ function initializePicker() {
                     dayElement.addEventListener('click', () => {
                         const alertBox = document.getElementById('alert-booking-date');
                         const dayText = noticePeriodDays === 1 ? 'día' : 'días';
+
+                        picker.clearSelection();
+                        window.clearBookingSelection();
 
                         alertBox.textContent =
                             `Debes reservar con al menos ${noticePeriodDays} ${dayText} de antelación.`;
