@@ -38,6 +38,18 @@ document.addEventListener('DOMContentLoaded', () => {
         alertDiv.classList.remove('no-display');
     }
 
+    window.clearBookingSelection = function () {
+        bookingReady = false;
+
+        startDate.value = "";
+        endDate.value = "";
+
+        buttonDiv.classList.add('no-display');
+
+        alertDiv.textContent = "";
+        alertDiv.classList.add('no-display');
+    };
+
     const csrftoken = getCookie('csrftoken');
 
     function confirmBooking(start, end) {

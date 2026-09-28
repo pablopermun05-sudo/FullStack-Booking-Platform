@@ -389,6 +389,7 @@ function initializePicker() {
                     alertBox.classList.remove('no-display');
 
                     picker.clearSelection();
+                    window.clearBookingSelection();
                     return;
                 }
 
@@ -401,11 +402,13 @@ function initializePicker() {
                     alertBox.classList.remove('no-display');
 
                     picker.clearSelection();
+                    window.clearBookingSelection();
                     return;
                 }
 
                 if (checkoutOnlyDates.includes(startStr)) {
                     picker.clearSelection();
+                    window.clearBookingSelection();
                     return;
                 }
 
@@ -418,6 +421,7 @@ function initializePicker() {
                     alertBox.classList.remove('no-display');
 
                     picker.clearSelection();
+                    window.clearBookingSelection();
                     return;
                 }
 
@@ -463,8 +467,9 @@ function initializePicker() {
                         // Guardamos el día que estaba seleccionado
                         const selectedDate = date.toJSDate();
 
-                        // Cancelar el check-in seleccionado
+                        // Cancelar la selección y limpiar el estado de reserva
                         picker.clearSelection();
+                        window.clearBookingSelection();
 
                         // Restaurar el calendario completo
                         picker.setOptions({
@@ -539,6 +544,7 @@ function initializePicker() {
                             'El rango seleccionado contiene una noche no disponible.';
                         alertBox.classList.remove('no-display');
                         picker.clearSelection();
+                        window.clearBookingSelection();
                         return;
                     }
 
@@ -553,6 +559,7 @@ function initializePicker() {
                         'La combinación de fechas no es válida: revisa el día marcado en rojo en diagonal.';
                     alertBox.classList.remove('no-display');
                     picker.clearSelection();
+                    window.clearBookingSelection();
                     return;
                 }
 
