@@ -52,12 +52,53 @@ def index(request):
 
 def property(request, property_id):
     property = get_object_or_404(Property, pk=property_id)
-    # Filter bookings that end today or in the future
-    active_bookings = property.bookings.filter(final_date__gte=date.today()).order_by('initial_date')
+
+    today = date.today()
+
+    active_bookings = property.bookings.filter(
+        final_date__gte=today
+    ).order_by("initial_date")
+
+    min_booking_date = today + timedelta(days=property.notice_period_days)
+    availability_end_date = min_booking_date + timedelta(days=365)
+
+    availability = PropertyAvailability.get_for_range(
+        property,
+        min_booking_date,
+        availability_end_date,
+    )
+
+    bookings = Booking.objects.filter(
+        property=property,
+        initial_date__lt=availability_end_date,
+        final_date__gt=min_booking_date,
+    ).order_by("initial_date")
+
+    booked_dates = set()
+
+    for booking in bookings:
+        current_date = max(booking.initial_date, min_booking_date)
+        booking_end = min(booking.final_date, availability_end_date)
+
+        while current_date < booking_end:
+            booked_dates.add(current_date.isoformat())
+            current_date += timedelta(days=1)
+
+    availability_data = [
+        {
+            "date": item["date"].isoformat(),
+            "price_per_night": str(item["price_per_night"]),
+            "status": item["status"],
+            "min_nights": item["min_nights"],
+        }
+        for item in availability
+    ]
 
     return render(request, "bookings/property.html", {
         "property": property,
-        "active_bookings": active_bookings
+        "active_bookings": active_bookings,
+        "availability_data": availability_data,
+        "booked_dates": sorted(booked_dates),
     })
 
 @login_required
