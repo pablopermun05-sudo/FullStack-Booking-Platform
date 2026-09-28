@@ -4,6 +4,8 @@ from django.http import HttpResponse, HttpResponseRedirect
 from django.contrib.auth import authenticate, login, logout
 from django.views.decorators.csrf import csrf_exempt
 from django.db import IntegrityError
+from django.db.models import Exists, F, IntegerField, OuterRef, Subquery
+from django.db.models.functions import Coalesce
 from .models import PropertyAvailability, User, Property, Booking
 from django import forms
 from django.forms import ModelForm
@@ -459,56 +461,6 @@ def delete_booking(request, booking_id):
     booking.delete()
     return HttpResponseRedirect(reverse("my_bookings"))
 
-def property_is_available(property, initial_date, final_date):
-    """
-    Devuelve True únicamente si la propiedad puede aceptar
-    toda la estancia indicada.
-    """
-
-    # Comprobar que se cumple el notice period
-    min_allowed_date = date.today() + timedelta(
-        days=property.notice_period_days
-    )
-
-    if initial_date < min_allowed_date:
-        return False
-
-    # Obtener la disponibilidad de todas las noches.
-    # initial_date es inclusiva y final_date exclusiva.
-    availability = PropertyAvailability.get_for_range(
-        property,
-        initial_date,
-        final_date
-    )
-
-    # Ninguna noche puede estar CLOSED
-    for day in availability:
-        if day["status"] == "CLOSED":
-            return False
-
-    # Comprobar estancia mínima aplicable al check-in
-    arrival_availability = PropertyAvailability.get_for_date(
-        property,
-        initial_date
-    )
-
-    total_nights = (final_date - initial_date).days
-
-    if total_nights < arrival_availability["min_nights"]:
-        return False
-
-    # Comprobar que ninguna de las noches está ocupada
-    has_booking = Booking.objects.filter(
-        property=property,
-        initial_date__lt=final_date,
-        final_date__gt=initial_date
-    ).exists()
-
-    if has_booking:
-        return False
-
-    return True
-
 def properties(request):
     if request.method != "GET":
         return JsonResponse({"error": "Petición GET necesaria."}, status=400)
@@ -583,22 +535,58 @@ def properties(request):
                 status=400
             )
 
-        available_properties = []
+        closed_availability = PropertyAvailability.objects.filter(
+            property=OuterRef("pk"),
+            date__gte=initial_date,
+            date__lt=final_date,
+            status="CLOSED",
+        )
 
-        for property in properties:
-            if property_is_available(
-                property,
-                initial_date,
-                final_date
-            ):
-                available_properties.append(property)
+        overlapping_bookings = Booking.objects.filter(
+            property=OuterRef("pk"),
+            initial_date__lt=final_date,
+            final_date__gt=initial_date,
+        )
 
-        properties = available_properties
+        arrival_availability = PropertyAvailability.objects.filter(
+            property=OuterRef("pk"),
+            date=initial_date,
+        ).values("min_nights")[:1]
 
-    properties = sorted(
-        properties,
-        key=lambda property: property.id
-    )
+        arrival_price = PropertyAvailability.objects.filter(
+            property=OuterRef("pk"),
+            date=initial_date,
+        ).values("price_per_night")[:1]
+
+        total_nights = (final_date - initial_date).days
+
+        properties = properties.annotate(
+            has_closed_availability=Exists(
+                closed_availability
+            ),
+            has_overlapping_booking=Exists(
+                overlapping_bookings
+            ),
+            arrival_min_nights=Subquery(
+                arrival_availability,
+                output_field=IntegerField(),
+            ),
+            arrival_price=Subquery(
+                arrival_price,
+            ),
+        ).annotate(
+            effective_min_nights=Coalesce(
+                F("arrival_min_nights"),
+                F("default_min_nights"),
+                output_field=IntegerField(),
+            )
+        ).filter(
+            has_closed_availability=False,
+            has_overlapping_booking=False,
+            effective_min_nights__lte=total_nights,
+        )
+
+    properties = properties.order_by("id")
 
     paginator = Paginator(properties, 6)
     page_number = request.GET.get("page")
@@ -614,13 +602,12 @@ def properties(request):
                 "location": property.location,
                 "image": property.image.name if property.image else "",
                 "price_per_night": str(
-                    PropertyAvailability.get_for_date(
-                        property,
-                        initial_date
-                    )["price_per_night"]
-                    if initial_date
+                    property.arrival_price
+                    if property.arrival_price is not None
                     else property.default_price_per_night
-                ),
+                )
+                if initial_date
+                else str(property.default_price_per_night),
                 "adults": property.adults,
                 "children": property.children,
                 "rooms": property.rooms,
