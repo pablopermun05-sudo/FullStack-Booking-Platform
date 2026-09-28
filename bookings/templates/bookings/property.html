@@ -502,7 +502,26 @@ function initializePicker() {
                 }
 
                 if (minStayUnavailableDates.includes(dStr)) {
-                    dayElement.classList.add('min-stay-unavailable');
+                    const hasCheckIn =
+                        picker.datePicked &&
+                        picker.datePicked.length === 1;
+
+                    const selectedCheckIn = hasCheckIn
+                        ? picker.datePicked[0].format('YYYY-MM-DD')
+                        : null;
+
+                    const canBeCheckout =
+                        hasCheckIn &&
+                        dStr > selectedCheckIn &&
+                        !checkInOnlyDates.includes(dStr) &&
+                        !blockedDates.includes(dStr) &&
+                        (!maxCheckoutDate || dStr <= maxCheckoutDate);
+
+                    if (canBeCheckout) {
+                        dayElement.classList.remove('min-stay-unavailable');
+                    } else {
+                        dayElement.classList.add('min-stay-unavailable');
+                    }
                 }
 
                 if (checkoutOnlyDates.includes(dStr)) {
