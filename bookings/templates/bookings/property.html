@@ -385,8 +385,7 @@ function initializePicker() {
                 selectedDate.setHours(0, 0, 0, 0);
 
                 if (selectedDate < today) {
-                    alertBox.textContent =
-                        'No puedes seleccionar una fecha pasada para realizar una reserva.';
+                    alertBox.textContent = 'Fecha pasada.';
                     alertBox.classList.remove('no-display');
 
                     picker.clearSelection();
@@ -399,7 +398,7 @@ function initializePicker() {
 
                 if (selectedDate < earliestDate) {
                     alertBox.textContent =
-                        `No puedes seleccionar esta fecha porque debes reservar con al menos ${noticePeriodDays} días de antelación.`;
+                        `Debes reservar con al menos ${noticePeriodDays} días de antelación.`;
                     alertBox.classList.remove('no-display');
 
                     picker.clearSelection();
@@ -414,15 +413,14 @@ function initializePicker() {
                 }
 
                 if (minStayUnavailableDates.includes(startStr)) {
-                    const minNights =
-                        availabilityData[startStr]?.minNights || defaultMinNights;
-
-                    alertBox.textContent =
-                        `No puedes seleccionar esta fecha como entrada porque la estancia mínima es de ${minNights} noches y no hay disponibilidad suficiente para completar la estancia.`;
-                    alertBox.classList.remove('no-display');
+                    const minNights = availabilityData[startStr]?.minNights || defaultMinNights;
 
                     picker.clearSelection();
                     window.clearBookingSelection();
+
+                    alertBox.textContent = `Estancia mínima de ${minNights} noches.`;
+                    alertBox.classList.remove('no-display');
+
                     return;
                 }
 
@@ -540,8 +538,7 @@ function initializePicker() {
                     dayElement.addEventListener('click', () => {
                         const alertBox = document.getElementById('alert-booking-date');
 
-                        alertBox.textContent =
-                            'No puedes seleccionar una fecha pasada para realizar una reserva.';
+                        alertBox.textContent = 'Fecha pasada.';
                         alertBox.classList.remove('no-display');
                     });
                 } else if (dayDate < minBookingDate) {
@@ -550,7 +547,7 @@ function initializePicker() {
                         const dayText = noticePeriodDays === 1 ? 'día' : 'días';
 
                         alertBox.textContent =
-                            `No puedes seleccionar esta fecha porque debes reservar con al menos ${noticePeriodDays} ${dayText} de antelación.`;
+                            `Debes reservar con al menos ${noticePeriodDays} ${dayText} de antelación.`;
                         alertBox.classList.remove('no-display');
                     });
                 }
