@@ -52,9 +52,14 @@
                         <input type="hidden" id="start-date">
                         <input type="hidden" id="end-date">
 
-                        <div
-                            class="mb-0 no-display"
-                            id="booking-button">
+                        <div class="mb-0 {% if not request.GET.initial_date or not request.GET.final_date %}no-display{% endif %}" id="booking-button">
+                        {% if request.GET.initial_date and request.GET.final_date %}
+                            <button
+                                id="confirm-booking-button"
+                                class="btn btn-dark w-100 rounded-pill mt-3 mb-3 py-2">
+                                Confirmar Reserva
+                            </button>
+                        {% endif %}
                         </div>
 
                     {% else %}
@@ -154,6 +159,11 @@ const defaultMinNights = parseInt(document.getElementById('default-min-nights').
 const urlParams = new URLSearchParams(window.location.search);
 const initialDate = urlParams.get('initial_date');
 const finalDate = urlParams.get('final_date');
+
+if (initialDate && finalDate) {
+    document.getElementById('start-date').value = initialDate;
+    document.getElementById('end-date').value = finalDate;
+}
 
 let availabilityData = {};
 let bookedDatesFromApi = [];
@@ -606,8 +616,7 @@ function initializePicker() {
                 startInput.value = startStr;
                 endInput.value = endStr;
 
-                startInput.dispatchEvent(new Event('change'));
-                endInput.dispatchEvent(new Event('change'));
+                window.validateBooking();
             });
         }
     });
