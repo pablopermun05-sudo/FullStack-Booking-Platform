@@ -195,6 +195,7 @@ let checkInOnlyDates = [];
 let checkoutOnlyDates = [];
 let blockedDates = [];
 let minStayUnavailableDates = [];
+let maxCheckoutDate = null;
 
 function getPreviousDate(dateStr) {
     const date = new Date(`${dateStr}T00:00:00`);
@@ -433,9 +434,11 @@ function initializePicker() {
                         .filter(date => date > startStr)
                         .sort()[0];
 
+                    maxCheckoutDate = firstCheckoutOnlyDate || null;
+
                     picker.setOptions({
-                        maxDate: firstCheckoutOnlyDate
-                            ? new Date(`${firstCheckoutOnlyDate}T00:00:00`)
+                        maxDate: maxCheckoutDate
+                            ? new Date(`${maxCheckoutDate}T00:00:00`)
                             : null
                     });
 
@@ -444,6 +447,15 @@ function initializePicker() {
                 }
 
                 const nights = date2.diff(date1, 'day');
+
+                if (
+                    maxCheckoutDate &&
+                    date2.format('YYYY-MM-DD') > maxCheckoutDate
+                ) {
+                    picker.datePicked.length = 1;
+                    picker.render();
+                    return;
+                }
 
                 if (nights < selectedMinNights) {
                     picker.datePicked.length = 1;
@@ -471,7 +483,8 @@ function initializePicker() {
                         picker.clearSelection();
                         window.clearBookingSelection();
 
-                        // Restaurar el calendario completo
+                        maxCheckoutDate = null;
+
                         picker.setOptions({
                             maxDate: null
                         });
@@ -562,6 +575,12 @@ function initializePicker() {
                     window.clearBookingSelection();
                     return;
                 }
+
+                picker.setOptions({
+                    maxDate: null
+                });
+
+                maxCheckoutDate = null;
 
                 alertBox.classList.add('no-display');
 
