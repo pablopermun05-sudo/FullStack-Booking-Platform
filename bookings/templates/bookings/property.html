@@ -2,9 +2,10 @@
 {% load static %}
 
 {% block body %}
-<input type="hidden" id="property-id" value="{{ property.id }}">
 <input type="hidden" id="notice-period-days" value="{{ property.notice_period_days }}">
 <input type="hidden" id="default-min-nights" value="{{ property.default_min_nights }}">
+{{ availability_data|json_script:"availability-data" }}
+{{ booked_dates|json_script:"booked-dates" }}
 <div class="container pt-5 pb-5">
     <div class="row g-4">
         <div class="col-lg-8">
@@ -154,7 +155,6 @@
 
 <script>
 const noticePeriodDays = parseInt(document.getElementById('notice-period-days').value) || 0;
-const propertyId = document.getElementById('property-id').value;
 const defaultMinNights = parseInt(document.getElementById('default-min-nights').value) || 1;
 const urlParams = new URLSearchParams(window.location.search);
 const initialDate = urlParams.get('initial_date');
@@ -165,44 +165,35 @@ if (initialDate && finalDate) {
     document.getElementById('end-date').value = finalDate;
 }
 
+const availabilityDataFromServer =
+    JSON.parse(
+        document.getElementById('availability-data').textContent
+    );
+
+const bookedDatesFromServer =
+    JSON.parse(
+        document.getElementById('booked-dates').textContent
+    );
+
 let availabilityData = {};
-let bookedDatesFromApi = [];
+
+availabilityDataFromServer.forEach(item => {
+    availabilityData[item.date] = {
+        pricePerNight: Number(item.price_per_night),
+        status: item.status,
+        minNights: item.min_nights
+    };
+});
+
+const bookedDates = bookedDatesFromServer;
 let selectedMinNights = defaultMinNights;
 
-let availabilityLoaded = false;
 let picker;
 
 let checkInOnlyDates = [];
 let checkoutOnlyDates = [];
 let blockedDates = [];
 let minStayUnavailableDates = [];
-
-async function loadAvailability(startDate, endDate) {
-    const url = `/property/${propertyId}/availability/data?start_date=${startDate}&end_date=${endDate}`;
-
-    const response = await fetch(url);
-
-    if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Error al cargar la disponibilidad.');
-    }
-
-    const data = await response.json();
-
-    availabilityData = {};
-
-    data.availability.forEach(item => {
-        availabilityData[item.date] = {
-            pricePerNight: Number(item.price_per_night),
-            status: item.status,
-            minNights: item.min_nights
-        };
-    });
-
-    bookedDatesFromApi = data.booked_dates;
-
-    return data;
-}
 
 function getPreviousDate(dateStr) {
     const date = new Date(`${dateStr}T00:00:00`);
@@ -211,7 +202,7 @@ function getPreviousDate(dateStr) {
 }
 
 function isBooked(dateStr) {
-    return bookedDatesFromApi.includes(dateStr);
+    return bookedDates.includes(dateStr);
 }
 
 function isClosed(dateStr) {
@@ -227,114 +218,76 @@ minBookingDate.setHours(0, 0, 0, 0);
 minBookingDate.setDate(minBookingDate.getDate() + noticePeriodDays);
 const minBookingDateStr = minBookingDate.toLocaleDateString('en-CA'); // Formato "YYYY-MM-DD"
 
-const availabilityEndDate = new Date(minBookingDate);
-availabilityEndDate.setFullYear(availabilityEndDate.getFullYear() + 1);
+checkInOnlyDates = [];
+checkoutOnlyDates = [];
+blockedDates = [];
+minStayUnavailableDates = [];
 
-const availabilityEndDateStr = availabilityEndDate.toLocaleDateString('en-CA');
+Object.keys(availabilityData)
+    .filter(dateStr => dateStr >= minBookingDateStr)
+    .forEach(dateStr => {
 
-const availabilityStartDate = new Date(minBookingDate);
-availabilityStartDate.setDate(availabilityStartDate.getDate() - 1);
+        const previousDate = getPreviousDate(dateStr);
 
-const availabilityStartDateStr = availabilityStartDate.toLocaleDateString('en-CA');
+        const currentNightAvailable =
+            isAvailableNight(dateStr);
 
-picker = initializePicker();
+        const previousNightAvailable =
+            isAvailableNight(previousDate);
 
-loadAvailability(availabilityStartDateStr, availabilityEndDateStr)
-    .then(() => {
+        const minNights =
+            availabilityData[dateStr]?.minNights ||
+            defaultMinNights;
 
-        checkInOnlyDates = [];
-        checkoutOnlyDates = [];
-        blockedDates = [];
-        minStayUnavailableDates = [];
+        let minStayBlocked = false;
 
-        Object.keys(availabilityData)
-            .filter(dateStr => dateStr >= minBookingDateStr)
-            .forEach(dateStr => {
+        for (let i = 0; i < minNights; i++) {
 
-                const previousDate = getPreviousDate(dateStr);
+            const nightDate =
+                new Date(`${dateStr}T00:00:00`);
 
-                const currentNightAvailable =
-                    isAvailableNight(dateStr);
+            nightDate.setDate(
+                nightDate.getDate() + i
+            );
 
-                const previousNightAvailable =
-                    isAvailableNight(previousDate);
+            const nightDateStr =
+                nightDate.toLocaleDateString('en-CA');
 
-                const minNights =
-                    availabilityData[dateStr]?.minNights ||
-                    defaultMinNights;
-
-                let minStayBlocked = false;
-
-                for (let i = 0; i < minNights; i++) {
-
-                    const nightDate =
-                        new Date(`${dateStr}T00:00:00`);
-
-                    nightDate.setDate(
-                        nightDate.getDate() + i
-                    );
-
-                    const nightDateStr =
-                        nightDate.toLocaleDateString('en-CA');
-
-                    if (!isAvailableNight(nightDateStr)) {
-                        minStayBlocked = true;
-                        break;
-                    }
-                }
-
-                if (minStayBlocked) {
-                    minStayUnavailableDates.push(dateStr);
-                }
-
-                if (
-                    !currentNightAvailable &&
-                    previousNightAvailable
-                ) {
-                    checkoutOnlyDates.push(dateStr);
-                    return;
-                }
-
-                if (
-                    currentNightAvailable &&
-                    !previousNightAvailable
-                ) {
-                    checkInOnlyDates.push(dateStr);
-                    return;
-                }
-
-                if (
-                    !currentNightAvailable &&
-                    !previousNightAvailable
-                ) {
-                    blockedDates.push(dateStr);
-                }
-            });
-
-        availabilityLoaded = true;
-
-        picker.setOptions({
-            lockDays: blockedDates.map(date => [date, date]),
-            bookedDays: checkoutOnlyDates,
-            disallowedDatesRanges:
-                blockedDates.map(date => [date, date])
-        });
-
-        picker.render();
-
-        if (initialDate && finalDate) {
-            picker.setDateRange(initialDate, finalDate);
+            if (!isAvailableNight(nightDateStr)) {
+                minStayBlocked = true;
+                break;
+            }
         }
 
-    })
-    .catch(error => {
+        if (minStayBlocked) {
+            minStayUnavailableDates.push(dateStr);
+        }
 
-        console.error(
-            'Error cargando disponibilidad:',
-            error
-        );
+        if (
+            !currentNightAvailable &&
+            previousNightAvailable
+        ) {
+            checkoutOnlyDates.push(dateStr);
+            return;
+        }
 
+        if (
+            currentNightAvailable &&
+            !previousNightAvailable
+        ) {
+            checkInOnlyDates.push(dateStr);
+            return;
+        }
+
+        if (
+            !currentNightAvailable &&
+            !previousNightAvailable
+        ) {
+            blockedDates.push(dateStr);
+        }
     });
+
+picker = initializePicker();
 
 function initializePicker() {
 
@@ -418,12 +371,6 @@ function initializePicker() {
             picker.on('preselect', (date1, date2) => {
 
                 if (!date1) {
-                    return;
-                }
-
-                // Esperamos a que la disponibilidad real haya llegado desde la API.
-                if (!availabilityLoaded) {
-                    picker.clearSelection();
                     return;
                 }
 

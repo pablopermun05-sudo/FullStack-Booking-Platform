@@ -62,22 +62,26 @@ def property(request, property_id):
     min_booking_date = today + timedelta(days=property.notice_period_days)
     availability_end_date = min_booking_date + timedelta(days=365)
 
+    availability_start_date = (
+        min_booking_date - timedelta(days=1)
+    )
+
     availability = PropertyAvailability.get_for_range(
         property,
-        min_booking_date,
+        availability_start_date,
         availability_end_date,
     )
 
     bookings = Booking.objects.filter(
         property=property,
         initial_date__lt=availability_end_date,
-        final_date__gt=min_booking_date,
+        final_date__gt=availability_start_date,
     ).order_by("initial_date")
 
     booked_dates = set()
 
     for booking in bookings:
-        current_date = max(booking.initial_date, min_booking_date)
+        current_date = max(booking.initial_date, availability_start_date)
         booking_end = min(booking.final_date, availability_end_date)
 
         while current_date < booking_end:
