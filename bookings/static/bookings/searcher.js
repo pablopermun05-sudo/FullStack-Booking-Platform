@@ -12,7 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Creating the observers
     let observer = new IntersectionObserver((entries) => {
         entries.forEach(entry => {
-            if (entry.isIntersecting) {
+            if (entry.isIntersecting && !isLoading) {
                 pageNumber++;
                 loadProperties();
             }
