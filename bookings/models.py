@@ -132,6 +132,16 @@ class Booking(models.Model):
 
         return True
 
+    @classmethod
+    def expire_pending_bookings(cls):
+        now = timezone.now()
+
+        return cls.objects.filter(
+            status="PENDING",
+            expires_at__isnull=False,
+            expires_at__lte=now,
+        ).update(status="EXPIRED")
+
     class Meta:
         verbose_name = "Reserva"
         verbose_name_plural = "Reservas"
