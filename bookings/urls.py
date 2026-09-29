@@ -13,6 +13,10 @@ urlpatterns = [
     path("booking/delete/<int:booking_id>", views.delete_booking, name="delete_booking"),
     path("my_properties", views.my_properties, name="my_properties"),
     path("my_bookings", views.my_bookings, name="my_bookings"),
+    path("property/<int:property_id>/availability", views.property_availability, name="property_availability"),
+    path("property/<int:property_id>/availability/reset", views.property_availability_reset, name="property_availability_reset",),
+    path("property/<int:property_id>/availability/data", views.property_availability_data, name="property_availability_data",),
+    path("property/<int:property_id>/availability/save", views.property_availability_save, name="property_availability_save",),
     #API ROUTES
     path("properties/", views.properties, name="properties"),
     path("booking/<int:property_id>/", views.booking, name="booking"),

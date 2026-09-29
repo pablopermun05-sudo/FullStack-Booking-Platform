@@ -3,6 +3,7 @@ const titleLimit = 50;
 const descriptionLimit = 160;
 let lastProperty;
 let isLoading = false;
+let currentRequestController = null;
 
 document.addEventListener('DOMContentLoaded', () => {
     let pageNumber = 1;
@@ -11,7 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Creating the observers
     let observer = new IntersectionObserver((entries) => {
         entries.forEach(entry => {
-            if (entry.isIntersecting) {
+            if (entry.isIntersecting && !isLoading) {
                 pageNumber++;
                 loadProperties();
             }
@@ -26,43 +27,58 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.querySelector('#search').onsubmit = (event) => {
         event.preventDefault();
+
         pageNumber = 1;
+
         if (lastProperty) {
             observer.unobserve(lastProperty);
+            lastProperty = false;
         }
+
         h2properties.textContent = 'Viviendas relacionadas con tu búsqueda:';
-        loadProperties();
+
+        loadProperties(true);
     }
 
-    function loadProperties() {
+    function loadProperties(isSearch = false) {
         const divProperties = document.querySelector('#properties');
 
-        if (isLoading) {
+        if (isLoading && !isSearch) {
             return;
-        } else {
-            isLoading = true;
         }
+
+        if (isSearch && currentRequestController) {
+            currentRequestController.abort();
+        }
+
+        currentRequestController = new AbortController();
+        isLoading = true;
+
+        const requestController = currentRequestController;
+        const requestPage = pageNumber;
 
         const formData = new FormData(document.querySelector('#search'));
         const urlData = new URLSearchParams(formData);
-        urlData.append('page', pageNumber);
+        urlData.append('page', requestPage);
 
         const alertDiv = document.querySelector('#alert-form');
 
-        fetch(`/properties/?${urlData}`)
+        fetch(`/properties/?${urlData}`, {
+            signal: requestController.signal
+        })
             .then(response => {
                 if (!response.ok) {
                     // Extracting JSON error details before throwing to the catch block.
                     return response.json().then(err => { throw err; });
                 }
-                if (pageNumber == 1) {
+                if (requestPage == 1) {
                     alertDiv.style.display = 'none';
                 }
                 return response.json();
             })
             .then(properties => {
 
-                if (pageNumber == 1) {
+                if (requestPage == 1) {
 
                     divProperties.textContent = '';
                     divProperties.className = "";
@@ -90,11 +106,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
             })
             .catch(error => {
+                if (error.name === 'AbortError') {
+                    return;
+                }
+
                 alertDiv.textContent = error.error || "Error inesperado.";
                 alertDiv.style.display = 'block';
             })
             .finally(() => {
-                isLoading = false;
+                if (currentRequestController === requestController) {
+                    isLoading = false;
+                    currentRequestController = null;
+                }
             })
     }
 
@@ -185,7 +208,22 @@ document.addEventListener('DOMContentLoaded', () => {
         const aLink = document.createElement("a");
         aLink.classList.add("primary-button", "text-nowrap", "d-inline-flex", "justify-content-center", "fw-bold");
         aLink.textContent = "Ver Disponibilidad ";
-        aLink.href = PROPERTY_URL_BASE.replace("0", property.id);
+
+        const propertyUrl = PROPERTY_URL_BASE.replace("0", property.id);
+
+        const initialDate = document.getElementById('id_initial_date').value;
+        const finalDate = document.getElementById('id_final_date').value;
+
+        if (initialDate && finalDate) {
+            const params = new URLSearchParams({
+                initial_date: initialDate,
+                final_date: finalDate
+            });
+
+            aLink.href = `${propertyUrl}?${params.toString()}`;
+        } else {
+            aLink.href = propertyUrl;
+        }
         const iLink = document.createElement("i");
         iLink.classList.add("bi", "bi-chevron-right", "ms-1");
         aLink.appendChild(iLink);

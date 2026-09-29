@@ -23,7 +23,8 @@ class Property(models.Model):
     description = models.TextField()
     location = models.CharField(max_length=255)
     image = models.ImageField(upload_to='properties/')
-    price_per_night = models.DecimalField(max_digits=7, decimal_places=2)
+    default_price_per_night = models.DecimalField(max_digits=7, decimal_places=2)
+    default_min_nights = models.PositiveIntegerField(default=1)
     children = models.PositiveIntegerField()
     adults = models.PositiveIntegerField()
     rooms = models.PositiveIntegerField()
@@ -39,10 +40,10 @@ class Property(models.Model):
         return self.title
 
     def clean(self):
-        if self.price_per_night < 0:
-            raise ValidationError("El precio por noche no puede ser negativo")
-        if self.price_per_night == 0:
-            raise ValidationError("El precio por noche no puede ser 0")
+        if self.default_price_per_night <= 0:
+            raise ValidationError("El precio por noche debe ser mayor que 0")
+        if self.default_min_nights < 1:
+            raise ValidationError("El número mínimo de noches debe ser al menos 1")
         if self.adults == 0:
             raise ValidationError("El número máximos de adultos no puede ser 0")
         if self.rooms == 0:
@@ -83,6 +84,36 @@ class Booking(models.Model):
         if self.tenant == self.property.owner:
             raise ValidationError("No puedes reservar tu propia vivienda.")
 
+        total_nights = (self.final_date - self.initial_date).days
+
+        availability = PropertyAvailability.get_for_range(
+            self.property,
+            self.initial_date,
+            self.final_date
+        )
+
+        closed_dates = [
+            day["date"]
+            for day in availability
+            if day["status"] == "CLOSED"
+        ]
+
+        if closed_dates:
+            raise ValidationError(
+                "El alojamiento no está disponible en todas las fechas seleccionadas."
+            )
+
+        arrival_availability = PropertyAvailability.get_for_date(
+            self.property,
+            self.initial_date
+        )
+
+        if total_nights < arrival_availability["min_nights"]:
+            raise ValidationError(
+                f"La estancia debe ser de al menos "
+                f"{arrival_availability['min_nights']} noches."
+            )
+
         # Buscamos reservas existentes que choquen
         bookings = Booking.objects.filter(
             property=self.property,
@@ -97,6 +128,115 @@ class Booking(models.Model):
         if bookings.exists():
             raise ValidationError("Ya hay una reserva en esas fechas")
     
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+class PropertyAvailability(models.Model):
+    STATUS_CHOICES = [
+        ("OPEN", "Open"),
+        ("CLOSED", "Closed"),
+    ]
+
+    property = models.ForeignKey(
+        Property,
+        on_delete=models.CASCADE,
+        related_name="availability",
+    )
+    date = models.DateField()
+    price_per_night = models.DecimalField(
+        max_digits=7,
+        decimal_places=2,
+    )
+    status = models.CharField(
+        max_length=6,
+        choices=STATUS_CHOICES,
+    )
+    min_nights = models.PositiveIntegerField()
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["property", "date"],
+                name="unique_property_availability_date",
+            ),
+        ]
+    
+    @classmethod
+    def get_for_date(cls, property, date):
+        availability = cls.objects.filter(
+            property=property,
+            date=date,
+        ).first()
+
+        if availability:
+            return {
+                "price_per_night": availability.price_per_night,
+                "status": availability.status,
+                "min_nights": availability.min_nights,
+            }
+
+        return {
+            "price_per_night": property.default_price_per_night,
+            "status": "OPEN",
+            "min_nights": property.default_min_nights,
+        }
+
+    @classmethod
+    def get_for_range(cls, property, start_date, end_date):
+        overrides = cls.objects.filter(
+            property=property,
+            date__gte=start_date,
+            date__lt=end_date,
+        )
+
+        overrides_by_date = {
+            availability.date: availability
+            for availability in overrides
+        }
+
+        availability = []
+
+        current_date = start_date
+
+        while current_date < end_date:
+            override = overrides_by_date.get(current_date)
+
+            if override:
+                availability.append({
+                    "date": current_date,
+                    "price_per_night": override.price_per_night,
+                    "status": override.status,
+                    "min_nights": override.min_nights,
+                })
+            else:
+                availability.append({
+                    "date": current_date,
+                    "price_per_night": property.default_price_per_night,
+                    "status": "OPEN",
+                    "min_nights": property.default_min_nights,
+                })
+
+            current_date += timedelta(days=1)
+
+        return availability
+
+    def clean(self):
+        if self.price_per_night <= 0:
+            raise ValidationError(
+                "El precio por noche debe ser mayor que 0"
+            )
+
+        if self.min_nights < 1:
+            raise ValidationError(
+                "El número mínimo de noches debe ser al menos 1"
+            )
+
+        if self.date < date.today():
+            raise ValidationError(
+                "No se puede configurar la disponibilidad de una fecha pasada"
+            )
+
     def save(self, *args, **kwargs):
         self.full_clean()
         super().save(*args, **kwargs)

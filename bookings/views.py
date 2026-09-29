@@ -4,14 +4,17 @@ from django.http import HttpResponse, HttpResponseRedirect
 from django.contrib.auth import authenticate, login, logout
 from django.views.decorators.csrf import csrf_exempt
 from django.db import IntegrityError
-from .models import User, Property, Booking
+from django.db.models import Exists, F, IntegerField, OuterRef, Subquery
+from django.db.models.functions import Coalesce
+from .models import PropertyAvailability, User, Property, Booking
 from django import forms
 from django.forms import ModelForm
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.forms import AuthenticationForm
 from django.http import JsonResponse
-from datetime import date
-from django.core.paginator import Paginator
+from datetime import date, timedelta
+from decimal import Decimal, InvalidOperation
+from django.core.paginator import Paginator, PageNotAnInteger, EmptyPage
 from django.contrib.auth.decorators import login_required
 import json
 from django.core.exceptions import ValidationError
@@ -51,12 +54,57 @@ def index(request):
 
 def property(request, property_id):
     property = get_object_or_404(Property, pk=property_id)
-    # Filter bookings that end today or in the future
-    active_bookings = property.bookings.filter(final_date__gte=date.today()).order_by('initial_date')
+
+    today = date.today()
+
+    active_bookings = property.bookings.filter(
+        final_date__gte=today
+    ).order_by("initial_date")
+
+    min_booking_date = today + timedelta(days=property.notice_period_days)
+    availability_end_date = min_booking_date + timedelta(days=365)
+
+    availability_start_date = (
+        min_booking_date - timedelta(days=1)
+    )
+
+    availability = PropertyAvailability.get_for_range(
+        property,
+        availability_start_date,
+        availability_end_date,
+    )
+
+    bookings = Booking.objects.filter(
+        property=property,
+        initial_date__lt=availability_end_date,
+        final_date__gt=availability_start_date,
+    ).order_by("initial_date")
+
+    booked_dates = set()
+
+    for booking in bookings:
+        current_date = max(booking.initial_date, availability_start_date)
+        booking_end = min(booking.final_date, availability_end_date)
+
+        while current_date < booking_end:
+            booked_dates.add(current_date.isoformat())
+            current_date += timedelta(days=1)
+
+    availability_data = [
+        {
+            "date": item["date"].isoformat(),
+            "price_per_night": str(item["price_per_night"]),
+            "status": item["status"],
+            "min_nights": item["min_nights"],
+        }
+        for item in availability
+    ]
 
     return render(request, "bookings/property.html", {
         "property": property,
-        "active_bookings": active_bookings
+        "active_bookings": active_bookings,
+        "availability_data": availability_data,
+        "booked_dates": sorted(booked_dates),
     })
 
 @login_required
@@ -88,7 +136,7 @@ def my_bookings(request):
 class PropertyForm(ModelForm):
     class Meta:
         model = Property
-        fields = ("title", "description", "location", "image", "notice_period_days", "price_per_night", "children", "adults", "rooms", "allow_pets")
+        fields = ("title", "description", "location", "image", "notice_period_days", "default_price_per_night", "default_min_nights", "children", "adults", "rooms", "allow_pets")
 
 @login_required
 def manage_property(request, property_id=None):
@@ -127,15 +175,291 @@ def manage_property(request, property_id=None):
             "form": form
         })
 
-@login_required   
+@login_required
+def property_availability(request, property_id):
+    property = get_object_or_404(Property, pk=property_id)
+
+    if property.owner != request.user and not request.user.is_staff:
+        raise PermissionDenied
+
+    return render(request, "bookings/property_availability.html", {
+        "property": property,
+        "default_price_per_night": property.default_price_per_night,
+        "default_min_nights": property.default_min_nights,
+    })
+
+@login_required
+def property_availability_reset(request, property_id):
+    property = get_object_or_404(Property, pk=property_id)
+
+    if property.owner != request.user and not request.user.is_staff:
+        raise PermissionDenied
+
+    if request.method != "POST":
+        return JsonResponse(
+            {"error": "Method not allowed"},
+            status=405,
+        )
+
+    start_date = request.POST.get("start_date")
+    end_date = request.POST.get("end_date")
+
+    if not start_date or not end_date:
+        return JsonResponse(
+            {"error": "Start and end dates are required"},
+            status=400,
+        )
+
+    try:
+        start_date = date.fromisoformat(start_date)
+        end_date = date.fromisoformat(end_date)
+    except ValueError:
+        return JsonResponse(
+            {"error": "Invalid date format"},
+            status=400,
+        )
+
+    if start_date > end_date:
+        return JsonResponse(
+            {"error": "Start date must be before or equal to end date"},
+            status=400,
+        )
+
+    has_bookings = Booking.objects.filter(
+        property=property,
+        initial_date__lte=end_date,
+        final_date__gt=start_date,
+    ).exists()
+
+    if has_bookings:
+        return JsonResponse(
+            {"error": "No se pueden restaurar días que tienen reservas."},
+            status=400,
+        )
+
+    deleted_count, _ = PropertyAvailability.objects.filter(
+        property=property,
+        date__range=[start_date, end_date],
+    ).delete()
+
+    return JsonResponse({
+        "deleted_count": deleted_count,
+    })
+
+@login_required
+def property_availability_data(request, property_id):
+    property = get_object_or_404(Property, pk=property_id)
+
+    start_date = request.GET.get("start_date")
+    end_date = request.GET.get("end_date")
+
+    if not start_date or not end_date:
+        return JsonResponse(
+            {"error": "Start and end dates are required"},
+            status=400,
+        )
+
+    try:
+        start_date = date.fromisoformat(start_date)
+        end_date = date.fromisoformat(end_date)
+    except ValueError:
+        return JsonResponse(
+            {"error": "Invalid date format"},
+            status=400,
+        )
+
+    if start_date > end_date:
+        return JsonResponse(
+            {"error": "Start date must be before or equal to end date"},
+            status=400,
+        )
+
+    availability = PropertyAvailability.get_for_range(
+        property,
+        start_date,
+        end_date + timedelta(days=1),
+    )
+
+    bookings = Booking.objects.filter(
+        property=property,
+        initial_date__lte=end_date,
+        final_date__gt=start_date,
+    ).order_by("initial_date")
+
+    booked_dates = set()
+
+    for booking in bookings:
+        current_date = max(
+            booking.initial_date,
+            start_date,
+        )
+
+        booking_end = min(
+            booking.final_date,
+            end_date + timedelta(days=1),
+        )
+
+        while current_date < booking_end:
+            booked_dates.add(current_date.isoformat())
+            current_date += timedelta(days=1)
+
+    return JsonResponse({
+        "availability": [
+            {
+                "date": item["date"].isoformat(),
+                "price_per_night": str(item["price_per_night"]),
+                "status": item["status"],
+                "min_nights": item["min_nights"],
+                "has_override": PropertyAvailability.objects.filter(
+                    property=property,
+                    date=item["date"],
+                ).exists(),
+            }
+            for item in availability
+        ],
+        "booked_dates": sorted(booked_dates),
+    })
+
+@login_required
+def property_availability_save(request, property_id):
+    property = get_object_or_404(Property, pk=property_id)
+
+    if property.owner != request.user and not request.user.is_staff:
+        raise PermissionDenied
+
+    if request.method != "POST":
+        return JsonResponse(
+            {"error": "Method not allowed"},
+            status=405,
+        )
+
+    start_date = request.POST.get("start_date")
+    end_date = request.POST.get("end_date")
+    status = request.POST.get("status")
+    min_nights = request.POST.get("min_nights")
+    price_per_night = request.POST.get("price_per_night")
+
+    if not all([
+        start_date,
+        end_date,
+        status,
+        min_nights,
+        price_per_night,
+    ]):
+        return JsonResponse(
+            {"error": "All fields are required"},
+            status=400,
+        )
+
+    if status not in {"OPEN", "CLOSED"}:
+        return JsonResponse(
+            {"error": "Invalid status"},
+            status=400,
+        )
+
+    try:
+        start_date = date.fromisoformat(start_date)
+        end_date = date.fromisoformat(end_date)
+    except ValueError:
+        return JsonResponse(
+            {"error": "Invalid date format"},
+            status=400,
+        )
+
+    if start_date < date.today():
+        return JsonResponse(
+            {"error": "Cannot modify availability for past dates"},
+            status=400,
+        )
+
+    if start_date > end_date:
+        return JsonResponse(
+            {"error": "Start date must be before or equal to end date"},
+            status=400,
+        )
+
+    has_bookings = Booking.objects.filter(
+        property=property,
+        initial_date__lte=end_date,
+        final_date__gt=start_date,
+    ).exists()
+
+    if has_bookings:
+        return JsonResponse(
+            {"error": "No se pueden modificar días que tienen reservas."},
+            status=400,
+        )
+
+    try:
+        min_nights = int(min_nights)
+    except ValueError:
+        return JsonResponse(
+            {"error": "Invalid minimum nights"},
+            status=400,
+        )
+
+    if min_nights < 1:
+        return JsonResponse(
+            {"error": "Minimum nights must be at least 1"},
+            status=400,
+        )
+
+    try:
+        price_per_night = Decimal(price_per_night)
+    except (InvalidOperation, ValueError):
+        return JsonResponse(
+            {"error": "Invalid price"},
+            status=400,
+        )
+
+    if price_per_night <= 0:
+        return JsonResponse(
+            {"error": "Price must be greater than 0"},
+            status=400,
+        )
+
+    if price_per_night > Decimal("99999.99"):
+        return JsonResponse(
+            {"error": "Price must not exceed 99999.99"},
+            status=400,
+        )
+
+    updated_count = 0
+    current_date = start_date
+
+    while current_date <= end_date:
+        PropertyAvailability.objects.update_or_create(
+            property=property,
+            date=current_date,
+            defaults={
+                "status": status,
+                "min_nights": min_nights,
+                "price_per_night": price_per_night,
+            },
+        )
+
+        updated_count += 1
+        current_date += timedelta(days=1)
+
+    return JsonResponse({
+        "updated_count": updated_count,
+    })
+
+@login_required
 def delete_booking(request, booking_id):
-    if request.method == "POST":
-        booking = get_object_or_404(Booking, pk=booking_id)
-        if booking.tenant != request.user:
-            raise PermissionDenied
-        else:
-            booking.delete()
-            return HttpResponseRedirect(reverse("my_bookings"))
+    booking = get_object_or_404(Booking, pk=booking_id)
+
+    if request.method != "POST":
+        return JsonResponse(
+            {"error": "Method not allowed"},
+            status=405,
+        )
+
+    if booking.tenant != request.user:
+        raise PermissionDenied
+
+    booking.delete()
+    return HttpResponseRedirect(reverse("my_bookings"))
 
 def properties(request):
     if request.method != "GET":
@@ -156,33 +480,6 @@ def properties(request):
 
     if location:
         properties = properties.filter(location=location)
-
-    if initial_date or final_date:
-        if not initial_date or not final_date:
-             return JsonResponse({"error": "Ambas fechas deben ser seleccionadas."}, status=400)
-
-        # Convert dates from String into actual dates
-        initial_date = date.fromisoformat(initial_date)
-        final_date = date.fromisoformat(final_date)
-
-        if initial_date > final_date:
-            return JsonResponse({"error": "La fecha de salida debe ser igual o posterior a la de entrada."}, status=400)
-        elif initial_date < date.today():
-            return JsonResponse({"error": "La fecha de entrada no puede ser anterior al día de hoy."}, status=400)
-
-        # Check that the selected arrival date satisfies the property's
-        # minimum notice period.
-        days_until_booking = (initial_date - date.today()).days
-        properties = properties.filter(
-            notice_period_days__lte=days_until_booking
-        )
-
-        # Using "__" to filter data across related models.
-        # Using "distinct" to prevent from duplicated properties when join
-        properties = properties.exclude(
-            bookings__initial_date__lt=final_date,
-            bookings__final_date__gt=initial_date
-        ).distinct()
     
     if adults:
         try:
@@ -190,7 +487,7 @@ def properties(request):
             if adults < 1:
                 return JsonResponse({"error": "El número de adultos tiene que ser mayor que 0."}, status=400)
             properties = properties.filter(adults__gte=adults)
-        except:
+        except ValueError:
             return JsonResponse({"error": "Introduce un número válido para indicar el número de adultos."}, status=400)
 
     if children:
@@ -199,7 +496,7 @@ def properties(request):
             if children < 0:
                 return JsonResponse({"error": "El número de niños tiene que ser mayor o igual a 0."}, status=400)
             properties = properties.filter(children__gte=children)
-        except:
+        except ValueError:
             return JsonResponse({"error": "Introduce un número válido para indicar el número de niños."}, status=400)
 
     if rooms:
@@ -208,20 +505,118 @@ def properties(request):
             if rooms < 1:
                 return JsonResponse({"error": "El número de habitaciones tiene que ser mayor que 0."}, status=400)
             properties = properties.filter(rooms__gte=rooms)
-        except:
+        except ValueError:
             return JsonResponse({"error": "Introduce un número válido para indicar el número de habitaciones."}, status=400)
     
     if pets:
         properties = properties.filter(allow_pets=True)
 
+    if initial_date or final_date:
+        if not initial_date or not final_date:
+            return JsonResponse({"error": "Both dates are required"}, status=400)
+
+        try:
+            initial_date = date.fromisoformat(initial_date)
+            final_date = date.fromisoformat(final_date)
+        except ValueError:
+            return JsonResponse({"error": "Invalid date format"}, status=400)
+
+        if initial_date >= final_date:
+            return JsonResponse({"error": "Invalid date range"}, status=400)
+
+        if initial_date < date.today():
+            return JsonResponse(
+                {
+                    "error": (
+                        "La fecha de entrada no puede ser anterior "
+                        "al día de hoy."
+                    )
+                },
+                status=400
+            )
+
+        closed_availability = PropertyAvailability.objects.filter(
+            property=OuterRef("pk"),
+            date__gte=initial_date,
+            date__lt=final_date,
+            status="CLOSED",
+        )
+
+        overlapping_bookings = Booking.objects.filter(
+            property=OuterRef("pk"),
+            initial_date__lt=final_date,
+            final_date__gt=initial_date,
+        )
+
+        arrival_availability = PropertyAvailability.objects.filter(
+            property=OuterRef("pk"),
+            date=initial_date,
+        ).values("min_nights")[:1]
+
+        arrival_price = PropertyAvailability.objects.filter(
+            property=OuterRef("pk"),
+            date=initial_date,
+        ).values("price_per_night")[:1]
+
+        total_nights = (final_date - initial_date).days
+
+        properties = properties.annotate(
+            has_closed_availability=Exists(
+                closed_availability
+            ),
+            has_overlapping_booking=Exists(
+                overlapping_bookings
+            ),
+            arrival_min_nights=Subquery(
+                arrival_availability,
+                output_field=IntegerField(),
+            ),
+            arrival_price=Subquery(
+                arrival_price,
+            ),
+        ).annotate(
+            effective_min_nights=Coalesce(
+                F("arrival_min_nights"),
+                F("default_min_nights"),
+                output_field=IntegerField(),
+            )
+        ).filter(
+            has_closed_availability=False,
+            has_overlapping_booking=False,
+            effective_min_nights__lte=total_nights,
+        )
+
     properties = properties.order_by("id")
+
     paginator = Paginator(properties, 6)
-    page_number = request.GET.get('page')
+    page_number = request.GET.get("page")
 
     try:
         page_properties = paginator.page(page_number)
-        properties = list(page_properties.object_list.values())
-    except:
+
+        properties = [
+            {
+                "id": property.id,
+                "title": property.title,
+                "description": property.description,
+                "location": property.location,
+                "image": property.image.name if property.image else "",
+                "price_per_night": str(
+                    property.arrival_price
+                    if property.arrival_price is not None
+                    else property.default_price_per_night
+                )
+                if initial_date
+                else str(property.default_price_per_night),
+                "adults": property.adults,
+                "children": property.children,
+                "rooms": property.rooms,
+                "allow_pets": property.allow_pets,
+            }
+            for property in page_properties.object_list
+        ]
+
+    except (PageNotAnInteger, EmptyPage):
         # If page doesn`t exist, return empty list
         properties = []
 
@@ -229,66 +624,145 @@ def properties(request):
 
 @login_required
 def booking(request, property_id):
+    property = get_object_or_404(Property, pk=property_id)
+
     initial_date = request.GET.get('start')
     final_date = request.GET.get('end')
 
     if not initial_date or not final_date:
-            return JsonResponse({"error": "Ambas fechas deben ser seleccionadas."}, status=400)
+        return JsonResponse({"error": "Ambas fechas deben ser seleccionadas."}, status=400)
 
     try:
         # Convert dates from String into actual dates
         initial_date = date.fromisoformat(initial_date)
         final_date = date.fromisoformat(final_date)
 
-        if initial_date > final_date:
-            return JsonResponse({"error": "La fecha de salida debe ser igual o posterior a la de entrada."}, status=400)
+        if initial_date >= final_date:
+            return JsonResponse(
+                {
+                    "error": "La fecha de salida debe ser posterior a la fecha de entrada."
+                },
+                status=400,
+            )
         elif initial_date < date.today():
             return JsonResponse({"error": "La fecha de entrada no puede ser anterior al día de hoy."}, status=400)
         else:
+            availability = PropertyAvailability.get_for_range(
+                property,
+                initial_date,
+                final_date,
+            )
+
+            closed_dates = [
+                day["date"]
+                for day in availability
+                if day["status"] == "CLOSED"
+            ]
+
+            if closed_dates:
+                return JsonResponse(
+                    {
+                        "error": "El alojamiento no está disponible en todas las fechas seleccionadas."
+                    },
+                    status=400,
+                )
+
+            arrival_availability = PropertyAvailability.get_for_date(
+                property,
+                initial_date,
+            )
+
+            total_nights = (final_date - initial_date).days
+
+            if total_nights < arrival_availability["min_nights"]:
+                return JsonResponse(
+                    {
+                        "error": (
+                            f"La estancia debe ser de al menos "
+                            f"{arrival_availability['min_nights']} noches."
+                        )
+                    },
+                    status=400,
+                )
+
             # Check for any overlapping bookings in the database
             is_occupied = Booking.objects.filter(
                 property_id=property_id,
                 initial_date__lt=final_date,
-                final_date__gt=initial_date
+                final_date__gt=initial_date,
             ).exists()
 
             if is_occupied:
-                return JsonResponse({"error": "El alojamiento ya está reservado en esas fechas."}, status=400)
+                return JsonResponse(
+                    {"error": "El alojamiento ya está reservado en esas fechas."},
+                    status=400,
+                )
 
-            return JsonResponse({
-                "available": True
-            })
-        
+            return JsonResponse({"available": True})
+
     except ValueError:
         return JsonResponse({"error": "Formato de fecha inválido."}, status=400)
 
 @login_required
 def confirm_booking(request, property_id):
-    if request.method == "POST":
-        try:
-            data = json.loads(request.body)
-            
-            initial_date = date.fromisoformat(data.get('start'))
-            final_date = date.fromisoformat(data.get('end'))
+    if request.method != "POST":
+        return JsonResponse(
+            {"error": "Method not allowed"},
+            status=405,
+        )
 
-            booking = Booking(
-                property_id=property_id,
-                tenant=request.user,
-                initial_date=initial_date,
-                final_date=final_date
-            )
+    property = get_object_or_404(Property, pk=property_id)
 
-            try:
-                # Execute clean() method to control booking restrictions
-                booking.full_clean() 
-                booking.save()
-                return JsonResponse({"success": True})
-            except ValidationError as e:
-                print(e.message_dict)
-                return JsonResponse({"error": e.message_dict}, status=400)
-            
-        except json.JSONDecodeError:
-            return JsonResponse({"error": "JSON inválido"}, status=400)
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse(
+            {"error": "JSON inválido"},
+            status=400,
+        )
+
+    if not isinstance(data, dict):
+        return JsonResponse(
+            {"error": "JSON inválido"},
+            status=400,
+        )
+
+    initial_date = data.get("start")
+    final_date = data.get("end")
+
+    if not initial_date or not final_date:
+        return JsonResponse(
+            {"error": "Ambas fechas deben ser seleccionadas."},
+            status=400,
+        )
+
+    try:
+        initial_date = date.fromisoformat(initial_date)
+        final_date = date.fromisoformat(final_date)
+    except ValueError:
+        return JsonResponse(
+            {"error": "Formato de fecha inválido."},
+            status=400,
+        )
+
+    try:
+        booking = Booking(
+            tenant=request.user,
+            property=property,
+            initial_date=initial_date,
+            final_date=final_date,
+        )
+        booking.save()
+    except ValidationError as e:
+        return JsonResponse(
+            {"error": e.message_dict},
+            status=400,
+        )
+
+    return JsonResponse({
+            "success": True,
+            "message": "Reserva confirmada.",
+        })
 
 class LoginForm(AuthenticationForm):
     error_messages = {
@@ -314,6 +788,12 @@ def login_view(request):
         })
 
 def logout_view(request):
+    if request.method != "POST":
+        return JsonResponse(
+            {"error": "Method not allowed"},
+            status=405,
+        )
+
     logout(request)
     return HttpResponseRedirect(reverse("index"))
 

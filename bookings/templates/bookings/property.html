@@ -4,6 +4,9 @@
 {% block body %}
 <input type="hidden" id="property-id" value="{{ property.id }}">
 <input type="hidden" id="notice-period-days" value="{{ property.notice_period_days }}">
+<input type="hidden" id="default-min-nights" value="{{ property.default_min_nights }}">
+{{ availability_data|json_script:"availability-data" }}
+{{ booked_dates|json_script:"booked-dates" }}
 <div class="container pt-5 pb-5">
     <div class="row g-4">
         <div class="col-lg-8">
@@ -20,82 +23,129 @@
             </div>
         </div>
         <div class="col-lg-4">
-            <div class="card mb-5">
-                <div class="card-header bg-primary fs-5 fw-bold text-white text-center">
-                    Lo que ofrece
+        {% if request.user != property.owner %}
+            <div class="card booking-card mb-4">
+                <div class="card-header bg-warning fs-5 fw-bold text-white text-center">
+                    <i class="bi bi-calendar-check me-1"></i>
+                    Selecciona tu estancia
                 </div>
+
                 <div class="card-body">
-                    <ul class="list-group list-group-flush">
-                        <li class="list-group-item d-flex justify-content-between py-3">
-                            <span>Precio noche</span>
-                            <div class="fw-bold">{{ property.price_per_night }}€</div>
-                        </li>
-                        <li class="list-group-item d-flex justify-content-between py-4">
-                            <span>Capacidad</span>
-                            <div class="fw-bold">
-                                <div>
-                                    {% if property.adults == 1 %}
-                                    {{ property.adults }} adulto
-                                    {% else %}
-                                    {{ property.adults }} adultos
-                                    {% endif %}
-                                </div>
-                                <div>
-                                    {% if property.children == 1 %}
-                                    {{ property.children }} niño
-                                    {% else %}
-                                    {{ property.children }} niños
-                                    {% endif %}
-                                </div>
-                            </div>
-                        </li>
-                        <li class="list-group-item d-flex justify-content-between py-3">
-                            <span>Habitaciones</span>
-                            <div class="fw-bold">{{ property.rooms }}</div>
-                        </li>
-                        <li class="list-group-item d-flex justify-content-between py-3">
-                            <span>Mascotas</span>
-                            <div class="fw-bold">
-                                {% if property.allow_pets %} Sí {% else %} No {% endif %}
-                            </div>
-                        </li>
-                    </ul>
-                </div>
-            </div>
-            {% if request.user != property.owner %}
-                <div class="card mb-5">
-                    <div class="card-header bg-warning fs-5 fw-bold text-white text-center"><i class="bi bi-calendar-check"></i> Tu Reserva</div>
-                    <div class="card-body text-center">
-                        {% if user.is_authenticated %}
-                        <div id="datesDiv">
-                            <div class="py-3">
-                                <h6 class="fw-bold fs-5">Selecciona la fecha de tu estancia</h6>
-                                <p class="text-secondary fw-light small">Elige tus fechas para comprobar la disponibilidad y reservar.</p>
-                            </div>
-                            <div class="mb-3">
-                                <input type="text" id="booking-range" class="form-control text-center fw-bold" placeholder="Selecciona el rango de fechas" readonly>
-                            </div>
+
+                    {% if user.is_authenticated %}
+
+                        <div
+                            class="alert alert-danger mb-0 no-display"
+                            id="alert-booking-date"
+                            role="alert">
+                        </div>
+
+                        <input
+                            type="text"
+                            id="booking-range"
+                            class="d-none"
+                            readonly
+                        >
+
+                        <div class="booking-calendar-wrapper">
+                            <div id="booking-calendar" class="booking-calendar"></div>
                         </div>
 
                         <input type="hidden" id="start-date">
                         <input type="hidden" id="end-date">
 
-                        <input type="hidden" id="booked-dates-raw" value="{% for booking in active_bookings %}{{ booking.initial_date|date:'Y-m-d' }},{{ booking.final_date|date:'Y-m-d' }}{% if not forloop.last %},{% endif %}{% endfor %}">
-                            
-                        <div class="alert alert-danger mt-3 mb-0 no-display" id="alert-booking-date" role="alert"></div>
-                        <div class="mt-3 mb-0 no-display" id="booking-button"></div>
-                        {% else %}
-                        <i class="bi bi-person-lock fs-1"></i>
-                        <div class="py-3">
-                            <h6 class="fw-bold fs-5">Inicia sesión para reservar</h6>
-                            <p class="text-secondary fw-light small">Necesitas una cuenta para completar el proceso.</p>
-                        </div>
-                        <a href="{% url 'login' %}" class="primary-button d-block w-100 mb-3" id="login-button">Iniciar Sesión</a>
+                        <div class="mb-0 {% if not request.GET.initial_date or not request.GET.final_date %}no-display{% endif %}" id="booking-button">
+                        {% if request.GET.initial_date and request.GET.final_date %}
+                            <button
+                                id="confirm-booking-button"
+                                class="btn btn-dark w-100 rounded-pill mt-3 mb-3 py-2">
+                                Confirmar Reserva
+                            </button>
                         {% endif %}
-                    </div>
+                        </div>
+
+                    {% else %}
+
+                        <div class="text-center">
+                            <i class="bi bi-person-lock fs-1"></i>
+
+                            <div class="py-3">
+                                <h6 class="fw-bold fs-5">
+                                    Inicia sesión para reservar
+                                </h6>
+
+                                <p class="text-secondary fw-light small">
+                                    Necesitas una cuenta para completar el proceso.
+                                </p>
+                            </div>
+
+                            <a
+                                href="{% url 'login' %}"
+                                class="primary-button d-block w-100 mb-3"
+                                id="login-button">
+                                Iniciar Sesión
+                            </a>
+                        </div>
+
+                    {% endif %}
+
                 </div>
-            {% endif %}
+            </div>
+        {% endif %}
+
+
+        <div class="card mb-5">
+            <div class="card-header bg-primary fs-5 fw-bold text-white text-center">
+                Lo que ofrece
+            </div>
+
+            <div class="card-body">
+                <ul class="list-group list-group-flush">
+
+                    <li class="list-group-item d-flex justify-content-between py-4">
+                        <span>Capacidad</span>
+
+                        <div class="fw-bold">
+                            <div>
+                                {% if property.adults == 1 %}
+                                    {{ property.adults }} adulto
+                                {% else %}
+                                    {{ property.adults }} adultos
+                                {% endif %}
+                            </div>
+
+                            <div>
+                                {% if property.children == 1 %}
+                                    {{ property.children }} niño
+                                {% else %}
+                                    {{ property.children }} niños
+                                {% endif %}
+                            </div>
+                        </div>
+                    </li>
+
+                    <li class="list-group-item d-flex justify-content-between py-3">
+                        <span>Habitaciones</span>
+                        <div class="fw-bold">{{ property.rooms }}</div>
+                    </li>
+
+                    <li class="list-group-item d-flex justify-content-between py-3">
+                        <span>Mascotas</span>
+
+                        <div class="fw-bold">
+                            {% if property.allow_pets %}
+                                Sí
+                            {% else %}
+                                No
+                            {% endif %}
+                        </div>
+                    </li>
+
+                </ul>
+            </div>
         </div>
+
+    </div>
     </div>
 </div>
 {% endblock %}
@@ -103,138 +153,7 @@
 {% block script %}
 {% if request.user != property.owner %}
 <script src="https://cdn.jsdelivr.net/npm/litepicker/dist/litepicker.js"></script>
-
-<script>
-const rawData = document.getElementById('booked-dates-raw').value;
-const bookedDates = [];
-
-const arrivalDates = [];
-const departureDates = [];
-
-if (rawData) {
-    const datesArray = rawData.split(',');
-    for (let i = 0; i < datesArray.length; i += 2) {
-        if (datesArray[i] && datesArray[i+1]) {
-            arrivalDates.push(datesArray[i]);
-            departureDates.push(datesArray[i + 1]);
-
-            const start = new Date(datesArray[i]);
-            start.setDate(start.getDate() + 1);
-
-            const startStr = start.toISOString().split('T')[0];
-
-            const end = new Date(datesArray[i + 1]);
-            end.setDate(end.getDate() - 1);
-
-            const endStr = end.toISOString().split('T')[0];
-
-            bookedDates.push([startStr, endStr]);
-        }
-    }
-}
-
-const noticePeriodDays = parseInt(document.getElementById('notice-period-days').value) || 0;
-
-// Calcular hoy + días de antelación en hora local
-const minBookingDate = new Date();
-minBookingDate.setDate(minBookingDate.getDate() + noticePeriodDays);
-const minBookingDateStr = minBookingDate.toLocaleDateString('en-CA'); // Formato "YYYY-MM-DD"
-
-// Fechas que son salida de una reserva y entrada de otra
-const changeoverDates = departureDates.filter(
-    date => arrivalDates.includes(date)
-);
-
-// Salida "simple": alguien se va ese día y nadie llega ese mismo día
-//   ese día SOLO puede usarse como LLEGADA de la nueva reserva
-const soloEntradaDates = departureDates.filter(
-    date => !changeoverDates.includes(date)
-);
-
-// Llegada "simple": alguien llega ese día y nadie se va ese mismo día
-//   ese día SOLO puede usarse como SALIDA de la nueva reserva
-const soloSalidaDates = arrivalDates.filter(
-    date => !changeoverDates.includes(date)
-);
-
-// si el primer día reservable coincide con una entrada, también debe mostrarse como ocupado
-if (arrivalDates.includes(minBookingDateStr) && !changeoverDates.includes(minBookingDateStr)) {
-    changeoverDates.push(minBookingDateStr);
-}
-
-// Si el primer día reservable no está ya bloqueado del todo, solo puede ser LLEGADA
-// (no puede existir una salida anterior a la antelación mínima)
-if (!changeoverDates.includes(minBookingDateStr) && !soloEntradaDates.includes(minBookingDateStr)) {
-    soloEntradaDates.push(minBookingDateStr);
-}
-
-// Añadir las fechas especiales como bloqueadas
-changeoverDates.forEach(date => {
-    bookedDates.push([date, date]);
-});
-
-const picker = new Litepicker({
-    element: document.getElementById('booking-range'),
-    singleMode: false,
-    numberOfMonths: 1,
-    numberOfColumns: 1,
-    format: 'DD/MM/YYYY',
-    minDate: minBookingDateStr,
-    minDays: 2,
-    lockDays: bookedDates, // Parámetro nativo correcto para bloquear e impedir selección
-    disallowedDatesRanges: bookedDates, 
-    selectForward: false,
-    lockDaysInversed: false, // Cambiado a false para bloquear estrictamente dentro del rango de reservas
-
-    tooltipText: {
-        one: 'noche',
-        other: 'noches'
-    },
-
-    tooltipNumber: (totalDays) => {
-        return totalDays - 1;
-    },
-
-    setup: (picker) => {
-        // Pinta en diagonal los días "solo entrada" / "solo salida"
-        picker.on('render:day', (dayElement, date) => {
-            const dStr = date.format('YYYY-MM-DD');
-            if (soloEntradaDates.includes(dStr)) {
-                dayElement.classList.add('solo-entrada');
-            } else if (soloSalidaDates.includes(dStr)) {
-                dayElement.classList.add('solo-salida');
-            }
-        });
-
-        picker.on('selected', (date1, date2) => {
-            const startStr = date1.format('YYYY-MM-DD');
-            const endStr = date2.format('YYYY-MM-DD');
-            const alertBox = document.getElementById('alert-booking-date');
-
-            // Un día "solo salida" no puede ser llegada, y un día "solo entrada" no puede ser salida
-            if (soloSalidaDates.includes(startStr) || soloEntradaDates.includes(endStr)) {
-                alertBox.textContent = 'La combinación de fechas no es válida: revisa el día marcado en rojo en diagonal.';
-                alertBox.classList.remove('no-display');
-                picker.clearSelection();
-                return;
-            }
-
-            alertBox.classList.add('no-display');
-
-            const startInput = document.getElementById('start-date');
-            const endInput = document.getElementById('end-date');
-
-            startInput.value = startStr;
-            endInput.value = endStr;
-
-            // Notifica de forma limpia a tu archivo booking.js
-            startInput.dispatchEvent(new Event('change'));
-            endInput.dispatchEvent(new Event('change'));
-        });
-    }
-});
-</script>
-
+<script src="{% static 'bookings/property.js' %}"></script>
 <script src="{% static 'bookings/booking.js' %}"></script>
 {% endif %}
 {% endblock %}
