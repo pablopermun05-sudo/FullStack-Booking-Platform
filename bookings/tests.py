@@ -333,6 +333,366 @@ class RegistrationTestCase(TestCase):
             User.objects.filter(username="invalid").exists()
         )
 
+class PropertyManagementPermissionTestCase(TestCase):
+    def create_user(self, username, email, **kwargs):
+        return User.objects.create_user(
+            username=username,
+            password="Password123!",
+            email=email,
+            first_name="Test",
+            last_name="User",
+            **kwargs,
+        )
+
+    def create_owner(self, username, email, status):
+        user = self.create_user(username, email)
+
+        OwnerProfile.objects.create(
+            user=user,
+            status=status,
+        )
+
+        return user
+
+    def create_property(self, owner):
+        return Property.objects.create(
+            title="Test property",
+            description="Test description",
+            location="Madrid",
+            image="test.jpg",
+            default_price_per_night=100,
+            default_min_nights=1,
+            children=2,
+            adults=2,
+            rooms=2,
+            notice_period_days=0,
+            allow_pets=False,
+            owner=owner,
+        )
+
+    def test_customer_cannot_create_property(self):
+        customer = self.create_user(
+            "customer",
+            "customer@example.com",
+        )
+
+        self.client.force_login(customer)
+
+        response = self.client.get(reverse("create_property"))
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_pending_owner_cannot_create_property(self):
+        owner = self.create_owner(
+            "pending",
+            "pending@example.com",
+            "PENDING",
+        )
+
+        self.client.force_login(owner)
+
+        response = self.client.get(reverse("create_property"))
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_rejected_owner_cannot_create_property(self):
+        owner = self.create_owner(
+            "rejected",
+            "rejected@example.com",
+            "REJECTED",
+        )
+
+        self.client.force_login(owner)
+
+        response = self.client.get(reverse("create_property"))
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_approved_owner_can_access_create_property(self):
+        owner = self.create_owner(
+            "approved",
+            "approved@example.com",
+            "APPROVED",
+        )
+
+        self.client.force_login(owner)
+
+        response = self.client.get(reverse("create_property"))
+
+        self.assertEqual(response.status_code, 200)
+
+    def test_staff_can_access_create_property(self):
+        staff = self.create_user(
+            "staff",
+            "staff@example.com",
+            is_staff=True,
+        )
+
+        self.client.force_login(staff)
+
+        response = self.client.get(reverse("create_property"))
+
+        self.assertEqual(response.status_code, 200)
+
+    def test_anonymous_user_can_access_property_availability_data(self):
+        owner = self.create_owner(
+            "owner",
+            "owner@example.com",
+            "APPROVED",
+        )
+
+        property = self.create_property(owner=owner)
+
+        response = self.client.get(
+            reverse(
+                "property_availability_data",
+                args=[property.pk],
+            ),
+            {
+                "start_date": "2026-10-01",
+                "end_date": "2026-10-03",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+    def test_owner_can_access_own_property(self):
+        owner = self.create_owner(
+            "owner",
+            "owner@example.com",
+            "APPROVED",
+        )
+
+        property = self.create_property(owner=owner)
+
+        self.client.force_login(owner)
+
+        response = self.client.get(
+            reverse(
+                "edit_property",
+                args=[property.pk],
+            )
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+    def test_approved_owner_cannot_access_other_owner_property(self):
+        owner = self.create_owner(
+            "owner",
+            "owner@example.com",
+            "APPROVED",
+        )
+
+        other_owner = self.create_owner(
+            "other",
+            "other@example.com",
+            "APPROVED",
+        )
+
+        property = self.create_property(owner=other_owner)
+
+        self.client.force_login(owner)
+
+        response = self.client.get(
+            reverse(
+                "edit_property",
+                args=[property.pk],
+            )
+        )
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_staff_can_access_other_owner_property(self):
+        staff = self.create_user(
+            "staff",
+            "staff@example.com",
+            is_staff=True,
+        )
+
+        owner = self.create_owner(
+            "owner",
+            "owner@example.com",
+            "APPROVED",
+        )
+
+        property = self.create_property(owner=owner)
+
+        self.client.force_login(staff)
+
+        response = self.client.get(
+            reverse(
+                "edit_property",
+                args=[property.pk],
+            )
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+    def test_customer_cannot_access_my_properties(self):
+        customer = self.create_user(
+            "customer",
+            "customer@example.com",
+        )
+
+        self.client.force_login(customer)
+
+        response = self.client.get(reverse("my_properties"))
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_approved_owner_can_access_my_properties(self):
+        owner = self.create_owner(
+            "owner",
+            "owner@example.com",
+            "APPROVED",
+        )
+
+        self.client.force_login(owner)
+
+        response = self.client.get(reverse("my_properties"))
+
+        self.assertEqual(response.status_code, 200)
+
+    def test_other_owner_cannot_access_property_availability(self):
+        owner = self.create_owner(
+            "owner",
+            "owner@example.com",
+            "APPROVED",
+        )
+
+        other_owner = self.create_owner(
+            "other",
+            "other@example.com",
+            "APPROVED",
+        )
+
+        property = self.create_property(owner=other_owner)
+
+        self.client.force_login(owner)
+
+        response = self.client.get(
+            reverse(
+                "property_availability",
+                args=[property.pk],
+            )
+        )
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_property_owner_can_access_property_availability(self):
+        owner = self.create_owner(
+            "owner",
+            "owner@example.com",
+            "APPROVED",
+        )
+
+        property = self.create_property(owner=owner)
+
+        self.client.force_login(owner)
+
+        response = self.client.get(
+            reverse(
+                "property_availability",
+                args=[property.pk],
+            )
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+    def test_staff_can_access_other_owner_property_availability(self):
+        staff = self.create_user(
+            "staff",
+            "staff@example.com",
+            is_staff=True,
+        )
+
+        owner = self.create_owner(
+            "owner",
+            "owner@example.com",
+            "APPROVED",
+        )
+
+        property = self.create_property(owner=owner)
+
+        self.client.force_login(staff)
+
+        response = self.client.get(
+            reverse(
+                "property_availability",
+                args=[property.pk],
+            )
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+    def test_other_owner_cannot_save_property_availability(self):
+        owner = self.create_owner(
+            "owner",
+            "owner@example.com",
+            "APPROVED",
+        )
+
+        other_owner = self.create_owner(
+            "other",
+            "other@example.com",
+            "APPROVED",
+        )
+
+        property = self.create_property(owner=other_owner)
+
+        self.client.force_login(owner)
+
+        response = self.client.post(
+            reverse(
+                "property_availability_save",
+                args=[property.pk],
+            ),
+            {
+                "start_date": "2026-10-01",
+                "end_date": "2026-10-03",
+                "status": "OPEN",
+                "min_nights": "1",
+                "price_per_night": "100",
+            },
+        )
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_other_owner_cannot_reset_property_availability(self):
+        owner = self.create_owner(
+            "owner",
+            "owner@example.com",
+            "APPROVED",
+        )
+
+        other_owner = self.create_owner(
+            "other",
+            "other@example.com",
+            "APPROVED",
+        )
+
+        property = self.create_property(owner=other_owner)
+
+        self.client.force_login(owner)
+
+        response = self.client.post(
+            reverse(
+                "property_availability_reset",
+                args=[property.pk],
+            ),
+            {
+                "start_date": "2026-10-01",
+                "end_date": "2026-10-03",
+            },
+        )
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_anonymous_user_cannot_create_property(self):
+        response = self.client.get(reverse("create_property"))
+
+        self.assertEqual(response.status_code, 302)
+
 class PropertyTestCase(TestCase):
 
     def setUp(self):

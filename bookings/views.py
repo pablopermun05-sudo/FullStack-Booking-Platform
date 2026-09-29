@@ -6,7 +6,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.db import IntegrityError
 from django.db.models import Exists, F, IntegerField, OuterRef, Subquery
 from django.db.models.functions import Coalesce
-from .models import User, OwnerProfile, Property, Booking, PropertyAvailability
+from .models import User, OwnerProfile, Property, Booking, PropertyAvailability, can_manage_properties
 from django import forms
 from django.forms import ModelForm
 from django.contrib.auth.forms import UserCreationForm
@@ -109,6 +109,9 @@ def property(request, property_id):
 
 @login_required
 def my_properties(request):
+    if not can_manage_properties(request.user):
+        raise PermissionDenied
+    
     properties = Property.objects.filter(owner=request.user)
     
     paginator = Paginator(properties, 6)
@@ -140,12 +143,15 @@ class PropertyForm(ModelForm):
 
 @login_required
 def manage_property(request, property_id=None):
+    if not can_manage_properties(request.user):
+        raise PermissionDenied
+
     if property_id is None:
         property = None
         form = PropertyForm()
     else :
         property = get_object_or_404(Property, pk=property_id)
-        if property.owner != request.user:
+        if property.owner != request.user and not request.user.is_staff:
             raise PermissionDenied
         form = PropertyForm(instance=property)
 
@@ -177,6 +183,9 @@ def manage_property(request, property_id=None):
 
 @login_required
 def property_availability(request, property_id):
+    if not can_manage_properties(request.user):
+        raise PermissionDenied
+
     property = get_object_or_404(Property, pk=property_id)
 
     if property.owner != request.user and not request.user.is_staff:
@@ -190,6 +199,9 @@ def property_availability(request, property_id):
 
 @login_required
 def property_availability_reset(request, property_id):
+    if not can_manage_properties(request.user):
+        raise PermissionDenied
+    
     property = get_object_or_404(Property, pk=property_id)
 
     if property.owner != request.user and not request.user.is_staff:
@@ -246,8 +258,8 @@ def property_availability_reset(request, property_id):
         "deleted_count": deleted_count,
     })
 
-@login_required
 def property_availability_data(request, property_id):
+    
     property = get_object_or_404(Property, pk=property_id)
 
     start_date = request.GET.get("start_date")
@@ -322,6 +334,9 @@ def property_availability_data(request, property_id):
 
 @login_required
 def property_availability_save(request, property_id):
+    if not can_manage_properties(request.user):
+        raise PermissionDenied
+
     property = get_object_or_404(Property, pk=property_id)
 
     if property.owner != request.user and not request.user.is_staff:
