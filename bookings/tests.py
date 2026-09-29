@@ -1668,6 +1668,80 @@ class BookingTestCase(TestCase):
 
         self.assertFalse(booking.is_expired())
 
+    def test_cancelled_booking_does_not_block_dates(self):
+        Booking.objects.create(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=date.today() + timedelta(days=5),
+            final_date=date.today() + timedelta(days=7),
+            status="CANCELLED",
+        )
+
+        booking = Booking(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=date.today() + timedelta(days=5),
+            final_date=date.today() + timedelta(days=7),
+        )
+
+        booking.full_clean()
+
+    def test_expired_booking_does_not_block_dates(self):
+        Booking.objects.create(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=date.today() + timedelta(days=5),
+            final_date=date.today() + timedelta(days=7),
+            status="EXPIRED",
+        )
+
+        booking = Booking(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=date.today() + timedelta(days=5),
+            final_date=date.today() + timedelta(days=7),
+        )
+
+        booking.full_clean()
+
+    def test_pending_booking_blocks_dates(self):
+        Booking.objects.create(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=date.today() + timedelta(days=5),
+            final_date=date.today() + timedelta(days=7),
+            status="PENDING",
+        )
+
+        booking = Booking(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=date.today() + timedelta(days=5),
+            final_date=date.today() + timedelta(days=7),
+        )
+
+        with self.assertRaises(ValidationError):
+            booking.full_clean()
+
+    def test_confirmed_booking_blocks_dates(self):
+        Booking.objects.create(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=date.today() + timedelta(days=5),
+            final_date=date.today() + timedelta(days=7),
+            status="CONFIRMED",
+        )
+
+        booking = Booking(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=date.today() + timedelta(days=5),
+            final_date=date.today() + timedelta(days=7),
+        )
+
+        with self.assertRaises(ValidationError):
+            booking.full_clean()
+
 class PropertySearchTestCase(TestCase):
 
     def test_properties_rejects_invalid_initial_date(self):
