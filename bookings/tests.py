@@ -1742,6 +1742,74 @@ class BookingTestCase(TestCase):
         with self.assertRaises(ValidationError):
             booking.full_clean()
 
+    def test_expire_changes_expired_pending_booking_to_expired(self):
+        booking = Booking.objects.create(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=date.today() + timedelta(days=5),
+            final_date=date.today() + timedelta(days=7),
+            status="PENDING",
+            expires_at=timezone.now() - timedelta(minutes=5),
+        )
+
+        result = booking.expire()
+
+        booking.refresh_from_db()
+
+        self.assertTrue(result)
+        self.assertEqual(booking.status, "EXPIRED")
+
+    def test_expire_does_not_change_active_pending_booking(self):
+        booking = Booking.objects.create(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=date.today() + timedelta(days=5),
+            final_date=date.today() + timedelta(days=7),
+            status="PENDING",
+            expires_at=timezone.now() + timedelta(minutes=5),
+        )
+
+        result = booking.expire()
+
+        booking.refresh_from_db()
+
+        self.assertFalse(result)
+        self.assertEqual(booking.status, "PENDING")
+
+    def test_expire_does_not_change_confirmed_booking(self):
+        booking = Booking.objects.create(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=date.today() + timedelta(days=5),
+            final_date=date.today() + timedelta(days=7),
+            status="CONFIRMED",
+            expires_at=timezone.now() - timedelta(minutes=5),
+        )
+
+        result = booking.expire()
+
+        booking.refresh_from_db()
+
+        self.assertFalse(result)
+        self.assertEqual(booking.status, "CONFIRMED")
+
+    def test_expire_does_not_change_cancelled_booking(self):
+        booking = Booking.objects.create(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=date.today() + timedelta(days=5),
+            final_date=date.today() + timedelta(days=7),
+            status="CANCELLED",
+            expires_at=timezone.now() - timedelta(minutes=5),
+        )
+
+        result = booking.expire()
+
+        booking.refresh_from_db()
+
+        self.assertFalse(result)
+        self.assertEqual(booking.status, "CANCELLED")
+
 class PropertySearchTestCase(TestCase):
 
     def test_properties_rejects_invalid_initial_date(self):

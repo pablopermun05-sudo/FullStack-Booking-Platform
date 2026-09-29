@@ -123,6 +123,15 @@ class Booking(models.Model):
 
         return timezone.now() >= self.expires_at
 
+    def expire(self):
+        if not self.is_expired():
+            return False
+
+        self.status = "EXPIRED"
+        self.save(update_fields=["status"])
+
+        return True
+
     class Meta:
         verbose_name = "Reserva"
         verbose_name_plural = "Reservas"
