@@ -18,6 +18,33 @@ class User(AbstractUser):
     def __str__(self):
         return self.username
 
+class OwnerProfile(models.Model):
+    STATUS_CHOICES = [
+        ("PENDING", "Pendiente"),
+        ("APPROVED", "Aprobado"),
+        ("REJECTED", "Rechazado"),
+    ]
+
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="owner_profile",
+    )
+    status = models.CharField(
+        max_length=10,
+        choices=STATUS_CHOICES,
+        default="PENDING",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "Perfil de propietario"
+        verbose_name_plural = "Perfiles de propietarios"
+
+    def __str__(self):
+        return f"{self.user} - {self.get_status_display()}"
+
 class Property(models.Model):
     title = models.CharField(max_length=255)
     description = models.TextField()

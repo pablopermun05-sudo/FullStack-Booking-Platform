@@ -1,9 +1,79 @@
 from django.test import TestCase
 from django.urls import reverse
-from .models import User, Property, Booking, PropertyAvailability
+from .models import User, OwnerProfile, Property, Booking, PropertyAvailability
 from datetime import date, timedelta
 from django.core.exceptions import ValidationError
-from django.db import IntegrityError
+from django.utils import timezone
+
+class OwnerProfileTestCase(TestCase):
+    def test_owner_profile_is_pending_by_default(self):
+        user = User.objects.create_user(
+            username="owner",
+            password="password123",
+            email="owner@example.com",
+            first_name="Owner",
+            last_name="User",
+        )
+
+        owner_profile = OwnerProfile.objects.create(user=user)
+
+        self.assertEqual(owner_profile.status, "PENDING")
+        self.assertEqual(owner_profile.get_status_display(), "Pendiente")
+        self.assertIsNotNone(owner_profile.created_at)
+        self.assertIsNone(owner_profile.reviewed_at)
+
+    def test_owner_profile_has_one_to_one_relationship_with_user(self):
+        user = User.objects.create_user(
+            username="owner",
+            password="password123",
+            email="owner@example.com",
+            first_name="Owner",
+            last_name="User",
+        )
+
+        owner_profile = OwnerProfile.objects.create(user=user)
+
+        self.assertEqual(user.owner_profile, owner_profile)
+
+    def test_owner_profile_can_be_approved(self):
+        user = User.objects.create_user(
+            username="owner",
+            password="password123",
+            email="owner@example.com",
+            first_name="Owner",
+            last_name="User",
+        )
+
+        owner_profile = OwnerProfile.objects.create(user=user)
+
+        owner_profile.status = "APPROVED"
+        owner_profile.reviewed_at = timezone.now()
+        owner_profile.save()
+
+        owner_profile.refresh_from_db()
+
+        self.assertEqual(owner_profile.status, "APPROVED")
+        self.assertIsNotNone(owner_profile.reviewed_at)
+
+    def test_owner_profile_can_be_rejected(self):
+        user = User.objects.create_user(
+            username="owner",
+            password="password123",
+            email="owner@example.com",
+            first_name="Owner",
+            last_name="User",
+        )
+
+        owner_profile = OwnerProfile.objects.create(user=user)
+
+        owner_profile.status = "REJECTED"
+        owner_profile.reviewed_at = timezone.now()
+        owner_profile.save()
+
+        owner_profile.refresh_from_db()
+
+        self.assertEqual(owner_profile.status, "REJECTED")
+        self.assertIsNotNone(owner_profile.reviewed_at)
 
 class PropertyTestCase(TestCase):
 
