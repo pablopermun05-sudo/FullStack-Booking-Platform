@@ -4,6 +4,7 @@ from django.db import models
 from phonenumber_field.modelfields import PhoneNumberField
 from django.core.exceptions import ValidationError
 from datetime import date, timedelta
+from django.utils import timezone
 
 class User(AbstractUser):
     first_name = models.CharField("Nombre", max_length=150, blank=False)
@@ -111,6 +112,16 @@ class Booking(models.Model):
         choices=STATUS_CHOICES,
         default="CONFIRMED",
     )
+    expires_at = models.DateTimeField(null=True, blank=True)
+
+    def is_expired(self):
+        if self.status != "PENDING":
+            return False
+
+        if self.expires_at is None:
+            return False
+
+        return timezone.now() >= self.expires_at
 
     class Meta:
         verbose_name = "Reserva"
