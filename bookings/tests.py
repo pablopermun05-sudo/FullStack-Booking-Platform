@@ -769,6 +769,108 @@ class OwnerProfileAdminTestCase(TestCase):
             self.owner_profile.reviewed_at,
         )
 
+class NavigationTestCase(TestCase):
+    def create_user(self, username, email, **kwargs):
+        return User.objects.create_user(
+            username=username,
+            password="Password123!",
+            email=email,
+            first_name="Test",
+            last_name="User",
+            **kwargs,
+        )
+
+    def create_owner(self, username, email, status):
+        user = self.create_user(username, email)
+
+        OwnerProfile.objects.create(
+            user=user,
+            status=status,
+        )
+
+        return user
+
+    def test_anonymous_user_does_not_see_property_management_links(self):
+        response = self.client.get(reverse("index"))
+
+        self.assertNotContains(response, "Registrar Vivienda")
+        self.assertNotContains(response, "Mis Viviendas")
+        self.assertNotContains(response, "Mis Reservas")
+
+    def test_customer_does_not_see_property_management_links(self):
+        customer = self.create_user(
+            "customer",
+            "customer@example.com",
+        )
+
+        self.client.force_login(customer)
+
+        response = self.client.get(reverse("index"))
+
+        self.assertNotContains(response, "Registrar Vivienda")
+        self.assertNotContains(response, "Mis Viviendas")
+        self.assertContains(response, "Mis Reservas")
+
+    def test_pending_owner_does_not_see_property_management_links(self):
+        owner = self.create_owner(
+            "pending",
+            "pending@example.com",
+            "PENDING",
+        )
+
+        self.client.force_login(owner)
+
+        response = self.client.get(reverse("index"))
+
+        self.assertNotContains(response, "Registrar Vivienda")
+        self.assertNotContains(response, "Mis Viviendas")
+        self.assertContains(response, "Mis Reservas")
+
+    def test_rejected_owner_does_not_see_property_management_links(self):
+        owner = self.create_owner(
+            "rejected",
+            "rejected@example.com",
+            "REJECTED",
+        )
+
+        self.client.force_login(owner)
+
+        response = self.client.get(reverse("index"))
+
+        self.assertNotContains(response, "Registrar Vivienda")
+        self.assertNotContains(response, "Mis Viviendas")
+        self.assertContains(response, "Mis Reservas")
+
+    def test_approved_owner_sees_property_management_links(self):
+        owner = self.create_owner(
+            "approved",
+            "approved@example.com",
+            "APPROVED",
+        )
+
+        self.client.force_login(owner)
+
+        response = self.client.get(reverse("index"))
+
+        self.assertContains(response, "Registrar Vivienda")
+        self.assertContains(response, "Mis Viviendas")
+        self.assertContains(response, "Mis Reservas")
+
+    def test_staff_sees_property_management_links(self):
+        staff = self.create_user(
+            "staff",
+            "staff@example.com",
+            is_staff=True,
+        )
+
+        self.client.force_login(staff)
+
+        response = self.client.get(reverse("index"))
+
+        self.assertContains(response, "Registrar Vivienda")
+        self.assertContains(response, "Mis Viviendas")
+        self.assertContains(response, "Mis Reservas")
+
 class PropertyTestCase(TestCase):
 
     def setUp(self):

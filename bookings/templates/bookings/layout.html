@@ -50,18 +50,23 @@
                         </li>
 
                         {% if user.is_authenticated %}
-                        <li class="nav-item dropdown">
-                            <button class="nav-link dropdown-toggle mx-lg-2" data-bs-toggle="dropdown" aria-expanded="false">
-                                Viviendas
-                            </button>
-                            <ul class="dropdown-menu">
-                                <li><a class="dropdown-item" href="{% url 'create_property' %}">Registrar Vivienda</a></li>
-                                <li><a class="dropdown-item" href="{% url 'my_properties' %}">Mis Viviendas</a></li>
-                            </ul>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link mx-lg-2" href="{% url 'my_bookings' %}">Mis Reservas</a>
-                        </li>
+
+                            {% if user.is_approved_owner or user.is_staff %}
+                            <li class="nav-item dropdown">
+                                <button class="nav-link dropdown-toggle mx-lg-2" data-bs-toggle="dropdown" aria-expanded="false">
+                                    Viviendas
+                                </button>
+                                <ul class="dropdown-menu">
+                                    <li><a class="dropdown-item" href="{% url 'create_property' %}">Registrar Vivienda</a></li>
+                                    <li><a class="dropdown-item" href="{% url 'my_properties' %}">Mis Viviendas</a></li>
+                                </ul>
+                            </li>
+                            {% endif %}
+
+                            <li class="nav-item">
+                                <a class="nav-link mx-lg-2" href="{% url 'my_bookings' %}">Mis Reservas</a>
+                            </li>
+
                         {% endif %}
                     </ul>
                 </div>
