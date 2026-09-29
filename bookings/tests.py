@@ -1,6 +1,7 @@
 from django.test import TestCase
 from django.urls import reverse
-from .models import User, OwnerProfile, Property, Booking, PropertyAvailability
+from .models import User, OwnerProfile, Property, Booking, PropertyAvailability, can_manage_properties
+from django.contrib.auth.models import AnonymousUser
 from datetime import date, timedelta
 from django.core.exceptions import ValidationError
 from django.utils import timezone
@@ -74,6 +75,151 @@ class OwnerProfileTestCase(TestCase):
 
         self.assertEqual(owner_profile.status, "REJECTED")
         self.assertIsNotNone(owner_profile.reviewed_at)
+
+class OwnerPermissionTestCase(TestCase):
+    def test_user_without_owner_profile_is_not_approved_owner(self):
+        user = User.objects.create_user(
+            username="customer",
+            password="password123",
+            email="customer@example.com",
+            first_name="Customer",
+            last_name="User",
+        )
+
+        self.assertFalse(user.is_approved_owner)
+
+    def test_pending_owner_is_not_approved_owner(self):
+        user = User.objects.create_user(
+            username="owner",
+            password="password123",
+            email="owner@example.com",
+            first_name="Owner",
+            last_name="User",
+        )
+
+        OwnerProfile.objects.create(
+            user=user,
+            status="PENDING",
+        )
+
+        self.assertFalse(user.is_approved_owner)
+
+    def test_rejected_owner_is_not_approved_owner(self):
+        user = User.objects.create_user(
+            username="owner",
+            password="password123",
+            email="owner@example.com",
+            first_name="Owner",
+            last_name="User",
+        )
+
+        OwnerProfile.objects.create(
+            user=user,
+            status="REJECTED",
+        )
+
+        self.assertFalse(user.is_approved_owner)
+
+    def test_approved_owner_is_approved_owner(self):
+        user = User.objects.create_user(
+            username="owner",
+            password="password123",
+            email="owner@example.com",
+            first_name="Owner",
+            last_name="User",
+        )
+
+        OwnerProfile.objects.create(
+            user=user,
+            status="APPROVED",
+        )
+
+        self.assertTrue(user.is_approved_owner)
+
+    def test_customer_cannot_manage_properties(self):
+        user = User.objects.create_user(
+            username="customer",
+            password="password123",
+            email="customer@example.com",
+            first_name="Customer",
+            last_name="User",
+        )
+
+        self.assertFalse(can_manage_properties(user))
+
+    def test_pending_owner_cannot_manage_properties(self):
+        user = User.objects.create_user(
+            username="owner",
+            password="password123",
+            email="owner@example.com",
+            first_name="Owner",
+            last_name="User",
+        )
+
+        OwnerProfile.objects.create(
+            user=user,
+            status="PENDING",
+        )
+
+        self.assertFalse(can_manage_properties(user))
+
+    def test_rejected_owner_cannot_manage_properties(self):
+        user = User.objects.create_user(
+            username="owner",
+            password="password123",
+            email="owner@example.com",
+            first_name="Owner",
+            last_name="User",
+        )
+
+        OwnerProfile.objects.create(
+            user=user,
+            status="REJECTED",
+        )
+
+        self.assertFalse(can_manage_properties(user))
+
+    def test_approved_owner_can_manage_properties(self):
+        user = User.objects.create_user(
+            username="owner",
+            password="password123",
+            email="owner@example.com",
+            first_name="Owner",
+            last_name="User",
+        )
+
+        OwnerProfile.objects.create(
+            user=user,
+            status="APPROVED",
+        )
+
+        self.assertTrue(can_manage_properties(user))
+
+    def test_staff_can_manage_properties(self):
+        user = User.objects.create_user(
+            username="staff",
+            password="password123",
+            email="staff@example.com",
+            first_name="Staff",
+            last_name="User",
+            is_staff=True,
+        )
+
+        self.assertTrue(can_manage_properties(user))
+
+    def test_superuser_can_manage_properties(self):
+        user = User.objects.create_superuser(
+            username="admin",
+            password="password123",
+            email="admin@example.com",
+            first_name="Admin",
+            last_name="User",
+        )
+
+        self.assertTrue(can_manage_properties(user))
+
+    def test_anonymous_user_cannot_manage_properties(self):
+        self.assertFalse(can_manage_properties(AnonymousUser()))
 
 class PropertyTestCase(TestCase):
 

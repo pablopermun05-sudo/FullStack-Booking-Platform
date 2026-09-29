@@ -18,6 +18,10 @@ class User(AbstractUser):
     def __str__(self):
         return self.username
 
+    @property
+    def is_approved_owner(self):
+        return hasattr(self, "owner_profile") and self.owner_profile.status == "APPROVED"
+
 class OwnerProfile(models.Model):
     STATUS_CHOICES = [
         ("PENDING", "Pendiente"),
@@ -44,6 +48,11 @@ class OwnerProfile(models.Model):
 
     def __str__(self):
         return f"{self.user} - {self.get_status_display()}"
+
+def can_manage_properties(user):
+    if not user.is_authenticated:
+        return False
+    return user.is_staff or user.is_approved_owner
 
 class Property(models.Model):
     title = models.CharField(max_length=255)
