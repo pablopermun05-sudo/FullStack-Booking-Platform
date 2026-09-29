@@ -1480,7 +1480,12 @@ class PropertyAvailabilityTestCase(TestCase):
         self.owner = User.objects.create_user(
             username="availability_owner",
             email="availability_owner@test.com",
-            password="123"
+            password="123",
+        )
+
+        OwnerProfile.objects.create(
+            user=self.owner,
+            status="APPROVED",
         )
 
         self.property = Property.objects.create(

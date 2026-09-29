@@ -112,7 +112,7 @@ def my_properties(request):
     if not can_manage_properties(request.user):
         raise PermissionDenied
     
-    properties = Property.objects.filter(owner=request.user)
+    properties = Property.objects.filter(owner=request.user).order_by("id")
     
     paginator = Paginator(properties, 6)
     page_number = request.GET.get('page')
@@ -601,7 +601,7 @@ def properties(request):
             effective_min_nights__lte=total_nights,
         )
 
-    properties = properties.order_by("id")
+    properties = Property.objects.filter(owner=request.user).order_by("id")
 
     paginator = Paginator(properties, 6)
     page_number = request.GET.get("page")
