@@ -1582,6 +1582,42 @@ class BookingTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.json()["available"])
 
+    def test_booking_defaults_to_confirmed(self):
+        booking = Booking.objects.create(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=date.today() + timedelta(days=5),
+            final_date=date.today() + timedelta(days=7),
+        )
+
+        self.assertEqual(booking.status, "CONFIRMED")
+
+
+    def test_booking_status_can_be_changed(self):
+        booking = Booking.objects.create(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=date.today() + timedelta(days=5),
+            final_date=date.today() + timedelta(days=7),
+            status="CANCELLED",
+        )
+
+        self.assertEqual(booking.status, "CANCELLED")
+
+
+    def test_booking_has_expected_status_choices(self):
+        statuses = dict(Booking.STATUS_CHOICES)
+
+        self.assertEqual(
+            statuses,
+            {
+                "PENDING": "Pendiente",
+                "CONFIRMED": "Confirmada",
+                "CANCELLED": "Cancelada",
+                "EXPIRED": "Expirada",
+            },
+        )
+
 class PropertySearchTestCase(TestCase):
 
     def test_properties_rejects_invalid_initial_date(self):

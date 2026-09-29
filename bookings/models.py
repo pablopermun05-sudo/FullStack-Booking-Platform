@@ -90,11 +90,27 @@ class Property(models.Model):
         super().save(*args, **kwargs)
 
 class Booking(models.Model):
-    tenant = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="bookings")
+    STATUS_CHOICES = [
+        ("PENDING", "Pendiente"),
+        ("CONFIRMED", "Confirmada"),
+        ("CANCELLED", "Cancelada"),
+        ("EXPIRED", "Expirada"),
+    ]
+
+    tenant = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="bookings"
+    )
     property = models.ForeignKey(Property, on_delete=models.CASCADE, related_name="bookings")
     initial_date = models.DateField()
     final_date = models.DateField()
     created_at = models.DateTimeField(auto_now_add=True)
+    status = models.CharField(
+        max_length=10,
+        choices=STATUS_CHOICES,
+        default="CONFIRMED",
+    )
 
     class Meta:
         verbose_name = "Reserva"
