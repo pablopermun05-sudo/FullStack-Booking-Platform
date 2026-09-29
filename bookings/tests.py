@@ -1254,7 +1254,7 @@ class BookingTestCase(TestCase):
         with self.assertRaises(ValidationError):
             booking.full_clean()
 
-    def test_confirm_booking_rejects_non_post_request(self):
+    def test_create_booking_rejects_non_post_request(self):
         self.client.force_login(self.tenant)
 
         response = self.client.get(
@@ -1268,7 +1268,7 @@ class BookingTestCase(TestCase):
         self.assertEqual(response.json()["error"], "Method not allowed")
 
 
-    def test_confirm_booking_rejects_invalid_json(self):
+    def test_create_booking_rejects_invalid_json(self):
         self.client.force_login(self.tenant)
 
         response = self.client.post(
@@ -1284,7 +1284,7 @@ class BookingTestCase(TestCase):
         self.assertEqual(response.json()["error"], "JSON inválido")
 
 
-    def test_confirm_booking_rejects_invalid_date_format(self):
+    def test_create_booking_rejects_invalid_date_format(self):
         self.client.force_login(self.tenant)
 
         response = self.client.post(
@@ -1306,7 +1306,7 @@ class BookingTestCase(TestCase):
         )
 
 
-    def test_confirm_booking_rejects_missing_dates(self):
+    def test_create_booking_rejects_missing_dates(self):
         self.client.force_login(self.tenant)
 
         response = self.client.post(
@@ -1327,7 +1327,7 @@ class BookingTestCase(TestCase):
         )
 
 
-    def test_confirm_booking_returns_404_for_invalid_property(self):
+    def test_create_booking_returns_404_for_invalid_property(self):
         self.client.force_login(self.tenant)
 
         response = self.client.post(
@@ -1344,7 +1344,7 @@ class BookingTestCase(TestCase):
 
         self.assertEqual(response.status_code, 404)
 
-    def test_confirm_booking_rejects_closed_date(self):
+    def test_create_booking_rejects_closed_date(self):
         self.client.force_login(self.tenant)
 
         arrival_date = date.today() + timedelta(days=5)
@@ -1371,7 +1371,7 @@ class BookingTestCase(TestCase):
 
         self.assertEqual(response.status_code, 400)
 
-    def test_confirm_booking_rejects_insufficient_min_nights(self):
+    def test_create_booking_rejects_insufficient_min_nights(self):
         self.client.force_login(self.tenant)
 
         arrival_date = date.today() + timedelta(days=5)
@@ -1398,7 +1398,7 @@ class BookingTestCase(TestCase):
 
         self.assertEqual(response.status_code, 400)
 
-    def test_confirm_booking_allows_closed_checkout_date(self):
+    def test_create_booking_allows_closed_checkout_date(self):
         self.client.force_login(self.tenant)
 
         arrival_date = date.today() + timedelta(days=5)
@@ -1427,16 +1427,61 @@ class BookingTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response.json()["message"],
-            "Reserva confirmada.",
+            "Reserva pendiente.",
         )
 
-        self.assertTrue(
-            Booking.objects.filter(
-                tenant=self.tenant,
-                property=self.property,
-                initial_date=arrival_date,
-                final_date=checkout_date,
-            ).exists()
+        booking = Booking.objects.get(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=arrival_date,
+            final_date=checkout_date,
+        )
+
+        self.assertEqual(booking.status, "PENDING")
+        self.assertIsNotNone(booking.expires_at)
+        self.assertGreater(booking.expires_at, timezone.now())
+
+    def test_create_booking_sets_pending_expiration(self):
+        self.client.force_login(self.tenant)
+
+        arrival_date = date.today() + timedelta(days=5)
+        checkout_date = arrival_date + timedelta(days=7)
+
+        before_request = timezone.now()
+
+        response = self.client.post(
+            reverse(
+                "confirm_booking",
+                kwargs={"property_id": self.property.pk},
+            ),
+            data={
+                "start": arrival_date.isoformat(),
+                "end": checkout_date.isoformat(),
+            },
+            content_type="application/json",
+        )
+
+        after_request = timezone.now()
+
+        self.assertEqual(response.status_code, 200)
+
+        booking = Booking.objects.get(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=arrival_date,
+            final_date=checkout_date,
+        )
+
+        self.assertEqual(booking.status, "PENDING")
+
+        self.assertGreaterEqual(
+            booking.expires_at,
+            before_request + timedelta(minutes=15),
+        )
+
+        self.assertLessEqual(
+            booking.expires_at,
+            after_request + timedelta(minutes=15),
         )
 
     def test_delete_booking_rejects_non_post_request(self):

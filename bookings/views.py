@@ -13,6 +13,7 @@ from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.forms import AuthenticationForm
 from django.http import JsonResponse
 from datetime import date, timedelta
+from django.utils import timezone
 from decimal import Decimal, InvalidOperation
 from django.core.paginator import Paginator, PageNotAnInteger, EmptyPage
 from django.contrib.auth.decorators import login_required
@@ -718,8 +719,10 @@ def booking(request, property_id):
     except ValueError:
         return JsonResponse({"error": "Formato de fecha inválido."}, status=400)
 
+PENDING_BOOKING_MINUTES = 15
+
 @login_required
-def confirm_booking(request, property_id):
+def create_booking(request, property_id):
     if request.method != "POST":
         return JsonResponse(
             {"error": "Method not allowed"},
@@ -761,13 +764,17 @@ def confirm_booking(request, property_id):
         )
 
     try:
-        booking = Booking(
+        expires_at = timezone.now() + timedelta(
+            minutes=PENDING_BOOKING_MINUTES
+        )
+
+        booking = Booking.create_pending(
             tenant=request.user,
             property=property,
             initial_date=initial_date,
             final_date=final_date,
+            expires_at=expires_at,
         )
-        booking.save()
     except ValidationError as e:
         return JsonResponse(
             {"error": e.message_dict},
@@ -776,7 +783,7 @@ def confirm_booking(request, property_id):
 
     return JsonResponse({
             "success": True,
-            "message": "Reserva confirmada.",
+            "message": "Reserva pendiente.",
         })
 
 class LoginForm(AuthenticationForm):

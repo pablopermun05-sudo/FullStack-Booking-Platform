@@ -20,5 +20,5 @@ urlpatterns = [
     #API ROUTES
     path("properties/", views.properties, name="properties"),
     path("booking/<int:property_id>/", views.booking, name="booking"),
-    path("confirm_booking/<int:property_id>", views.confirm_booking, name="confirm_booking")
+    path("confirm_booking/<int:property_id>", views.create_booking, name="confirm_booking")
 ]
