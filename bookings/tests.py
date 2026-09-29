@@ -693,6 +693,82 @@ class PropertyManagementPermissionTestCase(TestCase):
 
         self.assertEqual(response.status_code, 302)
 
+class OwnerProfileAdminTestCase(TestCase):
+    def setUp(self):
+        self.admin_user = User.objects.create_superuser(
+            username="admin",
+            password="password123",
+            email="admin@example.com",
+            first_name="Admin",
+            last_name="User",
+        )
+
+        self.owner_user = User.objects.create_user(
+            username="owner",
+            password="password123",
+            email="owner@example.com",
+            first_name="Owner",
+            last_name="User",
+        )
+
+        self.owner_profile = OwnerProfile.objects.create(
+            user=self.owner_user,
+            status="PENDING",
+        )
+
+        self.client.force_login(self.admin_user)
+
+    def test_admin_can_access_owner_profiles(self):
+        response = self.client.get(
+            reverse("admin:bookings_ownerprofile_changelist")
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+    def test_admin_can_approve_owner(self):
+        response = self.client.post(
+            reverse("admin:bookings_ownerprofile_changelist"),
+            {
+                "action": "approve_owners",
+                "_selected_action": [self.owner_profile.pk],
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+        self.owner_profile.refresh_from_db()
+
+        self.assertEqual(
+            self.owner_profile.status,
+            "APPROVED",
+        )
+        self.assertIsNotNone(
+            self.owner_profile.reviewed_at,
+        )
+
+    def test_admin_can_reject_owner(self):
+        response = self.client.post(
+            reverse("admin:bookings_ownerprofile_changelist"),
+            {
+                "action": "reject_owners",
+                "_selected_action": [self.owner_profile.pk],
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+        self.owner_profile.refresh_from_db()
+
+        self.assertEqual(
+            self.owner_profile.status,
+            "REJECTED",
+        )
+        self.assertIsNotNone(
+            self.owner_profile.reviewed_at,
+        )
+
 class PropertyTestCase(TestCase):
 
     def setUp(self):
