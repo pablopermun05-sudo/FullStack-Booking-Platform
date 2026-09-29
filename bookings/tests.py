@@ -221,6 +221,118 @@ class OwnerPermissionTestCase(TestCase):
     def test_anonymous_user_cannot_manage_properties(self):
         self.assertFalse(can_manage_properties(AnonymousUser()))
 
+class RegistrationTestCase(TestCase):
+    def test_customer_registration_creates_user_without_owner_profile(self):
+        response = self.client.post(
+            reverse("register"),
+            {
+                "first_name": "Customer",
+                "last_name": "User",
+                "username": "customer",
+                "email": "customer@example.com",
+                "phone_number": "+34600000000",
+                "account_type": "customer",
+                "password1": "StrongPassword123!",
+                "password2": "StrongPassword123!",
+            },
+        )
+
+        self.assertRedirects(response, reverse("index"))
+
+        user = User.objects.get(username="customer")
+
+        self.assertFalse(
+            OwnerProfile.objects.filter(user=user).exists()
+        )
+
+    def test_owner_registration_creates_pending_owner_profile(self):
+        response = self.client.post(
+            reverse("register"),
+            {
+                "first_name": "Owner",
+                "last_name": "User",
+                "username": "owner",
+                "email": "owner@example.com",
+                "phone_number": "+34600000001",
+                "account_type": "owner",
+                "password1": "StrongPassword123!",
+                "password2": "StrongPassword123!",
+            },
+        )
+
+        self.assertRedirects(response, reverse("index"))
+
+        user = User.objects.get(username="owner")
+        owner_profile = OwnerProfile.objects.get(user=user)
+
+        self.assertEqual(owner_profile.status, "PENDING")
+        self.assertIsNone(owner_profile.reviewed_at)
+
+    def test_owner_registration_logs_user_in(self):
+        self.client.post(
+            reverse("register"),
+            {
+                "first_name": "Owner",
+                "last_name": "User",
+                "username": "owner",
+                "email": "owner@example.com",
+                "phone_number": "+34600000002",
+                "account_type": "owner",
+                "password1": "StrongPassword123!",
+                "password2": "StrongPassword123!",
+            },
+        )
+
+        user = User.objects.get(username="owner")
+
+        self.assertEqual(
+            int(self.client.session["_auth_user_id"]),
+            user.pk,
+        )
+
+    def test_customer_registration_logs_user_in(self):
+        self.client.post(
+            reverse("register"),
+            {
+                "first_name": "Customer",
+                "last_name": "User",
+                "username": "customer",
+                "email": "customer@example.com",
+                "phone_number": "+34600000003",
+                "account_type": "customer",
+                "password1": "StrongPassword123!",
+                "password2": "StrongPassword123!",
+            },
+        )
+
+        user = User.objects.get(username="customer")
+
+        self.assertEqual(
+            int(self.client.session["_auth_user_id"]),
+            user.pk,
+        )
+
+    def test_invalid_account_type_does_not_create_user(self):
+        response = self.client.post(
+            reverse("register"),
+            {
+                "first_name": "Invalid",
+                "last_name": "User",
+                "username": "invalid",
+                "email": "invalid@example.com",
+                "phone_number": "+34600000004",
+                "account_type": "admin",
+                "password1": "StrongPassword123!",
+                "password2": "StrongPassword123!",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+        self.assertFalse(
+            User.objects.filter(username="invalid").exists()
+        )
+
 class PropertyTestCase(TestCase):
 
     def setUp(self):

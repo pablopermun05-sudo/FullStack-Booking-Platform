@@ -6,7 +6,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.db import IntegrityError
 from django.db.models import Exists, F, IntegerField, OuterRef, Subquery
 from django.db.models.functions import Coalesce
-from .models import PropertyAvailability, User, Property, Booking
+from .models import User, OwnerProfile, Property, Booking, PropertyAvailability
 from django import forms
 from django.forms import ModelForm
 from django.contrib.auth.forms import UserCreationForm
@@ -798,6 +798,16 @@ def logout_view(request):
     return HttpResponseRedirect(reverse("index"))
 
 class RegisterForm(UserCreationForm):
+    account_type = forms.ChoiceField(
+        label="Tipo de cuenta",
+        choices=[
+            ("customer", "Cliente"),
+            ("owner", "Propietario"),
+        ],
+        widget=forms.RadioSelect,
+        initial="customer",
+    )
+    
     class Meta(UserCreationForm.Meta):
         model = User
         fields = ("first_name","last_name","username", "email", "phone_number")
@@ -822,11 +832,11 @@ class UserForm(ModelForm):
 
 def manage_profile(request):
     # If an authenticated user tries to access the registration URL, redirect them to edit profile
-    if request.user.is_authenticated and request.resolver_match.url_name == 'register':
+    if request.user.is_authenticated and request.resolver_match.url_name == "register":
         return HttpResponseRedirect(reverse("edit_profile"))
 
     # If an unauthenticated user tries to access the edit profile URL, redirect them to login
-    if not request.user.is_authenticated and request.resolver_match.url_name == 'edit_profile':
+    if not request.user.is_authenticated and request.resolver_match.url_name == "edit_profile":
         return HttpResponseRedirect(reverse("login"))
 
     if request.user.is_authenticated:
@@ -839,10 +849,19 @@ def manage_profile(request):
             form = UserForm(request.POST, instance=request.user)
         else:
             form = RegisterForm(request.POST)
+
         if form.is_valid():
             user = form.save()
+
             if not request.user.is_authenticated:
+                if form.cleaned_data["account_type"] == "owner":
+                    OwnerProfile.objects.create(
+                        user=user,
+                        status="PENDING",
+                    )
+
                 login(request, user)
+
             return HttpResponseRedirect(reverse("index"))
         else:
             return render(request, "bookings/userForm.html", {
