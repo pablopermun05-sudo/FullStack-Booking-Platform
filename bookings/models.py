@@ -142,6 +142,17 @@ class Booking(models.Model):
             expires_at__lte=now,
         ).update(status="EXPIRED")
 
+    @classmethod
+    def create_pending(cls, *, tenant, property, initial_date, final_date, expires_at):
+        return cls.objects.create(
+            tenant=tenant,
+            property=property,
+            initial_date=initial_date,
+            final_date=final_date,
+            status="PENDING",
+            expires_at=expires_at,
+        )
+
     class Meta:
         verbose_name = "Reserva"
         verbose_name_plural = "Reservas"

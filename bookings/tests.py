@@ -1881,6 +1881,37 @@ class BookingTestCase(TestCase):
 
         self.assertEqual(expired_count, 2)
 
+    def test_create_pending_creates_pending_booking(self):
+        expires_at = timezone.now() + timedelta(minutes=15)
+
+        booking = Booking.create_pending(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=date.today() + timedelta(days=5),
+            final_date=date.today() + timedelta(days=7),
+            expires_at=expires_at,
+        )
+
+        self.assertEqual(booking.status, "PENDING")
+        self.assertEqual(booking.expires_at, expires_at)
+
+
+    def test_create_pending_saves_booking(self):
+        expires_at = timezone.now() + timedelta(minutes=15)
+
+        booking = Booking.create_pending(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=date.today() + timedelta(days=5),
+            final_date=date.today() + timedelta(days=7),
+            expires_at=expires_at,
+        )
+
+        self.assertIsNotNone(booking.pk)
+        self.assertTrue(
+            Booking.objects.filter(pk=booking.pk).exists()
+        )
+
 class PropertySearchTestCase(TestCase):
 
     def test_properties_rejects_invalid_initial_date(self):
