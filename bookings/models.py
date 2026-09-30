@@ -105,7 +105,26 @@ class Booking(models.Model):
     tenant = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        related_name="bookings"
+        related_name="bookings",
+        null=True,
+        blank=True,
+    )
+
+    guest_first_name = models.CharField(
+        "Nombre del huésped",
+        max_length=150,
+        blank=True,
+    )
+
+    guest_last_name = models.CharField(
+        "Apellidos del huésped",
+        max_length=150,
+        blank=True,
+    )
+
+    guest_email = models.EmailField(
+        "Email del huésped",
+        blank=True,
     )
     property = models.ForeignKey(Property, on_delete=models.CASCADE, related_name="bookings")
     initial_date = models.DateField()
@@ -226,8 +245,14 @@ class Booking(models.Model):
             raise ValidationError("La fecha de entrada debe cumplir con la antelación exigida por el propietario de la vivienda.")
 
         # El dueño no puede reservar su propiedad
-        if self.tenant == self.property.owner:
+        if self.tenant is not None and self.tenant == self.property.owner:
             raise ValidationError("No puedes reservar tu propia vivienda.")
+
+        if self.tenant is None:
+            if not self.guest_first_name or not self.guest_last_name or not self.guest_email:
+                raise ValidationError(
+                    "Las reservas anónimas requieren nombre, apellidos y email."
+                )
 
         total_nights = (self.final_date - self.initial_date).days
 

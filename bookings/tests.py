@@ -1394,6 +1394,30 @@ class BookingModelTestCase(BookingTestBase):
                 price_per_night=self.property.default_price_per_night,
             )
 
+    def test_anonymous_booking_with_guest_data_is_valid(self):
+        booking = Booking(
+            tenant=None,
+            property=self.property,
+            initial_date=date.today() + timedelta(days=2),
+            final_date=date.today() + timedelta(days=5),
+            guest_first_name="Juan",
+            guest_last_name="García",
+            guest_email="juan@example.com",
+        )
+
+        booking.full_clean()
+
+    def test_anonymous_booking_without_guest_data_is_invalid(self):
+        booking = Booking(
+            tenant=None,
+            property=self.property,
+            initial_date=date.today() + timedelta(days=2),
+            final_date=date.today() + timedelta(days=5),
+        )
+
+        with self.assertRaises(ValidationError):
+            booking.full_clean()
+
 class BookingLifecycleTestCase(BookingTestBase):
 
     def test_confirm_changes_pending_booking_to_confirmed(self):
