@@ -479,7 +479,7 @@ def delete_booking(request, booking_id):
     if booking.tenant != request.user:
         raise PermissionDenied
 
-    booking.delete()
+    booking.cancel()
     return HttpResponseRedirect(reverse("my_bookings"))
 
 def properties(request):

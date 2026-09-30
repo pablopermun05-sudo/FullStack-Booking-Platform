@@ -167,6 +167,15 @@ class Booking(models.Model):
 
         return True
 
+    def cancel(self):
+        if self.status != "CONFIRMED":
+            return False
+
+        self.status = "CANCELLED"
+        self.save(update_fields=["status"])
+
+        return True
+
     class Meta:
         verbose_name = "Reserva"
         verbose_name_plural = "Reservas"

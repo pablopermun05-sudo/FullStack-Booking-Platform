@@ -1511,6 +1511,112 @@ class BookingTestCase(TestCase):
             Booking.objects.filter(pk=booking.pk).exists()
         )
 
+    def test_delete_booking_cancels_confirmed_booking(self):
+        self.client.force_login(self.tenant)
+
+        booking = Booking.objects.create(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=date.today() + timedelta(days=5),
+            final_date=date.today() + timedelta(days=7),
+            status="CONFIRMED",
+        )
+
+        response = self.client.post(
+            reverse(
+                "delete_booking",
+                kwargs={"booking_id": booking.pk},
+            )
+        )
+
+        self.assertEqual(response.status_code, 302)
+
+        booking.refresh_from_db()
+
+        self.assertEqual(booking.status, "CANCELLED")
+        self.assertTrue(
+            Booking.objects.filter(pk=booking.pk).exists()
+        )
+
+    def test_delete_booking_rejects_booking_from_another_user(self):
+        other_tenant = User.objects.create_user(
+            username="other-tenant",
+            email="other-tenant@test.com",
+            password="123",
+        )
+
+        booking = Booking.objects.create(
+            tenant=other_tenant,
+            property=self.property,
+            initial_date=date.today() + timedelta(days=5),
+            final_date=date.today() + timedelta(days=7),
+            status="CONFIRMED",
+        )
+
+        self.client.force_login(self.tenant)
+
+        response = self.client.post(
+            reverse(
+                "delete_booking",
+                kwargs={"booking_id": booking.pk},
+            )
+        )
+
+        self.assertEqual(response.status_code, 403)
+
+        booking.refresh_from_db()
+
+        self.assertEqual(booking.status, "CONFIRMED")
+
+    def test_cancel_changes_confirmed_booking_to_cancelled(self):
+        booking = Booking.objects.create(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=date.today() + timedelta(days=5),
+            final_date=date.today() + timedelta(days=7),
+            status="CONFIRMED",
+        )
+
+        result = booking.cancel()
+
+        booking.refresh_from_db()
+
+        self.assertTrue(result)
+        self.assertEqual(booking.status, "CANCELLED")
+
+    def test_cancel_does_not_change_pending_booking(self):
+        booking = Booking.objects.create(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=date.today() + timedelta(days=5),
+            final_date=date.today() + timedelta(days=7),
+            status="PENDING",
+            expires_at=timezone.now() + timedelta(minutes=5),
+        )
+
+        result = booking.cancel()
+
+        booking.refresh_from_db()
+
+        self.assertFalse(result)
+        self.assertEqual(booking.status, "PENDING")
+
+    def test_cancel_does_not_change_cancelled_booking(self):
+        booking = Booking.objects.create(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=date.today() + timedelta(days=5),
+            final_date=date.today() + timedelta(days=7),
+            status="CANCELLED",
+        )
+
+        result = booking.cancel()
+
+        booking.refresh_from_db()
+
+        self.assertFalse(result)
+        self.assertEqual(booking.status, "CANCELLED")
+
     def test_booking_returns_404_for_invalid_property(self):
         self.client.force_login(self.tenant)
 
