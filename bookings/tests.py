@@ -7,6 +7,7 @@ from django.core.exceptions import ValidationError
 from django.utils import timezone
 from django.db import IntegrityError
 from unittest.mock import patch
+from decimal import Decimal
 
 class OwnerProfileTestCase(TestCase):
     def test_owner_profile_is_pending_by_default(self):
@@ -2158,6 +2159,61 @@ class BookingTestCase(TestCase):
         self.assertFalse(
             booking.nights.filter(date=end_date).exists()
         )
+
+    def test_booking_total_price_sums_booking_nights(self):
+        start_date = date.today() + timedelta(days=5)
+        end_date = start_date + timedelta(days=3)
+
+        booking = Booking.create_pending(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=start_date,
+            final_date=end_date,
+            expires_at=timezone.now() + timedelta(minutes=15),
+        )
+
+        booking.nights.filter(date=start_date).update(price_per_night=100)
+        booking.nights.filter(
+            date=start_date + timedelta(days=1)
+        ).update(price_per_night=120)
+        booking.nights.filter(
+            date=start_date + timedelta(days=2)
+        ).update(price_per_night=150)
+
+        self.assertEqual(booking.total_price, Decimal("370.00"))
+
+    def test_booking_total_price_uses_snapshots(self):
+        start_date = date.today() + timedelta(days=5)
+        end_date = start_date + timedelta(days=2)
+
+        booking = Booking.create_pending(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=start_date,
+            final_date=end_date,
+            expires_at=timezone.now() + timedelta(minutes=15),
+        )
+
+        self.assertEqual(booking.total_price, Decimal("160.00"))
+
+        self.property.default_price_per_night = Decimal("500.00")
+        self.property.save(update_fields=["default_price_per_night"])
+
+        booking.refresh_from_db()
+
+        self.assertEqual(booking.total_price, Decimal("160.00"))
+
+    def test_booking_total_price_is_zero_without_nights(self):
+        booking = Booking.objects.create(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=date.today() + timedelta(days=5),
+            final_date=date.today() + timedelta(days=7),
+            status="PENDING",
+            expires_at=timezone.now() + timedelta(minutes=15),
+        )
+
+        self.assertEqual(booking.total_price, Decimal("0"))
 
     def test_confirm_changes_pending_booking_to_confirmed(self):
         booking = Booking.objects.create(

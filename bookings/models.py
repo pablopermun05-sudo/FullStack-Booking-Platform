@@ -5,6 +5,8 @@ from phonenumber_field.modelfields import PhoneNumberField
 from django.core.exceptions import ValidationError
 from datetime import date, timedelta
 from django.utils import timezone
+from builtins import property as python_property
+from decimal import Decimal
 
 class User(AbstractUser):
     first_name = models.CharField("Nombre", max_length=150, blank=False)
@@ -195,6 +197,13 @@ class Booking(models.Model):
         self.save(update_fields=["status"])
 
         return True
+    
+    @python_property
+    def total_price(self):
+        return sum(
+            (night.price_per_night for night in self.nights.all()),
+            Decimal("0"),
+        )
 
     class Meta:
         verbose_name = "Reserva"
