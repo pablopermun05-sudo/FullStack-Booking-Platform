@@ -152,6 +152,18 @@ class Booking(models.Model):
             status="PENDING",
             expires_at=expires_at,
         )
+    
+    def confirm(self):
+        if self.status != "PENDING":
+            return False
+
+        if self.is_expired():
+            return False
+
+        self.status = "CONFIRMED"
+        self.save(update_fields=["status"])
+
+        return True
 
     class Meta:
         verbose_name = "Reserva"
