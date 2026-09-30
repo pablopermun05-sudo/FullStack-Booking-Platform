@@ -2115,6 +2115,49 @@ class BookingTestCase(TestCase):
 
 class PropertySearchTestCase(TestCase):
 
+    def setUp(self):
+        self.owner = User.objects.create_user(
+            username="owner",
+            email="owner@test.com",
+            password="123",
+        )
+
+        self.tenant = User.objects.create_user(
+            username="tenant",
+            email="tenant@test.com",
+            password="123",
+        )
+
+        self.other_owner = User.objects.create_user(
+            username="other-owner",
+            email="other-owner@test.com",
+            password="123",
+        )
+
+        self.property = Property.objects.create(
+            title="Casa Rural",
+            description="Desc",
+            location="Madrid",
+            default_price_per_night=80,
+            image="test.jpg",
+            children=2,
+            adults=2,
+            rooms=2,
+            owner=self.owner,
+        )
+
+        self.other_property = Property.objects.create(
+            title="Casa Barcelona",
+            description="Desc",
+            location="Barcelona",
+            default_price_per_night=100,
+            image="test.jpg",
+            children=2,
+            adults=2,
+            rooms=2,
+            owner=self.other_owner,
+        )
+
     def test_properties_rejects_invalid_initial_date(self):
         response = self.client.get(
             reverse("properties"),
@@ -2182,6 +2225,91 @@ class PropertySearchTestCase(TestCase):
             response.json()["error"],
             "Introduce un número válido para indicar el número de habitaciones.",
         )
+
+    def test_public_property_search_is_available_to_anonymous_users(self):
+        self.client.logout()
+
+        response = self.client.get(
+            reverse("properties"),
+            {"page": 1},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, self.property.title)
+
+
+    def test_public_property_search_preserves_location_filter(self):
+        Property.objects.create(
+            title="Casa Barcelona",
+            description="Desc",
+            location="Barcelona",
+            default_price_per_night=100,
+            image="test.jpg",
+            children=2,
+            adults=2,
+            rooms=2,
+            owner=self.owner,
+        )
+
+        response = self.client.get(
+            reverse("properties"),
+            {
+                "location": "Madrid",
+                "page": 1,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, self.property.title)
+        self.assertNotContains(response, "Casa Barcelona")
+
+
+    def test_public_property_search_excludes_unavailable_property(self):
+        Property.objects.create(
+            title="Casa Ocupada",
+            description="Desc",
+            location="Madrid",
+            default_price_per_night=100,
+            image="test.jpg",
+            children=2,
+            adults=2,
+            rooms=2,
+            owner=self.owner,
+        )
+
+        occupied_property = Property.objects.get(title="Casa Ocupada")
+
+        Booking.objects.create(
+            tenant=self.tenant,
+            property=occupied_property,
+            initial_date=date.today(),
+            final_date=date.today() + timedelta(days=3),
+            status="CONFIRMED",
+        )
+
+        response = self.client.get(
+            reverse("properties"),
+            {
+                "initial_date": date.today().isoformat(),
+                "final_date": (date.today() + timedelta(days=3)).isoformat(),
+                "page": 1,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "Casa Ocupada")
+
+
+    def test_public_property_search_includes_property_owned_by_other_user(self):
+        self.client.logout()
+
+        response = self.client.get(
+            reverse("properties"),
+            {"page": 1},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, self.other_property.title)
 
 class PropertyAvailabilityTestCase(TestCase):
 

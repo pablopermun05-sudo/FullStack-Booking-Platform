@@ -608,8 +608,6 @@ def properties(request):
             effective_min_nights__lte=total_nights,
         )
 
-    properties = Property.objects.filter(owner=request.user).order_by("id")
-
     paginator = Paginator(properties, 6)
     page_number = request.GET.get("page")
 
