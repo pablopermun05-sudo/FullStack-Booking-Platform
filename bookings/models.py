@@ -98,6 +98,8 @@ class Booking(models.Model):
         ("EXPIRED", "Expirada"),
     ]
 
+    ACTIVE_STATUSES = ("PENDING", "CONFIRMED")
+
     tenant = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,

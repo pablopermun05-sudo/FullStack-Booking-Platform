@@ -2010,6 +2010,12 @@ class BookingTestCase(TestCase):
         self.assertFalse(result)
         self.assertEqual(booking.status, "CONFIRMED")
 
+    def test_active_statuses_are_pending_and_confirmed(self):
+        self.assertEqual(
+            Booking.ACTIVE_STATUSES,
+            ("PENDING", "CONFIRMED"),
+        )
+
 class PropertySearchTestCase(TestCase):
 
     def test_properties_rejects_invalid_initial_date(self):
