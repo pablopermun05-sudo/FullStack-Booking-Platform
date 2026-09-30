@@ -1735,7 +1735,7 @@ class BookingTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.json()["available"])
 
-    def test_booking_defaults_to_confirmed(self):
+    def test_booking_defaults_to_pending(self):
         booking = Booking.objects.create(
             tenant=self.tenant,
             property=self.property,
@@ -1743,7 +1743,7 @@ class BookingTestCase(TestCase):
             final_date=date.today() + timedelta(days=7),
         )
 
-        self.assertEqual(booking.status, "CONFIRMED")
+        self.assertEqual(booking.status, "PENDING")
 
 
     def test_booking_status_can_be_changed(self):
