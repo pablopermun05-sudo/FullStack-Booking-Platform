@@ -166,7 +166,7 @@ class Booking(models.Model):
         ).update(status="EXPIRED")
 
     @classmethod
-    def create_pending(cls, *, tenant, property, initial_date, final_date, expires_at):
+    def create_pending(cls, *, tenant, property, initial_date, final_date, expires_at, guest_first_name="", guest_last_name="", guest_email=""):
         with transaction.atomic():
             booking = cls.objects.create(
                 tenant=tenant,
@@ -175,6 +175,9 @@ class Booking(models.Model):
                 final_date=final_date,
                 status="PENDING",
                 expires_at=expires_at,
+                guest_first_name=guest_first_name,
+                guest_last_name=guest_last_name,
+                guest_email=guest_email,
             )
 
             availability = PropertyAvailability.get_for_range(

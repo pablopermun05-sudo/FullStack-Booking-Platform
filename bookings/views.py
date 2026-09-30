@@ -726,29 +726,17 @@ def booking(request, property_id):
 
 PENDING_BOOKING_MINUTES = 15
 
-@login_required
 def create_booking(request, property_id):
     if request.method != "POST":
-        return JsonResponse(
-            {"error": "Method not allowed"},
-            status=405,
-        )
-
-    property = get_object_or_404(Property, pk=property_id)
+        return JsonResponse({"error": "Method not allowed"}, status=405)
 
     try:
         data = json.loads(request.body)
     except json.JSONDecodeError:
-        return JsonResponse(
-            {"error": "JSON inválido"},
-            status=400,
-        )
+        return JsonResponse({"error": "JSON inválido"}, status=400)
 
     if not isinstance(data, dict):
-        return JsonResponse(
-            {"error": "JSON inválido"},
-            status=400,
-        )
+        return JsonResponse({"error": "JSON inválido"}, status=400)
 
     initial_date = data.get("start")
     final_date = data.get("end")
@@ -758,6 +746,25 @@ def create_booking(request, property_id):
             {"error": "Ambas fechas deben ser seleccionadas."},
             status=400,
         )
+
+    if request.user.is_authenticated:
+        tenant = request.user
+        guest_first_name = ""
+        guest_last_name = ""
+        guest_email = ""
+    else:
+        tenant = None
+        guest_first_name = data.get("first_name", "").strip()
+        guest_last_name = data.get("last_name", "").strip()
+        guest_email = data.get("email", "").strip()
+
+        if not guest_first_name or not guest_last_name or not guest_email:
+            return JsonResponse(
+                {"error": "Nombre, apellidos y email son obligatorios."},
+                status=400,
+            )
+
+    property = get_object_or_404(Property, pk=property_id)
 
     try:
         initial_date = date.fromisoformat(initial_date)
@@ -773,23 +780,29 @@ def create_booking(request, property_id):
             minutes=PENDING_BOOKING_MINUTES
         )
 
-        booking = Booking.create_pending(
-            tenant=request.user,
+        Booking.create_pending(
+            tenant=tenant,
             property=property,
             initial_date=initial_date,
             final_date=final_date,
             expires_at=expires_at,
+            guest_first_name=guest_first_name,
+            guest_last_name=guest_last_name,
+            guest_email=guest_email,
         )
+
     except ValidationError as e:
         return JsonResponse(
-            {"error": e.message_dict},
+            {"error": e.message_dict if hasattr(e, "message_dict") else str(e)},
             status=400,
         )
 
-    return JsonResponse({
+    return JsonResponse(
+        {
             "success": True,
             "message": "Reserva pendiente.",
-        })
+        }
+    )
 
 class LoginForm(AuthenticationForm):
     error_messages = {

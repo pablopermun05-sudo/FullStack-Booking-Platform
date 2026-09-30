@@ -8,6 +8,7 @@ from django.utils import timezone
 from django.db import IntegrityError
 from unittest.mock import patch
 from decimal import Decimal
+import json
 
 class OwnerProfileTestCase(TestCase):
     def test_owner_profile_is_pending_by_default(self):
@@ -2117,7 +2118,7 @@ class BookingAvailabilityViewTestCase(BookingTestBase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.json()["available"])
 
-class BookingModCreateBookingViewTestCaseelTestCase(BookingTestBase):
+class BookingModCreateBookingViewTestCase(BookingTestBase):
 
     def test_create_booking_rejects_non_post_request(self):
         self.client.force_login(self.tenant)
@@ -2348,6 +2349,41 @@ class BookingModCreateBookingViewTestCaseelTestCase(BookingTestBase):
             after_request + timedelta(minutes=15),
         )
 
+    def test_anonymous_user_can_create_pending_booking(self):
+        response = self.client.post(
+            reverse("confirm_booking", args=[self.property.id]),
+            data=json.dumps({
+                "start": str(date.today() + timedelta(days=2)),
+                "end": str(date.today() + timedelta(days=5)),
+                "first_name": "Juan",
+                "last_name": "García",
+                "email": "juan@example.com",
+            }),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+        booking = Booking.objects.get(property=self.property)
+
+        self.assertIsNone(booking.tenant)
+        self.assertEqual(booking.guest_first_name, "Juan")
+        self.assertEqual(booking.guest_last_name, "García")
+        self.assertEqual(booking.guest_email, "juan@example.com")
+        self.assertEqual(booking.status, "PENDING")
+
+    def test_anonymous_user_requires_guest_data(self):
+        response = self.client.post(
+            reverse("confirm_booking", args=[self.property.id]),
+            data=json.dumps({
+                "start": str(date.today() + timedelta(days=2)),
+                "end": str(date.today() + timedelta(days=5)),
+            }),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("obligatorios", response.json()["error"])
 
 class BookingCancellationViewTestCase(BookingTestBase):
 
