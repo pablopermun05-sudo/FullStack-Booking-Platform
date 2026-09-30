@@ -1,6 +1,6 @@
 from django.contrib.auth.models import AbstractUser
 from django.conf import settings
-from django.db import models
+from django.db import models, transaction
 from phonenumber_field.modelfields import PhoneNumberField
 from django.core.exceptions import ValidationError
 from datetime import date, timedelta
@@ -146,14 +146,34 @@ class Booking(models.Model):
 
     @classmethod
     def create_pending(cls, *, tenant, property, initial_date, final_date, expires_at):
-        return cls.objects.create(
-            tenant=tenant,
-            property=property,
-            initial_date=initial_date,
-            final_date=final_date,
-            status="PENDING",
-            expires_at=expires_at,
-        )
+        with transaction.atomic():
+            booking = cls.objects.create(
+                tenant=tenant,
+                property=property,
+                initial_date=initial_date,
+                final_date=final_date,
+                status="PENDING",
+                expires_at=expires_at,
+            )
+
+            availability = PropertyAvailability.get_for_range(
+                property,
+                initial_date,
+                final_date,
+            )
+
+            BookingNight.objects.bulk_create(
+                [
+                    BookingNight(
+                        booking=booking,
+                        date=night["date"],
+                        price_per_night=night["price_per_night"],
+                    )
+                    for night in availability
+                ]
+            )
+
+            return booking
     
     def confirm(self):
         if self.status != "PENDING":
@@ -248,6 +268,29 @@ class Booking(models.Model):
     def save(self, *args, **kwargs):
         self.full_clean()
         super().save(*args, **kwargs)
+
+class BookingNight(models.Model):
+    booking = models.ForeignKey(
+        Booking,
+        on_delete=models.CASCADE,
+        related_name="nights",
+    )
+    date = models.DateField()
+    price_per_night = models.DecimalField(
+        max_digits=7,
+        decimal_places=2,
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["booking", "date"],
+                name="unique_booking_night_date",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.booking} - {self.date}"
 
 class PropertyAvailability(models.Model):
     STATUS_CHOICES = [

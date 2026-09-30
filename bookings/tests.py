@@ -1,10 +1,12 @@
 from django.test import TestCase
 from django.urls import reverse
-from .models import User, OwnerProfile, Property, Booking, PropertyAvailability, can_manage_properties
+from .models import User, OwnerProfile, Property, Booking, BookingNight, PropertyAvailability, can_manage_properties
 from django.contrib.auth.models import AnonymousUser
 from datetime import date, timedelta
 from django.core.exceptions import ValidationError
 from django.utils import timezone
+from django.db import IntegrityError
+from unittest.mock import patch
 
 class OwnerProfileTestCase(TestCase):
     def test_owner_profile_is_pending_by_default(self):
@@ -2046,7 +2048,6 @@ class BookingTestCase(TestCase):
         self.assertEqual(booking.status, "PENDING")
         self.assertEqual(booking.expires_at, expires_at)
 
-
     def test_create_pending_saves_booking(self):
         expires_at = timezone.now() + timedelta(minutes=15)
 
@@ -2061,6 +2062,101 @@ class BookingTestCase(TestCase):
         self.assertIsNotNone(booking.pk)
         self.assertTrue(
             Booking.objects.filter(pk=booking.pk).exists()
+        )
+
+    def test_create_pending_creates_booking_night_for_each_stay_night(self):
+        booking = Booking.create_pending(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=date.today() + timedelta(days=5),
+            final_date=date.today() + timedelta(days=8),
+            expires_at=timezone.now() + timedelta(minutes=15),
+        )
+
+        nights = booking.nights.order_by("date")
+
+        self.assertEqual(nights.count(), 3)
+        self.assertEqual(
+            list(nights.values_list("date", flat=True)),
+            [
+                date.today() + timedelta(days=5),
+                date.today() + timedelta(days=6),
+                date.today() + timedelta(days=7),
+            ],
+        )
+
+    def test_create_pending_snapshots_default_price(self):
+        booking = Booking.create_pending(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=date.today() + timedelta(days=5),
+            final_date=date.today() + timedelta(days=7),
+            expires_at=timezone.now() + timedelta(minutes=15),
+        )
+
+        prices = list(
+            booking.nights.order_by("date").values_list(
+                "price_per_night",
+                flat=True,
+            )
+        )
+
+        self.assertEqual(
+            prices,
+            [
+                self.property.default_price_per_night,
+                self.property.default_price_per_night,
+            ],
+        )
+
+    def test_create_pending_snapshots_availability_price_overrides(self):
+        start_date = date.today() + timedelta(days=5)
+        middle_date = start_date + timedelta(days=1)
+        end_date = start_date + timedelta(days=3)
+
+        PropertyAvailability.objects.create(
+            property=self.property,
+            date=middle_date,
+            price_per_night=150,
+            status="OPEN",
+            min_nights=1,
+        )
+
+        booking = Booking.create_pending(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=start_date,
+            final_date=end_date,
+            expires_at=timezone.now() + timedelta(minutes=15),
+        )
+
+        nights = booking.nights.order_by("date")
+
+        self.assertEqual(nights.count(), 3)
+
+        self.assertEqual(
+            list(nights.values_list("price_per_night", flat=True)),
+            [
+                self.property.default_price_per_night,
+                150,
+                self.property.default_price_per_night,
+            ],
+        )
+
+    def test_create_pending_does_not_create_booking_night_for_checkout_date(self):
+        start_date = date.today() + timedelta(days=5)
+        end_date = start_date + timedelta(days=2)
+
+        booking = Booking.create_pending(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=start_date,
+            final_date=end_date,
+            expires_at=timezone.now() + timedelta(minutes=15),
+        )
+
+        self.assertFalse(
+            booking.nights.filter(date=end_date).exists()
         )
 
     def test_confirm_changes_pending_booking_to_confirmed(self):
@@ -2080,7 +2176,6 @@ class BookingTestCase(TestCase):
         self.assertTrue(result)
         self.assertEqual(booking.status, "CONFIRMED")
 
-
     def test_confirm_does_not_change_expired_pending_booking(self):
         booking = Booking.objects.create(
             tenant=self.tenant,
@@ -2097,7 +2192,6 @@ class BookingTestCase(TestCase):
 
         self.assertFalse(result)
         self.assertEqual(booking.status, "PENDING")
-
 
     def test_confirm_does_not_change_confirmed_booking(self):
         booking = Booking.objects.create(
@@ -2147,7 +2241,6 @@ class BookingTestCase(TestCase):
             "El alojamiento ya está reservado en esas fechas.",
         )
 
-
     def test_booking_endpoint_rejects_confirmed_booking(self):
         self.client.login(username="tenant", password="123")
 
@@ -2173,7 +2266,6 @@ class BookingTestCase(TestCase):
             "El alojamiento ya está reservado en esas fechas.",
         )
 
-
     def test_booking_endpoint_allows_cancelled_booking(self):
         self.client.login(username="tenant", password="123")
 
@@ -2196,7 +2288,6 @@ class BookingTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.json()["available"])
 
-
     def test_booking_endpoint_allows_expired_booking(self):
         self.client.login(username="tenant", password="123")
 
@@ -2218,6 +2309,52 @@ class BookingTestCase(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.json()["available"])
+
+    def test_create_pending_rolls_back_booking_if_booking_nights_creation_fails(self):
+        initial_date = date.today() + timedelta(days=5)
+        final_date = initial_date + timedelta(days=2)
+
+        with patch.object(
+            BookingNight.objects,
+            "bulk_create",
+            side_effect=Exception("Error creando noches"),
+        ):
+            with self.assertRaises(Exception):
+                Booking.create_pending(
+                    tenant=self.tenant,
+                    property=self.property,
+                    initial_date=initial_date,
+                    final_date=final_date,
+                    expires_at=timezone.now() + timedelta(minutes=15),
+                )
+
+        self.assertFalse(
+            Booking.objects.filter(
+                tenant=self.tenant,
+                property=self.property,
+                initial_date=initial_date,
+                final_date=final_date,
+            ).exists()
+        )
+
+    def test_booking_night_rejects_duplicate_date_for_same_booking(self):
+        initial_date = date.today() + timedelta(days=5)
+        final_date = initial_date + timedelta(days=2)
+
+        booking = Booking.create_pending(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=initial_date,
+            final_date=final_date,
+            expires_at=timezone.now() + timedelta(minutes=15),
+        )
+
+        with self.assertRaises(IntegrityError):
+            BookingNight.objects.create(
+                booking=booking,
+                date=initial_date,
+                price_per_night=self.property.default_price_per_night,
+            )
 
 class PropertySearchTestCase(TestCase):
 
