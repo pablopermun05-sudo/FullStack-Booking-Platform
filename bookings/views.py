@@ -642,7 +642,6 @@ def properties(request):
 
     return JsonResponse(properties, safe=False)
 
-@login_required
 def booking(request, property_id):
     property = get_object_or_404(Property, pk=property_id)
 

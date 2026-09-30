@@ -2118,6 +2118,18 @@ class BookingAvailabilityViewTestCase(BookingTestBase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.json()["available"])
 
+    def test_anonymous_user_can_check_booking_availability(self):
+        response = self.client.get(
+            reverse("booking", args=[self.property.id]),
+            {
+                "start": str(date.today() + timedelta(days=2)),
+                "end": str(date.today() + timedelta(days=5)),
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["available"])
+
 class BookingModCreateBookingViewTestCase(BookingTestBase):
 
     def test_create_booking_rejects_non_post_request(self):
