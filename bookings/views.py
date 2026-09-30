@@ -59,7 +59,8 @@ def property(request, property_id):
     today = date.today()
 
     active_bookings = property.bookings.filter(
-        final_date__gte=today
+        final_date__gte=today,
+        status__in=Booking.ACTIVE_STATUSES,
     ).order_by("initial_date")
 
     min_booking_date = today + timedelta(days=property.notice_period_days)
@@ -79,6 +80,7 @@ def property(request, property_id):
         property=property,
         initial_date__lt=availability_end_date,
         final_date__gt=availability_start_date,
+        status__in=Booking.ACTIVE_STATUSES,
     ).order_by("initial_date")
 
     booked_dates = set()
@@ -242,6 +244,7 @@ def property_availability_reset(request, property_id):
         property=property,
         initial_date__lte=end_date,
         final_date__gt=start_date,
+        status__in=Booking.ACTIVE_STATUSES,
     ).exists()
 
     if has_bookings:
@@ -297,6 +300,7 @@ def property_availability_data(request, property_id):
         property=property,
         initial_date__lte=end_date,
         final_date__gt=start_date,
+        status__in=Booking.ACTIVE_STATUSES,
     ).order_by("initial_date")
 
     booked_dates = set()
@@ -398,6 +402,7 @@ def property_availability_save(request, property_id):
         property=property,
         initial_date__lte=end_date,
         final_date__gt=start_date,
+        status__in=Booking.ACTIVE_STATUSES,
     ).exists()
 
     if has_bookings:
@@ -562,6 +567,7 @@ def properties(request):
             property=OuterRef("pk"),
             initial_date__lt=final_date,
             final_date__gt=initial_date,
+            status__in=Booking.ACTIVE_STATUSES,
         )
 
         arrival_availability = PropertyAvailability.objects.filter(
@@ -706,6 +712,7 @@ def booking(request, property_id):
                 property_id=property_id,
                 initial_date__lt=final_date,
                 final_date__gt=initial_date,
+                status__in=Booking.ACTIVE_STATUSES,
             ).exists()
 
             if is_occupied:

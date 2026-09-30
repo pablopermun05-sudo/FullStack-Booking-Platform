@@ -2016,6 +2016,103 @@ class BookingTestCase(TestCase):
             ("PENDING", "CONFIRMED"),
         )
 
+    def test_booking_endpoint_rejects_pending_booking(self):
+        self.client.login(username="tenant", password="123")
+
+        Booking.objects.create(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=self.booking1.initial_date,
+            final_date=self.booking1.final_date,
+            status="PENDING",
+        )
+
+        response = self.client.get(
+            reverse("booking", args=[self.property.id]),
+            {
+                "start": self.booking1.initial_date.isoformat(),
+                "end": self.booking1.final_date.isoformat(),
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json()["error"],
+            "El alojamiento ya está reservado en esas fechas.",
+        )
+
+
+    def test_booking_endpoint_rejects_confirmed_booking(self):
+        self.client.login(username="tenant", password="123")
+
+        Booking.objects.create(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=self.booking1.initial_date,
+            final_date=self.booking1.final_date,
+            status="CONFIRMED",
+        )
+
+        response = self.client.get(
+            reverse("booking", args=[self.property.id]),
+            {
+                "start": self.booking1.initial_date.isoformat(),
+                "end": self.booking1.final_date.isoformat(),
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json()["error"],
+            "El alojamiento ya está reservado en esas fechas.",
+        )
+
+
+    def test_booking_endpoint_allows_cancelled_booking(self):
+        self.client.login(username="tenant", password="123")
+
+        Booking.objects.create(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=self.booking1.initial_date,
+            final_date=self.booking1.final_date,
+            status="CANCELLED",
+        )
+
+        response = self.client.get(
+            reverse("booking", args=[self.property.id]),
+            {
+                "start": self.booking1.initial_date.isoformat(),
+                "end": self.booking1.final_date.isoformat(),
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["available"])
+
+
+    def test_booking_endpoint_allows_expired_booking(self):
+        self.client.login(username="tenant", password="123")
+
+        Booking.objects.create(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=self.booking1.initial_date,
+            final_date=self.booking1.final_date,
+            status="EXPIRED",
+        )
+
+        response = self.client.get(
+            reverse("booking", args=[self.property.id]),
+            {
+                "start": self.booking1.initial_date.isoformat(),
+                "end": self.booking1.final_date.isoformat(),
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["available"])
+
 class PropertySearchTestCase(TestCase):
 
     def test_properties_rejects_invalid_initial_date(self):

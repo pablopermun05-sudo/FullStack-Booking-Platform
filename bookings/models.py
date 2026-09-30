@@ -226,7 +226,7 @@ class Booking(models.Model):
             property=self.property,
             initial_date__lt=self.final_date,
             final_date__gt=self.initial_date,
-            status__in=["PENDING", "CONFIRMED"],
+            status__in=self.ACTIVE_STATUSES,
         )
 
         # Si el objeto ya existe en la BD (es una edición), lo excluimos del chequeo
