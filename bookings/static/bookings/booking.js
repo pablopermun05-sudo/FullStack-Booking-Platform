@@ -1,4 +1,3 @@
-let successBooking = false;
 let bookingReady = false;
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -36,6 +35,8 @@ document.addEventListener('DOMContentLoaded', () => {
         return cookieValue;
     }
 
+    const csrftoken = getCookie('csrftoken');
+
     function showError(message) {
         bookingReady = false;
         buttonDiv.classList.add('no-display');
@@ -55,12 +56,9 @@ document.addEventListener('DOMContentLoaded', () => {
         alertDiv.classList.add('no-display');
     };
 
-    const csrftoken = getCookie('csrftoken');
-
-    function confirmBooking(start, end) {
-        if (successBooking || !bookingReady) {
-            return;
-        }
+    function createBooking(start, end, firstName, lastName, email, button) {
+        button.disabled = true;
+        button.textContent = "Procesando...";
 
         const url = `/confirm_booking/${propertyId}`;
 
@@ -72,13 +70,16 @@ document.addEventListener('DOMContentLoaded', () => {
             },
             body: JSON.stringify({
                 start: start,
-                end: end
+                end: end,
+                first_name: firstName,
+                last_name: lastName,
+                email: email
             })
         })
             .then(response => {
                 if (!response.ok) {
-                    return response.json().then(err => {
-                        throw err;
+                    return response.json().then(error => {
+                        throw error;
                     });
                 }
 
@@ -86,12 +87,22 @@ document.addEventListener('DOMContentLoaded', () => {
             })
             .then(data => {
                 if (data.success) {
-                    successBooking = true;
-                    window.location.href = "/my_bookings";
+                    button.textContent = "Reserva creada";
+                    button.disabled = true;
+
+                    guestDataForm?.classList.add('no-display');
+
+                    alertDiv.textContent = data.message;
+                    alertDiv.classList.remove('no-display');
                 }
             })
             .catch(error => {
-                showError(error.error || "Error al procesar la reserva.");
+                button.disabled = false;
+                button.textContent = "Confirmar Reserva";
+
+                showError(
+                    error.error || "Error al procesar la reserva."
+                );
             });
     }
 
@@ -102,13 +113,43 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             if (guestDataForm) {
-                guestDataForm.classList.remove('no-display');
-                guestFirstName.focus();
+                if (guestDataForm.classList.contains('no-display')) {
+                    guestDataForm.classList.remove('no-display');
+                    guestFirstName.focus();
+                    return;
+                }
+
+                const firstName = guestFirstName.value.trim();
+                const lastName = guestLastName.value.trim();
+                const email = guestEmail.value.trim();
+
+                if (!firstName || !lastName || !email) {
+                    showError(
+                        "Nombre, apellidos y email son obligatorios."
+                    );
+                    return;
+                }
+
+                createBooking(
+                    startDate.value,
+                    endDate.value,
+                    firstName,
+                    lastName,
+                    email,
+                    button
+                );
+
                 return;
             }
 
-            button.disabled = true;
-            button.textContent = "Continuar";
+            createBooking(
+                startDate.value,
+                endDate.value,
+                "",
+                "",
+                "",
+                button
+            );
         });
     }
 
