@@ -50,6 +50,49 @@
                         <input type="hidden" id="start-date">
                         <input type="hidden" id="end-date">
 
+                        {% if not request.user.is_authenticated %}
+                            <div id="guest-data-form" class="no-display mt-3">
+                                <div class="mb-3">
+                                    <label for="guest-first-name" class="form-label">
+                                        Nombre
+                                    </label>
+                                    <input
+                                        type="text"
+                                        id="guest-first-name"
+                                        class="form-control"
+                                        maxlength="150"
+                                        autocomplete="given-name"
+                                    >
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="guest-last-name" class="form-label">
+                                        Apellidos
+                                    </label>
+                                    <input
+                                        type="text"
+                                        id="guest-last-name"
+                                        class="form-control"
+                                        maxlength="150"
+                                        autocomplete="family-name"
+                                    >
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="guest-email" class="form-label">
+                                        Email
+                                    </label>
+                                    <input
+                                        type="email"
+                                        id="guest-email"
+                                        class="form-control"
+                                        maxlength="254"
+                                        autocomplete="email"
+                                    >
+                                </div>
+                            </div>
+                        {% endif %}
+
                         <div class="mb-0 {% if not request.GET.initial_date or not request.GET.final_date %}no-display{% endif %}" id="booking-button">
                         {% if request.GET.initial_date and request.GET.final_date %}
                             <button

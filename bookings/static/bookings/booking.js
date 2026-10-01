@@ -10,6 +10,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const startDate = document.querySelector('#start-date');
     const endDate = document.querySelector('#end-date');
 
+    const guestDataForm = document.querySelector('#guest-data-form');
+    const guestFirstName = document.querySelector('#guest-first-name');
+    const guestLastName = document.querySelector('#guest-last-name');
+    const guestEmail = document.querySelector('#guest-email');
+
     function getCookie(name) {
         let cookieValue = null;
 
@@ -96,13 +101,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            button.disabled = true;
-            button.textContent = "Procesando...";
+            if (guestDataForm) {
+                guestDataForm.classList.remove('no-display');
+                guestFirstName.focus();
+                return;
+            }
 
-            confirmBooking(
-                startDate.value,
-                endDate.value
-            );
+            button.disabled = true;
+            button.textContent = "Continuar";
         });
     }
 
