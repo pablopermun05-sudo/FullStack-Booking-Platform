@@ -1697,6 +1697,18 @@ class BookingLifecycleTestCase(BookingTestBase):
 
         self.assertEqual(expired_count, 2)
 
+    def test_non_pending_booking_is_not_expired_even_with_past_expiration(self):
+        booking = Booking.objects.create(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=date.today() + timedelta(days=10),
+            final_date=date.today() + timedelta(days=12),
+            status="CONFIRMED",
+            expires_at=timezone.now() - timedelta(minutes=1),
+        )
+
+        self.assertFalse(booking.is_expired())
+
 class BookingCreationTestCase(BookingTestBase):
 
     def test_create_pending_rolls_back_booking_if_booking_nights_creation_fails(self):
