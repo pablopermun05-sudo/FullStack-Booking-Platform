@@ -1847,6 +1847,71 @@ class BookingCreationTestCase(BookingTestBase):
             0,
         )
 
+    def test_create_pending_rejects_overlap_with_active_pending_booking(self):
+        initial_date = date.today() + timedelta(days=5)
+        final_date = initial_date + timedelta(days=2)
+
+        Booking.objects.create(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=initial_date,
+            final_date=final_date,
+            status="PENDING",
+            expires_at=timezone.now() + timedelta(minutes=10),
+        )
+
+        with self.assertRaises(ValidationError):
+            Booking.create_pending(
+                tenant=self.tenant,
+                property=self.property,
+                initial_date=initial_date,
+                final_date=final_date,
+                expires_at=timezone.now() + timedelta(minutes=15),
+            )
+
+        self.assertEqual(
+            Booking.objects.filter(
+                property=self.property,
+                initial_date=initial_date,
+                final_date=final_date,
+                status="PENDING",
+            ).count(),
+            1,
+        )
+
+    def test_create_pending_allows_overlap_with_expired_pending_booking(self):
+        initial_date = date.today() + timedelta(days=5)
+        final_date = initial_date + timedelta(days=2)
+
+        expired_booking = Booking.objects.create(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=initial_date,
+            final_date=final_date,
+            status="PENDING",
+            expires_at=timezone.now() - timedelta(minutes=1),
+        )
+
+        booking = Booking.create_pending(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=initial_date,
+            final_date=final_date,
+            expires_at=timezone.now() + timedelta(minutes=15),
+        )
+
+        self.assertNotEqual(booking.pk, expired_booking.pk)
+        self.assertEqual(booking.status, "PENDING")
+        self.assertEqual(
+            Booking.objects.filter(
+                property=self.property,
+                initial_date=initial_date,
+                final_date=final_date,
+                status="PENDING",
+            ).count(),
+            2,
+        )
+
     def test_create_pending_creates_pending_booking(self):
         expires_at = timezone.now() + timedelta(minutes=15)
 

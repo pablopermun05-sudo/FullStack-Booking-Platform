@@ -7,6 +7,7 @@ from datetime import date, timedelta
 from django.utils import timezone
 from builtins import property as python_property
 from decimal import Decimal
+from django.db.models import Q
 
 class User(AbstractUser):
     first_name = models.CharField("Nombre", max_length=150, blank=False)
@@ -305,12 +306,18 @@ class Booking(models.Model):
                 f"{arrival_availability['min_nights']} noches."
             )
 
-        # Buscamos reservas existentes que choquen
+        # Buscamos reservas existentes que choquen.
+        # Una reserva CONFIRMED siempre bloquea.
+        # Una reserva PENDING solo bloquea mientras no haya expirado.
+        now = timezone.now()
+
         bookings = Booking.objects.filter(
             property=self.property,
             initial_date__lt=self.final_date,
             final_date__gt=self.initial_date,
-            status__in=self.ACTIVE_STATUSES,
+        ).filter(
+            Q(status="CONFIRMED")
+            | Q(status="PENDING", expires_at__gt=now)
         )
 
         # Si el objeto ya existe en la BD (es una edición), lo excluimos del chequeo
