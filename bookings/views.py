@@ -168,7 +168,8 @@ def manage_property(request, property_id=None):
             if form.is_valid():
                 # Create the object instance without saving to the database yet
                 property = form.save(commit=False)
-                property.owner = request.user
+                if not property.pk:
+                    property.owner = request.user
                 # Now we can save it
                 property.save()
                 

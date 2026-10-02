@@ -532,6 +532,50 @@ class PropertyManagementPermissionTestCase(TestCase):
 
         self.assertEqual(response.status_code, 200)
 
+    def test_staff_editing_other_owner_property_preserves_owner(self):
+        staff = self.create_user(
+            "staff",
+            "staff@example.com",
+            is_staff=True,
+        )
+
+        owner = self.create_owner(
+            "owner",
+            "owner@example.com",
+            "APPROVED",
+        )
+
+        property = self.create_property(owner=owner)
+
+        self.client.force_login(staff)
+
+        response = self.client.post(
+            reverse(
+                "edit_property",
+                args=[property.pk],
+            ),
+            {
+                "title": "Updated property",
+                "description": property.description,
+                "location": property.location,
+                "default_price_per_night": "120",
+                "default_min_nights": "1",
+                "children": "2",
+                "adults": "2",
+                "rooms": "2",
+                "notice_period_days": "0",
+                "allow_pets": "",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+
+        property.refresh_from_db()
+
+        self.assertEqual(property.owner, owner)
+        self.assertEqual(property.title, "Updated property")
+        self.assertEqual(property.default_price_per_night, Decimal("120"))
+
     def test_customer_cannot_access_my_properties(self):
         customer = self.create_user(
             "customer",
