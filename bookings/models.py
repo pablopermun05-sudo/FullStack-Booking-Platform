@@ -145,27 +145,54 @@ class Booking(models.Model):
         return self.expires_at <= timezone.now()
 
     def confirm(self):
-        if self.status != "PENDING":
-            return False
+        with transaction.atomic():
+            booking = type(self).objects.select_for_update().get(pk=self.pk)
 
-        if self.is_expired():
-            self.status = "EXPIRED"
-            self.save(update_fields=["status"])
-            return False
+            if booking.status != "PENDING":
+                self.status = booking.status
+                return False
 
-        self.status = "CONFIRMED"
-        self.save(update_fields=["status"])
+            if booking.is_expired():
+                booking.status = "EXPIRED"
+                booking.save(update_fields=["status"])
+                self.status = booking.status
+                return False
 
-        return True
+            booking.status = "CONFIRMED"
+            booking.save(update_fields=["status"])
+            self.status = booking.status
+
+            return True
+
 
     def expire(self):
-        if not self.is_expired():
-            return False
+        with transaction.atomic():
+            booking = type(self).objects.select_for_update().get(pk=self.pk)
 
-        self.status = "EXPIRED"
-        self.save(update_fields=["status"])
+            if not booking.is_expired():
+                self.status = booking.status
+                return False
 
-        return True
+            booking.status = "EXPIRED"
+            booking.save(update_fields=["status"])
+            self.status = booking.status
+
+            return True
+
+
+    def cancel(self):
+        with transaction.atomic():
+            booking = type(self).objects.select_for_update().get(pk=self.pk)
+
+            if booking.status != "CONFIRMED":
+                self.status = booking.status
+                return False
+
+            booking.status = "CANCELLED"
+            booking.save(update_fields=["status"])
+            self.status = booking.status
+
+            return True
 
     @classmethod
     def expire_pending_bookings(cls):
@@ -211,15 +238,6 @@ class Booking(models.Model):
 
             return booking
 
-    def cancel(self):
-        if self.status != "CONFIRMED":
-            return False
-
-        self.status = "CANCELLED"
-        self.save(update_fields=["status"])
-
-        return True
-    
     @python_property
     def total_price(self):
         return sum(

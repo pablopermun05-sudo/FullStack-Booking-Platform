@@ -1516,6 +1516,29 @@ class BookingLifecycleTestCase(BookingTestBase):
         self.assertFalse(result)
         self.assertEqual(booking.status, "CONFIRMED")
 
+    def test_confirm_uses_current_database_state_for_stale_booking_instance(self):
+        booking = Booking.objects.create(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=date.today() + timedelta(days=5),
+            final_date=date.today() + timedelta(days=7),
+            status="PENDING",
+            expires_at=timezone.now() + timedelta(minutes=5),
+        )
+
+        stale_booking = Booking.objects.get(pk=booking.pk)
+
+        booking.confirm()
+
+        result = stale_booking.confirm()
+
+        self.assertFalse(result)
+        self.assertEqual(stale_booking.status, "CONFIRMED")
+
+        stale_booking.refresh_from_db()
+
+        self.assertEqual(stale_booking.status, "CONFIRMED")
+
     def test_cancel_changes_confirmed_booking_to_cancelled(self):
         booking = Booking.objects.create(
             tenant=self.tenant,
