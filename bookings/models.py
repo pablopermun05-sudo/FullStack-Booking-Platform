@@ -137,14 +137,19 @@ class Booking(models.Model):
     )
     expires_at = models.DateTimeField(null=True, blank=True)
 
-    def is_expired(self):
+    def confirm(self):
         if self.status != "PENDING":
             return False
 
-        if self.expires_at is None:
+        if self.is_expired():
+            self.status = "EXPIRED"
+            self.save(update_fields=["status"])
             return False
 
-        return timezone.now() >= self.expires_at
+        self.status = "CONFIRMED"
+        self.save(update_fields=["status"])
+
+        return True
 
     def expire(self):
         if not self.is_expired():
@@ -198,18 +203,6 @@ class Booking(models.Model):
             )
 
             return booking
-    
-    def confirm(self):
-        if self.status != "PENDING":
-            return False
-
-        if self.is_expired():
-            return False
-
-        self.status = "CONFIRMED"
-        self.save(update_fields=["status"])
-
-        return True
 
     def cancel(self):
         if self.status != "CONFIRMED":

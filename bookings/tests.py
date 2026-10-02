@@ -1438,7 +1438,7 @@ class BookingLifecycleTestCase(BookingTestBase):
         self.assertTrue(result)
         self.assertEqual(booking.status, "CONFIRMED")
 
-    def test_confirm_does_not_change_expired_pending_booking(self):
+    def test_confirm_expires_expired_pending_booking(self):
         booking = Booking.objects.create(
             tenant=self.tenant,
             property=self.property,
@@ -1453,7 +1453,7 @@ class BookingLifecycleTestCase(BookingTestBase):
         booking.refresh_from_db()
 
         self.assertFalse(result)
-        self.assertEqual(booking.status, "PENDING")
+        self.assertEqual(booking.status, "EXPIRED")
 
     def test_confirm_does_not_change_confirmed_booking(self):
         booking = Booking.objects.create(
