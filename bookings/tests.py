@@ -2470,6 +2470,11 @@ class BookingModCreateBookingViewTestCase(BookingTestBase):
             final_date=checkout_date,
         )
 
+        self.assertEqual(
+            response.json()["booking_id"],
+            booking.pk,
+        )
+
         self.assertEqual(booking.status, "PENDING")
 
         self.assertGreaterEqual(
@@ -2498,6 +2503,11 @@ class BookingModCreateBookingViewTestCase(BookingTestBase):
         self.assertEqual(response.status_code, 200)
 
         booking = Booking.objects.get(property=self.property)
+
+        self.assertEqual(
+            response.json()["booking_id"],
+            booking.pk,
+        )
 
         self.assertIsNone(booking.tenant)
         self.assertEqual(booking.guest_first_name, "Juan")

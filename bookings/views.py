@@ -780,7 +780,7 @@ def create_booking(request, property_id):
             minutes=PENDING_BOOKING_MINUTES
         )
 
-        Booking.create_pending(
+        booking = Booking.create_pending(
             tenant=tenant,
             property=property,
             initial_date=initial_date,
@@ -801,6 +801,7 @@ def create_booking(request, property_id):
         {
             "success": True,
             "message": "Reserva pendiente.",
+            "booking_id": booking.pk,
         }
     )
 
