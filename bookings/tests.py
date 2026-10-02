@@ -1805,6 +1805,48 @@ class BookingCreationTestCase(BookingTestBase):
             ).exists()
         )
 
+    def test_create_pending_rolls_back_when_booking_validation_fails(self):
+        initial_date = date.today() + timedelta(days=5)
+        final_date = initial_date + timedelta(days=2)
+
+        Booking.objects.create(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=initial_date,
+            final_date=final_date,
+            status="CONFIRMED",
+        )
+
+        with self.assertRaises(ValidationError):
+            Booking.create_pending(
+                tenant=self.tenant,
+                property=self.property,
+                initial_date=initial_date,
+                final_date=final_date,
+                expires_at=timezone.now() + timedelta(minutes=15),
+            )
+
+        self.assertEqual(
+            Booking.objects.filter(
+                tenant=self.tenant,
+                property=self.property,
+                initial_date=initial_date,
+                final_date=final_date,
+                status="PENDING",
+            ).count(),
+            0,
+        )
+
+        self.assertEqual(
+            BookingNight.objects.filter(
+                booking__tenant=self.tenant,
+                booking__property=self.property,
+                booking__initial_date=initial_date,
+                booking__final_date=final_date,
+            ).count(),
+            0,
+        )
+
     def test_create_pending_creates_pending_booking(self):
         expires_at = timezone.now() + timedelta(minutes=15)
 
