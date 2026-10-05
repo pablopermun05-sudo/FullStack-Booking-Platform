@@ -111,22 +111,26 @@ class Booking(models.Model):
         blank=True,
     )
 
-    guest_first_name = models.CharField(
-        "Nombre del huésped",
-        max_length=150,
-        blank=True,
-    )
+    guest_first_name = models.CharField("Nombre del huésped", max_length=150)
+    guest_last_name = models.CharField("Apellidos del huésped", max_length=150)
+    guest_email = models.EmailField("Email del huésped")
+    guest_phone_number = PhoneNumberField("Teléfono del huésped")
 
-    guest_last_name = models.CharField(
-        "Apellidos del huésped",
-        max_length=150,
-        blank=True,
-    )
+    guest_country = models.CharField("País del huésped", max_length=100)
+    guest_region = models.CharField("Región del huésped", max_length=100, blank=True)
+    guest_city = models.CharField("Ciudad del huésped", max_length=100)
+    guest_postal_code = models.CharField("Código postal del huésped", max_length=20, blank=True)
+    guest_address = models.CharField("Dirección del huésped", max_length=255)
 
-    guest_email = models.EmailField(
-        "Email del huésped",
-        blank=True,
-    )
+    is_for_self = models.BooleanField("La reserva es para sí mismo", default=True)
+    is_business_trip = models.BooleanField("Viaje de trabajo", default=False)
+
+    tax_id = models.CharField("CIF", max_length=50, blank=True)
+
+    guest_count = models.PositiveIntegerField("Número de huéspedes", default=1)
+
+    special_requests = models.TextField("Peticiones especiales", blank=True)
+    arrival_time = models.TimeField("Hora de llegada")
     property = models.ForeignKey(Property, on_delete=models.CASCADE, related_name="bookings")
     initial_date = models.DateField()
     final_date = models.DateField()
@@ -206,7 +210,7 @@ class Booking(models.Model):
         ).update(status="EXPIRED")
 
     @classmethod
-    def create_pending(cls, *, tenant, property, initial_date, final_date, expires_at, guest_first_name="", guest_last_name="", guest_email=""):
+    def create_pending(cls, *, tenant, property, initial_date, final_date, expires_at, guest_first_name, guest_last_name, guest_email, guest_phone_number, guest_country, guest_city, guest_address, guest_count, arrival_time, guest_region="", guest_postal_code="", is_for_self=True, is_business_trip=False, tax_id="", special_requests=""):
         with transaction.atomic():
             booking = cls.objects.create(
                 tenant=tenant,
@@ -218,6 +222,18 @@ class Booking(models.Model):
                 guest_first_name=guest_first_name,
                 guest_last_name=guest_last_name,
                 guest_email=guest_email,
+                guest_phone_number=guest_phone_number,
+                guest_country=guest_country,
+                guest_region=guest_region,
+                guest_city=guest_city,
+                guest_postal_code=guest_postal_code,
+                guest_address=guest_address,
+                is_for_self=is_for_self,
+                is_business_trip=is_business_trip,
+                tax_id=tax_id,
+                guest_count=guest_count,
+                special_requests=special_requests,
+                arrival_time=arrival_time,
             )
 
             availability = PropertyAvailability.get_for_range(
@@ -270,11 +286,13 @@ class Booking(models.Model):
         if self.tenant is not None and self.tenant == self.property.owner:
             raise ValidationError("No puedes reservar tu propia vivienda.")
 
-        if self.tenant is None:
-            if not self.guest_first_name or not self.guest_last_name or not self.guest_email:
-                raise ValidationError(
-                    "Las reservas anónimas requieren nombre, apellidos y email."
-                )
+        if self.guest_count < 1:
+            raise ValidationError("El número de huéspedes debe ser al menos 1.")
+
+        if self.is_business_trip and not self.tax_id:
+            raise ValidationError(
+                "El CIF es obligatorio para las reservas por viaje de trabajo."
+            )
 
         total_nights = (self.final_date - self.initial_date).days
 
@@ -317,15 +335,25 @@ class Booking(models.Model):
             final_date__gt=self.initial_date,
         ).filter(
             Q(status="CONFIRMED")
-            | Q(status="PENDING", expires_at__gt=now)
+            |
+            (
+                Q(status="PENDING")
+                &
+                (
+                    Q(expires_at__isnull=True)
+                    |
+                    Q(expires_at__gt=now)
+                )
+            )
         )
 
-        # Si el objeto ya existe en la BD (es una edición), lo excluimos del chequeo
         if self.pk:
             bookings = bookings.exclude(pk=self.pk)
 
         if bookings.exists():
-            raise ValidationError("Ya hay una reserva en esas fechas")
+            raise ValidationError(
+                "Ya hay una reserva en esas fechas"
+            )
     
     def save(self, *args, **kwargs):
         self.full_clean()

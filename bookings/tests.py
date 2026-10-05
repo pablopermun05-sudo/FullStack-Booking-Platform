@@ -2,7 +2,7 @@ from django.test import TestCase
 from django.urls import reverse
 from .models import User, OwnerProfile, Property, Booking, BookingNight, PropertyAvailability, can_manage_properties
 from django.contrib.auth.models import AnonymousUser
-from datetime import date, timedelta
+from datetime import date, time, timedelta
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 from django.db import IntegrityError
@@ -1106,17 +1106,43 @@ class BookingTestBase(TestCase):
             owner=self.owner
         )
 
+        self.booking_data = {
+            "guest_first_name": "Juan",
+            "guest_last_name": "García",
+            "guest_email": "juan@example.com",
+            "guest_phone_number": "+34600111222",
+            "guest_country": "España",
+            "guest_region": "Madrid",
+            "guest_city": "Madrid",
+            "guest_postal_code": "28001",
+            "guest_address": "Calle Mayor 1",
+            "is_for_self": True,
+            "is_business_trip": False,
+            "tax_id": "",
+            "guest_count": 2,
+            "special_requests": "",
+            "arrival_time": time(18, 0),
+        }
+
+        self.booking_payload = {
+            **self.booking_data,
+            "arrival_time": "18:00",
+        }
+
         self.booking1 = Booking(
             tenant=self.tenant,
             property=self.property,
             initial_date=date.today(),
-            final_date=date.today() + timedelta(days=3)
+            final_date=date.today() + timedelta(days=3),
+            **self.booking_data
         )
+
         self.booking2 = Booking(
             tenant=self.tenant,
             property=self.property,
             initial_date=date.today(),
-            final_date=date.today() + timedelta(days=3)
+            final_date=date.today() + timedelta(days=3),
+            **self.booking_data
         )
 
 class BookingModelTestCase(BookingTestBase):
@@ -1147,6 +1173,7 @@ class BookingModelTestCase(BookingTestBase):
             property=self.property,
             initial_date=self.booking1.final_date,
             final_date=self.booking1.final_date + timedelta(days=2),
+            **self.booking_data
         )
         try:
             booking_same_day.full_clean()
@@ -1167,6 +1194,7 @@ class BookingModelTestCase(BookingTestBase):
             property=self.property,
             initial_date=date.today() + timedelta(days=1),
             final_date=date.today() + timedelta(days=3),
+            **self.booking_data
         )
 
         with self.assertRaises(ValidationError):
@@ -1178,6 +1206,7 @@ class BookingModelTestCase(BookingTestBase):
             property=self.property,
             initial_date=date.today() + timedelta(days=5),
             final_date=date.today() + timedelta(days=7),
+            **self.booking_data
         )
         with self.assertRaises(ValidationError):
             booking_by_owner.full_clean()
@@ -1198,6 +1227,7 @@ class BookingModelTestCase(BookingTestBase):
             property=self.property,
             initial_date=closed_date,
             final_date=closed_date + timedelta(days=2),
+            **self.booking_data
         )
 
         with self.assertRaises(ValidationError):
@@ -1219,6 +1249,7 @@ class BookingModelTestCase(BookingTestBase):
             property=self.property,
             initial_date=arrival_date,
             final_date=arrival_date + timedelta(days=2),
+            **self.booking_data
         )
 
         with self.assertRaises(ValidationError):
@@ -1240,6 +1271,7 @@ class BookingModelTestCase(BookingTestBase):
             property=self.property,
             initial_date=arrival_date,
             final_date=arrival_date + timedelta(days=3),
+            **self.booking_data
         )
 
         try:
@@ -1272,6 +1304,7 @@ class BookingModelTestCase(BookingTestBase):
             property=self.property,
             initial_date=arrival_date,
             final_date=arrival_date + timedelta(days=2),
+            **self.booking_data
         )
 
         try:
@@ -1288,6 +1321,7 @@ class BookingModelTestCase(BookingTestBase):
             property=self.property,
             initial_date=date.today() + timedelta(days=5),
             final_date=date.today() + timedelta(days=3),
+            **self.booking_data
         )
 
         with self.assertRaises(ValidationError):
@@ -1299,6 +1333,7 @@ class BookingModelTestCase(BookingTestBase):
             property=self.property,
             initial_date=date.today() + timedelta(days=5),
             final_date=date.today() + timedelta(days=5),
+            **self.booking_data
         )
 
         with self.assertRaises(ValidationError):
@@ -1310,6 +1345,7 @@ class BookingModelTestCase(BookingTestBase):
             property=self.property,
             initial_date=date.today() + timedelta(days=5),
             final_date=date.today() + timedelta(days=7),
+            **self.booking_data
         )
 
         self.assertEqual(booking.status, "PENDING")
@@ -1322,6 +1358,7 @@ class BookingModelTestCase(BookingTestBase):
             initial_date=date.today() + timedelta(days=5),
             final_date=date.today() + timedelta(days=7),
             status="CANCELLED",
+            **self.booking_data
         )
 
         self.assertEqual(booking.status, "CANCELLED")
@@ -1347,6 +1384,7 @@ class BookingModelTestCase(BookingTestBase):
             initial_date=date.today() + timedelta(days=5),
             final_date=date.today() + timedelta(days=7),
             status="CANCELLED",
+            **self.booking_data
         )
 
         booking = Booking(
@@ -1354,6 +1392,7 @@ class BookingModelTestCase(BookingTestBase):
             property=self.property,
             initial_date=date.today() + timedelta(days=5),
             final_date=date.today() + timedelta(days=7),
+            **self.booking_data
         )
 
         booking.full_clean()
@@ -1365,6 +1404,7 @@ class BookingModelTestCase(BookingTestBase):
             initial_date=date.today() + timedelta(days=5),
             final_date=date.today() + timedelta(days=7),
             status="EXPIRED",
+            **self.booking_data
         )
 
         booking = Booking(
@@ -1372,6 +1412,7 @@ class BookingModelTestCase(BookingTestBase):
             property=self.property,
             initial_date=date.today() + timedelta(days=5),
             final_date=date.today() + timedelta(days=7),
+            **self.booking_data
         )
 
         booking.full_clean()
@@ -1383,6 +1424,7 @@ class BookingModelTestCase(BookingTestBase):
             initial_date=date.today() + timedelta(days=5),
             final_date=date.today() + timedelta(days=7),
             status="PENDING",
+            **self.booking_data
         )
 
         booking = Booking(
@@ -1390,6 +1432,7 @@ class BookingModelTestCase(BookingTestBase):
             property=self.property,
             initial_date=date.today() + timedelta(days=5),
             final_date=date.today() + timedelta(days=7),
+            **self.booking_data
         )
 
         with self.assertRaises(ValidationError):
@@ -1402,6 +1445,7 @@ class BookingModelTestCase(BookingTestBase):
             initial_date=date.today() + timedelta(days=5),
             final_date=date.today() + timedelta(days=7),
             status="CONFIRMED",
+            **self.booking_data
         )
 
         booking = Booking(
@@ -1409,6 +1453,7 @@ class BookingModelTestCase(BookingTestBase):
             property=self.property,
             initial_date=date.today() + timedelta(days=5),
             final_date=date.today() + timedelta(days=7),
+            **self.booking_data
         )
 
         with self.assertRaises(ValidationError):
@@ -1430,6 +1475,7 @@ class BookingModelTestCase(BookingTestBase):
             initial_date=initial_date,
             final_date=final_date,
             expires_at=timezone.now() + timedelta(minutes=15),
+            **self.booking_data
         )
 
         with self.assertRaises(IntegrityError):
@@ -1445,23 +1491,87 @@ class BookingModelTestCase(BookingTestBase):
             property=self.property,
             initial_date=date.today() + timedelta(days=2),
             final_date=date.today() + timedelta(days=5),
-            guest_first_name="Juan",
-            guest_last_name="García",
-            guest_email="juan@example.com",
+            **self.booking_data,
         )
 
         booking.full_clean()
 
-    def test_anonymous_booking_without_guest_data_is_invalid(self):
+    def test_booking_without_required_guest_data_is_invalid(self):
+        booking_data = self.booking_data.copy()
+        booking_data["guest_first_name"] = ""
+
         booking = Booking(
-            tenant=None,
+            tenant=self.tenant,
             property=self.property,
             initial_date=date.today() + timedelta(days=2),
             final_date=date.today() + timedelta(days=5),
+            **booking_data,
         )
 
         with self.assertRaises(ValidationError):
             booking.full_clean()
+
+    def test_guest_count_must_be_at_least_one(self):
+        booking_data = self.booking_data.copy()
+        booking_data["guest_count"] = 0
+
+        booking = Booking(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=date.today() + timedelta(days=5),
+            final_date=date.today() + timedelta(days=7),
+            **booking_data,
+        )
+
+        with self.assertRaises(ValidationError):
+            booking.full_clean()
+
+    def test_business_trip_requires_tax_id(self):
+        booking_data = self.booking_data.copy()
+        booking_data["is_business_trip"] = True
+        booking_data["tax_id"] = ""
+
+        booking = Booking(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=date.today() + timedelta(days=5),
+            final_date=date.today() + timedelta(days=7),
+            **booking_data,
+        )
+
+        with self.assertRaises(ValidationError):
+            booking.full_clean()
+
+    def test_business_trip_requires_tax_id(self):
+        booking_data = self.booking_data.copy()
+        booking_data["is_business_trip"] = True
+        booking_data["tax_id"] = ""
+
+        booking = Booking(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=date.today() + timedelta(days=5),
+            final_date=date.today() + timedelta(days=7),
+            **booking_data,
+        )
+
+        with self.assertRaises(ValidationError):
+            booking.full_clean()
+
+    def test_optional_guest_location_fields_can_be_blank(self):
+        booking_data = self.booking_data.copy()
+        booking_data["guest_region"] = ""
+        booking_data["guest_postal_code"] = ""
+
+        booking = Booking(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=date.today() + timedelta(days=5),
+            final_date=date.today() + timedelta(days=7),
+            **booking_data,
+        )
+
+        booking.full_clean()
 
 class BookingLifecycleTestCase(BookingTestBase):
 
@@ -1473,6 +1583,7 @@ class BookingLifecycleTestCase(BookingTestBase):
             final_date=date.today() + timedelta(days=7),
             status="PENDING",
             expires_at=timezone.now() + timedelta(minutes=5),
+            **self.booking_data
         )
 
         result = booking.confirm()
@@ -1490,6 +1601,7 @@ class BookingLifecycleTestCase(BookingTestBase):
             final_date=date.today() + timedelta(days=7),
             status="PENDING",
             expires_at=timezone.now() - timedelta(minutes=5),
+            **self.booking_data
         )
 
         result = booking.confirm()
@@ -1507,6 +1619,7 @@ class BookingLifecycleTestCase(BookingTestBase):
             final_date=date.today() + timedelta(days=7),
             status="CONFIRMED",
             expires_at=timezone.now() - timedelta(minutes=5),
+            **self.booking_data
         )
 
         result = booking.confirm()
@@ -1524,6 +1637,7 @@ class BookingLifecycleTestCase(BookingTestBase):
             final_date=date.today() + timedelta(days=7),
             status="PENDING",
             expires_at=timezone.now() + timedelta(minutes=5),
+            **self.booking_data
         )
 
         stale_booking = Booking.objects.get(pk=booking.pk)
@@ -1546,6 +1660,7 @@ class BookingLifecycleTestCase(BookingTestBase):
             initial_date=date.today() + timedelta(days=5),
             final_date=date.today() + timedelta(days=7),
             status="CONFIRMED",
+            **self.booking_data
         )
 
         result = booking.cancel()
@@ -1563,6 +1678,7 @@ class BookingLifecycleTestCase(BookingTestBase):
             final_date=date.today() + timedelta(days=7),
             status="PENDING",
             expires_at=timezone.now() + timedelta(minutes=5),
+            **self.booking_data
         )
 
         result = booking.cancel()
@@ -1579,6 +1695,7 @@ class BookingLifecycleTestCase(BookingTestBase):
             initial_date=date.today() + timedelta(days=5),
             final_date=date.today() + timedelta(days=7),
             status="CANCELLED",
+            **self.booking_data
         )
 
         result = booking.cancel()
@@ -1596,6 +1713,7 @@ class BookingLifecycleTestCase(BookingTestBase):
             final_date=date.today() + timedelta(days=7),
             status="PENDING",
             expires_at=timezone.now() + timedelta(minutes=5),
+            **self.booking_data
         )
 
         self.assertFalse(booking.is_expired())
@@ -1609,6 +1727,7 @@ class BookingLifecycleTestCase(BookingTestBase):
             final_date=date.today() + timedelta(days=7),
             status="PENDING",
             expires_at=timezone.now() - timedelta(minutes=5),
+            **self.booking_data
         )
 
         self.assertTrue(booking.is_expired())
@@ -1621,6 +1740,7 @@ class BookingLifecycleTestCase(BookingTestBase):
             initial_date=date.today() + timedelta(days=5),
             final_date=date.today() + timedelta(days=7),
             status="PENDING",
+            **self.booking_data
         )
 
         self.assertFalse(booking.is_expired())
@@ -1633,6 +1753,7 @@ class BookingLifecycleTestCase(BookingTestBase):
             final_date=date.today() + timedelta(days=7),
             status="PENDING",
             expires_at=timezone.now() - timedelta(minutes=5),
+            **self.booking_data
         )
 
         result = booking.expire()
@@ -1650,6 +1771,7 @@ class BookingLifecycleTestCase(BookingTestBase):
             final_date=date.today() + timedelta(days=7),
             status="PENDING",
             expires_at=timezone.now() + timedelta(minutes=5),
+            **self.booking_data
         )
 
         result = booking.expire()
@@ -1667,6 +1789,7 @@ class BookingLifecycleTestCase(BookingTestBase):
             final_date=date.today() + timedelta(days=7),
             status="CONFIRMED",
             expires_at=timezone.now() - timedelta(minutes=5),
+            **self.booking_data
         )
 
         result = booking.expire()
@@ -1684,6 +1807,7 @@ class BookingLifecycleTestCase(BookingTestBase):
             final_date=date.today() + timedelta(days=7),
             status="CANCELLED",
             expires_at=timezone.now() - timedelta(minutes=5),
+            **self.booking_data
         )
 
         result = booking.expire()
@@ -1701,6 +1825,7 @@ class BookingLifecycleTestCase(BookingTestBase):
             final_date=date.today() + timedelta(days=7),
             status="PENDING",
             expires_at=timezone.now() - timedelta(minutes=5),
+            **self.booking_data
         )
 
         Booking.expire_pending_bookings()
@@ -1717,6 +1842,7 @@ class BookingLifecycleTestCase(BookingTestBase):
             final_date=date.today() + timedelta(days=7),
             status="PENDING",
             expires_at=timezone.now() + timedelta(minutes=5),
+            **self.booking_data
         )
 
         Booking.expire_pending_bookings()
@@ -1733,6 +1859,7 @@ class BookingLifecycleTestCase(BookingTestBase):
             final_date=date.today() + timedelta(days=7),
             status="CONFIRMED",
             expires_at=timezone.now() - timedelta(minutes=5),
+            **self.booking_data
         )
 
         Booking.expire_pending_bookings()
@@ -1749,6 +1876,7 @@ class BookingLifecycleTestCase(BookingTestBase):
             final_date=date.today() + timedelta(days=7),
             status="PENDING",
             expires_at=timezone.now() - timedelta(minutes=5),
+            **self.booking_data
         )
 
         Booking.objects.create(
@@ -1758,6 +1886,7 @@ class BookingLifecycleTestCase(BookingTestBase):
             final_date=date.today() + timedelta(days=12),
             status="PENDING",
             expires_at=timezone.now() - timedelta(minutes=5),
+            **self.booking_data
         )
 
         expired_count = Booking.expire_pending_bookings()
@@ -1772,6 +1901,7 @@ class BookingLifecycleTestCase(BookingTestBase):
             final_date=date.today() + timedelta(days=12),
             status="CONFIRMED",
             expires_at=timezone.now() - timedelta(minutes=1),
+            **self.booking_data
         )
 
         self.assertFalse(booking.is_expired())
@@ -1794,6 +1924,7 @@ class BookingCreationTestCase(BookingTestBase):
                     initial_date=initial_date,
                     final_date=final_date,
                     expires_at=timezone.now() + timedelta(minutes=15),
+                    **self.booking_data
                 )
 
         self.assertFalse(
@@ -1815,6 +1946,15 @@ class BookingCreationTestCase(BookingTestBase):
             initial_date=initial_date,
             final_date=final_date,
             status="CONFIRMED",
+            guest_first_name="Test",
+            guest_last_name="Guest",
+            guest_email="test@example.com",
+            guest_phone_number="+34600000000",
+            guest_country="España",
+            guest_city="Madrid",
+            guest_address="Calle Test 1",
+            guest_count=1,
+            arrival_time=time(15, 0),
         )
 
         with self.assertRaises(ValidationError):
@@ -1824,6 +1964,7 @@ class BookingCreationTestCase(BookingTestBase):
                 initial_date=initial_date,
                 final_date=final_date,
                 expires_at=timezone.now() + timedelta(minutes=15),
+                **self.booking_data
             )
 
         self.assertEqual(
@@ -1858,6 +1999,7 @@ class BookingCreationTestCase(BookingTestBase):
             final_date=final_date,
             status="PENDING",
             expires_at=timezone.now() + timedelta(minutes=10),
+            **self.booking_data
         )
 
         with self.assertRaises(ValidationError):
@@ -1867,6 +2009,7 @@ class BookingCreationTestCase(BookingTestBase):
                 initial_date=initial_date,
                 final_date=final_date,
                 expires_at=timezone.now() + timedelta(minutes=15),
+                **self.booking_data
             )
 
         self.assertEqual(
@@ -1890,6 +2033,7 @@ class BookingCreationTestCase(BookingTestBase):
             final_date=final_date,
             status="PENDING",
             expires_at=timezone.now() - timedelta(minutes=1),
+            **self.booking_data
         )
 
         booking = Booking.create_pending(
@@ -1898,6 +2042,7 @@ class BookingCreationTestCase(BookingTestBase):
             initial_date=initial_date,
             final_date=final_date,
             expires_at=timezone.now() + timedelta(minutes=15),
+            **self.booking_data
         )
 
         self.assertNotEqual(booking.pk, expired_booking.pk)
@@ -1921,6 +2066,7 @@ class BookingCreationTestCase(BookingTestBase):
             initial_date=date.today() + timedelta(days=5),
             final_date=date.today() + timedelta(days=7),
             expires_at=expires_at,
+            **self.booking_data
         )
 
         self.assertEqual(booking.status, "PENDING")
@@ -1935,6 +2081,7 @@ class BookingCreationTestCase(BookingTestBase):
             initial_date=date.today() + timedelta(days=5),
             final_date=date.today() + timedelta(days=7),
             expires_at=expires_at,
+            **self.booking_data
         )
 
         self.assertIsNotNone(booking.pk)
@@ -1949,6 +2096,7 @@ class BookingCreationTestCase(BookingTestBase):
             initial_date=date.today() + timedelta(days=5),
             final_date=date.today() + timedelta(days=8),
             expires_at=timezone.now() + timedelta(minutes=15),
+            **self.booking_data
         )
 
         nights = booking.nights.order_by("date")
@@ -1970,6 +2118,7 @@ class BookingCreationTestCase(BookingTestBase):
             initial_date=date.today() + timedelta(days=5),
             final_date=date.today() + timedelta(days=7),
             expires_at=timezone.now() + timedelta(minutes=15),
+            **self.booking_data
         )
 
         prices = list(
@@ -2006,6 +2155,7 @@ class BookingCreationTestCase(BookingTestBase):
             initial_date=start_date,
             final_date=end_date,
             expires_at=timezone.now() + timedelta(minutes=15),
+            **self.booking_data
         )
 
         nights = booking.nights.order_by("date")
@@ -2031,6 +2181,7 @@ class BookingCreationTestCase(BookingTestBase):
             initial_date=start_date,
             final_date=end_date,
             expires_at=timezone.now() + timedelta(minutes=15),
+            **self.booking_data
         )
 
         self.assertFalse(
@@ -2047,6 +2198,7 @@ class BookingCreationTestCase(BookingTestBase):
             initial_date=start_date,
             final_date=end_date,
             expires_at=timezone.now() + timedelta(minutes=15),
+            **self.booking_data
         )
 
         booking.nights.filter(date=start_date).update(price_per_night=100)
@@ -2069,6 +2221,7 @@ class BookingCreationTestCase(BookingTestBase):
             initial_date=start_date,
             final_date=end_date,
             expires_at=timezone.now() + timedelta(minutes=15),
+            **self.booking_data
         )
 
         self.assertEqual(booking.total_price, Decimal("160.00"))
@@ -2088,6 +2241,7 @@ class BookingCreationTestCase(BookingTestBase):
             final_date=date.today() + timedelta(days=7),
             status="PENDING",
             expires_at=timezone.now() + timedelta(minutes=15),
+            **self.booking_data
         )
 
         self.assertEqual(booking.total_price, Decimal("0"))
@@ -2219,6 +2373,7 @@ class BookingAvailabilityViewTestCase(BookingTestBase):
             initial_date=self.booking1.initial_date,
             final_date=self.booking1.final_date,
             status="PENDING",
+            **self.booking_data
         )
 
         response = self.client.get(
@@ -2244,6 +2399,7 @@ class BookingAvailabilityViewTestCase(BookingTestBase):
             initial_date=self.booking1.initial_date,
             final_date=self.booking1.final_date,
             status="CONFIRMED",
+            **self.booking_data
         )
 
         response = self.client.get(
@@ -2269,6 +2425,7 @@ class BookingAvailabilityViewTestCase(BookingTestBase):
             initial_date=self.booking1.initial_date,
             final_date=self.booking1.final_date,
             status="CANCELLED",
+            **self.booking_data
         )
 
         response = self.client.get(
@@ -2291,6 +2448,7 @@ class BookingAvailabilityViewTestCase(BookingTestBase):
             initial_date=self.booking1.initial_date,
             final_date=self.booking1.final_date,
             status="EXPIRED",
+            **self.booking_data
         )
 
         response = self.client.get(
@@ -2428,6 +2586,7 @@ class BookingModCreateBookingViewTestCase(BookingTestBase):
             data={
                 "start": arrival_date.isoformat(),
                 "end": (arrival_date + timedelta(days=2)).isoformat(),
+                **self.booking_payload,
             },
             content_type="application/json",
         )
@@ -2455,6 +2614,7 @@ class BookingModCreateBookingViewTestCase(BookingTestBase):
             data={
                 "start": arrival_date.isoformat(),
                 "end": (arrival_date + timedelta(days=2)).isoformat(),
+                **self.booking_payload,
             },
             content_type="application/json",
         )
@@ -2483,6 +2643,7 @@ class BookingModCreateBookingViewTestCase(BookingTestBase):
             data={
                 "start": arrival_date.isoformat(),
                 "end": checkout_date.isoformat(),
+                **self.booking_payload,
             },
             content_type="application/json",
         )
@@ -2500,6 +2661,20 @@ class BookingModCreateBookingViewTestCase(BookingTestBase):
             final_date=checkout_date,
         )
 
+        self.assertEqual(booking.guest_first_name, "Juan")
+        self.assertEqual(booking.guest_last_name, "García")
+        self.assertEqual(booking.guest_email, "juan@example.com")
+        self.assertEqual(booking.guest_phone_number, "+34600111222")
+        self.assertEqual(booking.guest_country, "España")
+        self.assertEqual(booking.guest_region, "Madrid")
+        self.assertEqual(booking.guest_city, "Madrid")
+        self.assertEqual(booking.guest_postal_code, "28001")
+        self.assertEqual(booking.guest_address, "Calle Mayor 1")
+        self.assertTrue(booking.is_for_self)
+        self.assertFalse(booking.is_business_trip)
+        self.assertEqual(booking.guest_count, 2)
+        self.assertEqual(booking.special_requests, "")
+        self.assertEqual(booking.arrival_time, time(18, 0))
         self.assertEqual(booking.status, "PENDING")
         self.assertIsNotNone(booking.expires_at)
         self.assertGreater(booking.expires_at, timezone.now())
@@ -2520,6 +2695,7 @@ class BookingModCreateBookingViewTestCase(BookingTestBase):
             data={
                 "start": arrival_date.isoformat(),
                 "end": checkout_date.isoformat(),
+                **self.booking_payload,
             },
             content_type="application/json",
         )
@@ -2533,6 +2709,7 @@ class BookingModCreateBookingViewTestCase(BookingTestBase):
             property=self.property,
             initial_date=arrival_date,
             final_date=checkout_date,
+            **self.booking_data
         )
 
         self.assertEqual(
@@ -2558,16 +2735,17 @@ class BookingModCreateBookingViewTestCase(BookingTestBase):
             data=json.dumps({
                 "start": str(date.today() + timedelta(days=2)),
                 "end": str(date.today() + timedelta(days=5)),
-                "first_name": "Juan",
-                "last_name": "García",
-                "email": "juan@example.com",
+                **self.booking_payload,
             }),
             content_type="application/json",
         )
 
         self.assertEqual(response.status_code, 200)
 
-        booking = Booking.objects.get(property=self.property)
+        booking = Booking.objects.get(
+            property=self.property,
+            tenant=None,
+        )
 
         self.assertEqual(
             response.json()["booking_id"],
@@ -2578,9 +2756,15 @@ class BookingModCreateBookingViewTestCase(BookingTestBase):
         self.assertEqual(booking.guest_first_name, "Juan")
         self.assertEqual(booking.guest_last_name, "García")
         self.assertEqual(booking.guest_email, "juan@example.com")
+        self.assertEqual(booking.guest_phone_number, "+34600111222")
+        self.assertEqual(booking.guest_country, "España")
+        self.assertEqual(booking.guest_city, "Madrid")
+        self.assertEqual(booking.guest_address, "Calle Mayor 1")
+        self.assertEqual(booking.guest_count, 2)
+        self.assertEqual(booking.arrival_time, time(18, 0))
         self.assertEqual(booking.status, "PENDING")
 
-    def test_anonymous_user_requires_guest_data(self):
+    def test_create_booking_requires_guest_data(self):
         response = self.client.post(
             reverse("confirm_booking", args=[self.property.id]),
             data=json.dumps({
@@ -2591,7 +2775,172 @@ class BookingModCreateBookingViewTestCase(BookingTestBase):
         )
 
         self.assertEqual(response.status_code, 400)
-        self.assertIn("obligatorios", response.json()["error"])
+        self.assertEqual(
+            response.json()["error"],
+            "Faltan campos obligatorios.",
+        )
+        self.assertIn(
+            "guest_first_name",
+            response.json()["fields"],
+        )
+
+    def test_create_booking_rejects_invalid_guest_count(self):
+        self.client.force_login(self.tenant)
+
+        payload = self.booking_payload.copy()
+        payload["guest_count"] = "abc"
+
+        response = self.client.post(
+            reverse(
+                "confirm_booking",
+                kwargs={"property_id": self.property.pk},
+            ),
+            data=json.dumps({
+                "start": (
+                    date.today() + timedelta(days=5)
+                ).isoformat(),
+                "end": (
+                    date.today() + timedelta(days=7)
+                ).isoformat(),
+                **payload,
+            }),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json()["error"],
+            "El número de huéspedes debe ser un número entero.",
+        )
+
+    def test_create_booking_rejects_invalid_arrival_time(self):
+        self.client.force_login(self.tenant)
+
+        payload = self.booking_payload.copy()
+        payload["arrival_time"] = "not-a-time"
+
+        response = self.client.post(
+            reverse(
+                "confirm_booking",
+                kwargs={"property_id": self.property.pk},
+            ),
+            data=json.dumps({
+                "start": (
+                    date.today() + timedelta(days=5)
+                ).isoformat(),
+                "end": (
+                    date.today() + timedelta(days=7)
+                ).isoformat(),
+                **payload,
+            }),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json()["error"],
+            "Formato de hora de llegada inválido.",
+        )
+
+    def test_create_booking_rejects_business_trip_without_tax_id(self):
+        self.client.force_login(self.tenant)
+
+        payload = self.booking_payload.copy()
+        payload["is_business_trip"] = True
+        payload["tax_id"] = ""
+
+        response = self.client.post(
+            reverse(
+                "confirm_booking",
+                kwargs={"property_id": self.property.pk},
+            ),
+            data=json.dumps({
+                "start": (
+                    date.today() + timedelta(days=5)
+                ).isoformat(),
+                "end": (
+                    date.today() + timedelta(days=7)
+                ).isoformat(),
+                **payload,
+            }),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_create_booking_accepts_business_trip_with_tax_id(self):
+        self.client.force_login(self.tenant)
+
+        payload = self.booking_payload.copy()
+        payload["is_business_trip"] = True
+        payload["tax_id"] = "B12345678"
+
+        response = self.client.post(
+            reverse(
+                "confirm_booking",
+                kwargs={"property_id": self.property.pk},
+            ),
+            data=json.dumps({
+                "start": (
+                    date.today() + timedelta(days=5)
+                ).isoformat(),
+                "end": (
+                    date.today() + timedelta(days=7)
+                ).isoformat(),
+                **payload,
+            }),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+        booking = Booking.objects.get(
+            pk=response.json()["booking_id"]
+        )
+
+        self.assertTrue(booking.is_business_trip)
+        self.assertEqual(booking.tax_id, "B12345678")
+
+    def test_create_booking_saves_guest_snapshot(self):
+        self.client.force_login(self.tenant)
+
+        response = self.client.post(
+            reverse(
+                "confirm_booking",
+                kwargs={"property_id": self.property.pk},
+            ),
+            data=json.dumps({
+                "start": (
+                    date.today() + timedelta(days=5)
+                ).isoformat(),
+                "end": (
+                    date.today() + timedelta(days=7)
+                ).isoformat(),
+                **self.booking_payload,
+            }),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+        booking = Booking.objects.get(
+            pk=response.json()["booking_id"]
+        )
+
+        self.assertEqual(booking.guest_first_name, "Juan")
+        self.assertEqual(booking.guest_last_name, "García")
+        self.assertEqual(booking.guest_email, "juan@example.com")
+        self.assertEqual(booking.guest_phone_number, "+34600111222")
+        self.assertEqual(booking.guest_country, "España")
+        self.assertEqual(booking.guest_region, "Madrid")
+        self.assertEqual(booking.guest_city, "Madrid")
+        self.assertEqual(booking.guest_postal_code, "28001")
+        self.assertEqual(booking.guest_address, "Calle Mayor 1")
+        self.assertTrue(booking.is_for_self)
+        self.assertFalse(booking.is_business_trip)
+        self.assertEqual(booking.guest_count, 2)
+        self.assertEqual(booking.special_requests, "")
+        self.assertEqual(booking.arrival_time, time(18, 0))
 
 class BookingCancellationViewTestCase(BookingTestBase):
 
@@ -2603,6 +2952,7 @@ class BookingCancellationViewTestCase(BookingTestBase):
             property=self.property,
             initial_date=date.today() + timedelta(days=5),
             final_date=date.today() + timedelta(days=7),
+            **self.booking_data
         )
 
         response = self.client.get(
@@ -2631,6 +2981,7 @@ class BookingCancellationViewTestCase(BookingTestBase):
             initial_date=date.today() + timedelta(days=5),
             final_date=date.today() + timedelta(days=7),
             status="CONFIRMED",
+            **self.booking_data
         )
 
         response = self.client.post(
@@ -2662,6 +3013,7 @@ class BookingCancellationViewTestCase(BookingTestBase):
             initial_date=date.today() + timedelta(days=5),
             final_date=date.today() + timedelta(days=7),
             status="CONFIRMED",
+            **self.booking_data
         )
 
         self.client.force_login(self.tenant)
@@ -2851,6 +3203,15 @@ class PropertySearchTestCase(TestCase):
             initial_date=date.today(),
             final_date=date.today() + timedelta(days=3),
             status="CONFIRMED",
+            guest_first_name="Test",
+            guest_last_name="Guest",
+            guest_email="test@example.com",
+            guest_phone_number="+34600000000",
+            guest_country="España",
+            guest_city="Madrid",
+            guest_address="Calle Test 1",
+            guest_count=1,
+            arrival_time=time(15, 0),
         )
 
         response = self.client.get(
@@ -2864,7 +3225,6 @@ class PropertySearchTestCase(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertNotContains(response, "Casa Ocupada")
-
 
     def test_public_property_search_includes_property_owned_by_other_user(self):
         self.client.logout()
@@ -3125,6 +3485,16 @@ class PropertyAvailabilityTestCase(TestCase):
             property=self.property,
             initial_date=booking_start,
             final_date=booking_end,
+            status="CONFIRMED",
+            guest_first_name="Test",
+            guest_last_name="Guest",
+            guest_email="test@example.com",
+            guest_phone_number="+34600000000",
+            guest_country="España",
+            guest_city="Madrid",
+            guest_address="Calle Test 1",
+            guest_count=1,
+            arrival_time=time(15, 0),
         )
 
         self.client.force_login(self.owner)

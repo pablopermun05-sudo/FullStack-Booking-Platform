@@ -12,7 +12,7 @@ from django.forms import ModelForm
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.forms import AuthenticationForm
 from django.http import JsonResponse
-from datetime import date, timedelta
+from datetime import date, time, timedelta
 from django.utils import timezone
 from decimal import Decimal, InvalidOperation
 from django.core.paginator import Paginator, PageNotAnInteger, EmptyPage
@@ -117,6 +117,7 @@ def my_properties(request):
     
     properties = Property.objects.filter(owner=request.user).order_by("id")
     
+    properties = properties.order_by("id")
     paginator = Paginator(properties, 6)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
@@ -609,6 +610,7 @@ def properties(request):
             effective_min_nights__lte=total_nights,
         )
 
+    properties = properties.order_by("id")
     paginator = Paginator(properties, 6)
     page_number = request.GET.get("page")
 
@@ -728,52 +730,135 @@ PENDING_BOOKING_MINUTES = 15
 
 def create_booking(request, property_id):
     if request.method != "POST":
-        return JsonResponse({"error": "Method not allowed"}, status=405)
+        return JsonResponse(
+            {"error": "Method not allowed"},
+            status=405,
+        )
 
     try:
         data = json.loads(request.body)
     except json.JSONDecodeError:
-        return JsonResponse({"error": "JSON inválido"}, status=400)
+        return JsonResponse(
+            {"error": "JSON inválido"},
+            status=400,
+        )
 
     if not isinstance(data, dict):
-        return JsonResponse({"error": "JSON inválido"}, status=400)
+        return JsonResponse(
+            {"error": "JSON inválido"},
+            status=400,
+        )
 
-    initial_date = data.get("start")
-    final_date = data.get("end")
+    initial_date_raw = data.get("start")
+    final_date_raw = data.get("end")
 
-    if not initial_date or not final_date:
+    if not initial_date_raw or not final_date_raw:
         return JsonResponse(
             {"error": "Ambas fechas deben ser seleccionadas."},
             status=400,
         )
 
-    if request.user.is_authenticated:
-        tenant = request.user
-        guest_first_name = ""
-        guest_last_name = ""
-        guest_email = ""
-    else:
-        tenant = None
-        guest_first_name = data.get("first_name", "").strip()
-        guest_last_name = data.get("last_name", "").strip()
-        guest_email = data.get("email", "").strip()
-
-        if not guest_first_name or not guest_last_name or not guest_email:
-            return JsonResponse(
-                {"error": "Nombre, apellidos y email son obligatorios."},
-                status=400,
-            )
-
-    property = get_object_or_404(Property, pk=property_id)
-
     try:
-        initial_date = date.fromisoformat(initial_date)
-        final_date = date.fromisoformat(final_date)
-    except ValueError:
+        initial_date = date.fromisoformat(initial_date_raw)
+        final_date = date.fromisoformat(final_date_raw)
+    except (TypeError, ValueError):
         return JsonResponse(
             {"error": "Formato de fecha inválido."},
             status=400,
         )
+
+    property = get_object_or_404(
+        Property,
+        pk=property_id,
+    )
+
+    guest_first_name = data.get("guest_first_name", "").strip()
+    guest_last_name = data.get("guest_last_name", "").strip()
+    guest_email = data.get("guest_email", "").strip()
+    guest_phone_number = data.get("guest_phone_number", "").strip()
+
+    guest_country = data.get("guest_country", "").strip()
+    guest_region = data.get("guest_region", "").strip()
+    guest_city = data.get("guest_city", "").strip()
+    guest_postal_code = data.get("guest_postal_code", "").strip()
+    guest_address = data.get("guest_address", "").strip()
+
+    is_for_self = data.get("is_for_self", True)
+    is_business_trip = data.get("is_business_trip", False)
+
+    if not isinstance(is_for_self, bool):
+        return JsonResponse(
+            {"error": "is_for_self debe ser booleano."},
+            status=400,
+        )
+
+    if not isinstance(is_business_trip, bool):
+        return JsonResponse(
+            {"error": "is_business_trip debe ser booleano."},
+            status=400,
+        )
+
+    tax_id = data.get("tax_id", "").strip()
+    special_requests = data.get("special_requests", "").strip()
+
+    raw_guest_count = data.get("guest_count")
+    raw_arrival_time = data.get("arrival_time")
+
+    required_fields = {
+        "guest_first_name": guest_first_name,
+        "guest_last_name": guest_last_name,
+        "guest_email": guest_email,
+        "guest_phone_number": guest_phone_number,
+        "guest_country": guest_country,
+        "guest_city": guest_city,
+        "guest_address": guest_address,
+        "guest_count": raw_guest_count,
+        "arrival_time": raw_arrival_time,
+    }
+
+    missing_fields = [
+        field
+        for field, value in required_fields.items()
+        if value is None or value == ""
+    ]
+
+    if missing_fields:
+        return JsonResponse(
+            {
+                "error": "Faltan campos obligatorios.",
+                "fields": missing_fields,
+            },
+            status=400,
+        )
+
+    try:
+        guest_count = int(raw_guest_count)
+    except (TypeError, ValueError):
+        return JsonResponse(
+            {
+                "error": (
+                    "El número de huéspedes debe ser "
+                    "un número entero."
+                )
+            },
+            status=400,
+        )
+
+    try:
+        arrival_time = time.fromisoformat(raw_arrival_time)
+    except (TypeError, ValueError):
+        return JsonResponse(
+            {
+                "error": "Formato de hora de llegada inválido."
+            },
+            status=400,
+        )
+
+    tenant = (
+        request.user
+        if request.user.is_authenticated
+        else None
+    )
 
     try:
         expires_at = timezone.now() + timedelta(
@@ -789,11 +874,29 @@ def create_booking(request, property_id):
             guest_first_name=guest_first_name,
             guest_last_name=guest_last_name,
             guest_email=guest_email,
+            guest_phone_number=guest_phone_number,
+            guest_country=guest_country,
+            guest_region=guest_region,
+            guest_city=guest_city,
+            guest_postal_code=guest_postal_code,
+            guest_address=guest_address,
+            is_for_self=is_for_self,
+            is_business_trip=is_business_trip,
+            tax_id=tax_id,
+            guest_count=guest_count,
+            special_requests=special_requests,
+            arrival_time=arrival_time,
         )
 
     except ValidationError as e:
         return JsonResponse(
-            {"error": e.message_dict if hasattr(e, "message_dict") else str(e)},
+            {
+                "error": (
+                    e.message_dict
+                    if hasattr(e, "message_dict")
+                    else str(e)
+                )
+            },
             status=400,
         )
 
