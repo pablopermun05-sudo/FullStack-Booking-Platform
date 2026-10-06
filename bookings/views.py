@@ -888,6 +888,14 @@ def create_booking(request, property_id):
             arrival_time=arrival_time,
         )
 
+    except IntegrityError:
+        return JsonResponse(
+            {
+                "error": "El alojamiento ya está reservado en esas fechas."
+            },
+            status=409,
+        )
+
     except ValidationError as e:
         return JsonResponse(
             {
@@ -899,7 +907,7 @@ def create_booking(request, property_id):
             },
             status=400,
         )
-
+    
     return JsonResponse(
         {
             "success": True,

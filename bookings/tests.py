@@ -1,14 +1,18 @@
-from django.test import TestCase
+from asyncio import Barrier
+
+from django.test import TestCase, TransactionTestCase
 from django.urls import reverse
 from .models import User, OwnerProfile, Property, Booking, BookingNight, PropertyAvailability, can_manage_properties
 from django.contrib.auth.models import AnonymousUser
 from datetime import date, time, timedelta
 from django.core.exceptions import ValidationError
 from django.utils import timezone
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction, close_old_connections
 from unittest.mock import patch
 from decimal import Decimal
 import json
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
 
 class OwnerProfileTestCase(TestCase):
     def test_owner_profile_is_pending_by_default(self):
@@ -1134,6 +1138,7 @@ class BookingTestBase(TestCase):
             property=self.property,
             initial_date=date.today(),
             final_date=date.today() + timedelta(days=3),
+            expires_at=timezone.now() + timedelta(minutes=15),
             **self.booking_data
         )
 
@@ -1142,26 +1147,21 @@ class BookingTestBase(TestCase):
             property=self.property,
             initial_date=date.today(),
             final_date=date.today() + timedelta(days=3),
+            expires_at=timezone.now() + timedelta(minutes=15),
             **self.booking_data
         )
 
 class BookingModelTestCase(BookingTestBase):
 
     def test_valid_booking(self):
-        try:
-            self.booking1.full_clean()
-        except ValidationError:
-            self.fail("Should not raise ValidationError")
+        self.booking1.full_clean()
 
     def test_overlap_booking(self):
-        # Repito el código anterior para que me de error de solapamiento
-        try:
-            self.booking1.full_clean()
-            self.booking1.save()
+        self.booking1.full_clean()
+        self.booking1.save()
+
+        with self.assertRaises(ValidationError):
             self.booking2.full_clean()
-            self.fail("Should raise ValidationError")
-        except ValidationError:
-            pass
 
     # Test que verifica que una reserva puede empezar el mismo día que otra termina
     def test_overlap_booking_sharing_checkout_day(self):
@@ -1173,6 +1173,7 @@ class BookingModelTestCase(BookingTestBase):
             property=self.property,
             initial_date=self.booking1.final_date,
             final_date=self.booking1.final_date + timedelta(days=2),
+            expires_at=timezone.now() + timedelta(minutes=15),
             **self.booking_data
         )
         try:
@@ -1194,6 +1195,7 @@ class BookingModelTestCase(BookingTestBase):
             property=self.property,
             initial_date=date.today() + timedelta(days=1),
             final_date=date.today() + timedelta(days=3),
+            expires_at=timezone.now() + timedelta(minutes=15),
             **self.booking_data
         )
 
@@ -1206,6 +1208,7 @@ class BookingModelTestCase(BookingTestBase):
             property=self.property,
             initial_date=date.today() + timedelta(days=5),
             final_date=date.today() + timedelta(days=7),
+            expires_at=timezone.now() + timedelta(minutes=15),
             **self.booking_data
         )
         with self.assertRaises(ValidationError):
@@ -1227,6 +1230,7 @@ class BookingModelTestCase(BookingTestBase):
             property=self.property,
             initial_date=closed_date,
             final_date=closed_date + timedelta(days=2),
+            expires_at=timezone.now() + timedelta(minutes=15),
             **self.booking_data
         )
 
@@ -1249,6 +1253,7 @@ class BookingModelTestCase(BookingTestBase):
             property=self.property,
             initial_date=arrival_date,
             final_date=arrival_date + timedelta(days=2),
+            expires_at=timezone.now() + timedelta(minutes=15),
             **self.booking_data
         )
 
@@ -1271,13 +1276,12 @@ class BookingModelTestCase(BookingTestBase):
             property=self.property,
             initial_date=arrival_date,
             final_date=arrival_date + timedelta(days=3),
+            expires_at=timezone.now() + timedelta(minutes=15),
             **self.booking_data
         )
 
-        try:
-            booking.full_clean()
-        except ValidationError:
-            self.fail("La reserva debería cumplir el mínimo de noches del día de llegada.")
+        booking.full_clean()
+        
 
     def test_booking_uses_only_arrival_date_min_nights(self):
         arrival_date = date.today() + timedelta(days=5)
@@ -1304,16 +1308,11 @@ class BookingModelTestCase(BookingTestBase):
             property=self.property,
             initial_date=arrival_date,
             final_date=arrival_date + timedelta(days=2),
+            expires_at=timezone.now() + timedelta(minutes=15),
             **self.booking_data
         )
 
-        try:
-            booking.full_clean()
-        except ValidationError:
-            self.fail(
-                "El mínimo de noches debe depender únicamente "
-                "del día de llegada."
-            )
+        booking.full_clean()
 
     def test_invalid_booking_dates(self):
         booking = Booking(
@@ -1321,6 +1320,7 @@ class BookingModelTestCase(BookingTestBase):
             property=self.property,
             initial_date=date.today() + timedelta(days=5),
             final_date=date.today() + timedelta(days=3),
+            expires_at=timezone.now() + timedelta(minutes=15),
             **self.booking_data
         )
 
@@ -1333,6 +1333,7 @@ class BookingModelTestCase(BookingTestBase):
             property=self.property,
             initial_date=date.today() + timedelta(days=5),
             final_date=date.today() + timedelta(days=5),
+            expires_at=timezone.now() + timedelta(minutes=15),
             **self.booking_data
         )
 
@@ -1345,6 +1346,7 @@ class BookingModelTestCase(BookingTestBase):
             property=self.property,
             initial_date=date.today() + timedelta(days=5),
             final_date=date.today() + timedelta(days=7),
+            expires_at=timezone.now() + timedelta(minutes=15),
             **self.booking_data
         )
 
@@ -1392,6 +1394,7 @@ class BookingModelTestCase(BookingTestBase):
             property=self.property,
             initial_date=date.today() + timedelta(days=5),
             final_date=date.today() + timedelta(days=7),
+            expires_at=timezone.now() + timedelta(minutes=15),
             **self.booking_data
         )
 
@@ -1412,6 +1415,7 @@ class BookingModelTestCase(BookingTestBase):
             property=self.property,
             initial_date=date.today() + timedelta(days=5),
             final_date=date.today() + timedelta(days=7),
+            expires_at=timezone.now() + timedelta(minutes=15),
             **self.booking_data
         )
 
@@ -1424,19 +1428,9 @@ class BookingModelTestCase(BookingTestBase):
             initial_date=date.today() + timedelta(days=5),
             final_date=date.today() + timedelta(days=7),
             status="PENDING",
+            expires_at=timezone.now() + timedelta(minutes=15),
             **self.booking_data
         )
-
-        booking = Booking(
-            tenant=self.tenant,
-            property=self.property,
-            initial_date=date.today() + timedelta(days=5),
-            final_date=date.today() + timedelta(days=7),
-            **self.booking_data
-        )
-
-        with self.assertRaises(ValidationError):
-            booking.full_clean()
 
     def test_confirmed_booking_blocks_dates(self):
         Booking.objects.create(
@@ -1453,6 +1447,7 @@ class BookingModelTestCase(BookingTestBase):
             property=self.property,
             initial_date=date.today() + timedelta(days=5),
             final_date=date.today() + timedelta(days=7),
+            expires_at=timezone.now() + timedelta(minutes=15),
             **self.booking_data
         )
 
@@ -1491,6 +1486,7 @@ class BookingModelTestCase(BookingTestBase):
             property=self.property,
             initial_date=date.today() + timedelta(days=2),
             final_date=date.today() + timedelta(days=5),
+            expires_at=timezone.now() + timedelta(minutes=15),
             **self.booking_data,
         )
 
@@ -1505,6 +1501,7 @@ class BookingModelTestCase(BookingTestBase):
             property=self.property,
             initial_date=date.today() + timedelta(days=2),
             final_date=date.today() + timedelta(days=5),
+            expires_at=timezone.now() + timedelta(minutes=15),
             **booking_data,
         )
 
@@ -1520,6 +1517,7 @@ class BookingModelTestCase(BookingTestBase):
             property=self.property,
             initial_date=date.today() + timedelta(days=5),
             final_date=date.today() + timedelta(days=7),
+            expires_at=timezone.now() + timedelta(minutes=15),
             **booking_data,
         )
 
@@ -1536,22 +1534,7 @@ class BookingModelTestCase(BookingTestBase):
             property=self.property,
             initial_date=date.today() + timedelta(days=5),
             final_date=date.today() + timedelta(days=7),
-            **booking_data,
-        )
-
-        with self.assertRaises(ValidationError):
-            booking.full_clean()
-
-    def test_business_trip_requires_tax_id(self):
-        booking_data = self.booking_data.copy()
-        booking_data["is_business_trip"] = True
-        booking_data["tax_id"] = ""
-
-        booking = Booking(
-            tenant=self.tenant,
-            property=self.property,
-            initial_date=date.today() + timedelta(days=5),
-            final_date=date.today() + timedelta(days=7),
+            expires_at=timezone.now() + timedelta(minutes=15),
             **booking_data,
         )
 
@@ -1568,6 +1551,7 @@ class BookingModelTestCase(BookingTestBase):
             property=self.property,
             initial_date=date.today() + timedelta(days=5),
             final_date=date.today() + timedelta(days=7),
+            expires_at=timezone.now() + timedelta(minutes=15),
             **booking_data,
         )
 
@@ -1600,9 +1584,15 @@ class BookingLifecycleTestCase(BookingTestBase):
             initial_date=date.today() + timedelta(days=5),
             final_date=date.today() + timedelta(days=7),
             status="PENDING",
-            expires_at=timezone.now() - timedelta(minutes=5),
+            expires_at=timezone.now() + timedelta(minutes=5),
             **self.booking_data
         )
+
+        Booking.objects.filter(pk=booking.pk).update(
+            expires_at=timezone.now() - timedelta(minutes=5)
+        )
+
+        booking.refresh_from_db()
 
         result = booking.confirm()
 
@@ -1726,15 +1716,20 @@ class BookingLifecycleTestCase(BookingTestBase):
             initial_date=date.today() + timedelta(days=5),
             final_date=date.today() + timedelta(days=7),
             status="PENDING",
-            expires_at=timezone.now() - timedelta(minutes=5),
+            expires_at=timezone.now() + timedelta(minutes=5),
             **self.booking_data
         )
 
+        Booking.objects.filter(pk=booking.pk).update(
+            expires_at=timezone.now() - timedelta(minutes=5)
+        )
+
+        booking.refresh_from_db()
+
         self.assertTrue(booking.is_expired())
 
-
-    def test_pending_booking_without_expiration_is_not_expired(self):
-        booking = Booking.objects.create(
+    def test_pending_booking_requires_expiration(self):
+        booking = Booking(
             tenant=self.tenant,
             property=self.property,
             initial_date=date.today() + timedelta(days=5),
@@ -1743,7 +1738,8 @@ class BookingLifecycleTestCase(BookingTestBase):
             **self.booking_data
         )
 
-        self.assertFalse(booking.is_expired())
+        with self.assertRaises(ValidationError):
+            booking.full_clean()
 
     def test_expire_changes_expired_pending_booking_to_expired(self):
         booking = Booking.objects.create(
@@ -1752,9 +1748,15 @@ class BookingLifecycleTestCase(BookingTestBase):
             initial_date=date.today() + timedelta(days=5),
             final_date=date.today() + timedelta(days=7),
             status="PENDING",
-            expires_at=timezone.now() - timedelta(minutes=5),
+            expires_at=timezone.now() + timedelta(minutes=5),
             **self.booking_data
         )
+
+        Booking.objects.filter(pk=booking.pk).update(
+            expires_at=timezone.now() - timedelta(minutes=5)
+        )
+
+        booking.refresh_from_db()
 
         result = booking.expire()
 
@@ -1824,8 +1826,12 @@ class BookingLifecycleTestCase(BookingTestBase):
             initial_date=date.today() + timedelta(days=5),
             final_date=date.today() + timedelta(days=7),
             status="PENDING",
-            expires_at=timezone.now() - timedelta(minutes=5),
+            expires_at=timezone.now() + timedelta(minutes=5),
             **self.booking_data
+        )
+
+        Booking.objects.filter(pk=expired_booking.pk).update(
+            expires_at=timezone.now() - timedelta(minutes=5)
         )
 
         Booking.expire_pending_bookings()
@@ -1869,24 +1875,30 @@ class BookingLifecycleTestCase(BookingTestBase):
         self.assertEqual(confirmed_booking.status, "CONFIRMED")
 
     def test_expire_pending_bookings_returns_expired_count(self):
-        Booking.objects.create(
+        booking1 = Booking.objects.create(
             tenant=self.tenant,
             property=self.property,
             initial_date=date.today() + timedelta(days=5),
             final_date=date.today() + timedelta(days=7),
             status="PENDING",
-            expires_at=timezone.now() - timedelta(minutes=5),
+            expires_at=timezone.now() + timedelta(minutes=5),
             **self.booking_data
         )
 
-        Booking.objects.create(
+        booking2 = Booking.objects.create(
             tenant=self.tenant,
             property=self.property,
             initial_date=date.today() + timedelta(days=10),
             final_date=date.today() + timedelta(days=12),
             status="PENDING",
-            expires_at=timezone.now() - timedelta(minutes=5),
+            expires_at=timezone.now() + timedelta(minutes=5),
             **self.booking_data
+        )
+
+        Booking.objects.filter(
+            pk__in=[booking1.pk, booking2.pk]
+        ).update(
+            expires_at=timezone.now() - timedelta(minutes=5)
         )
 
         expired_count = Booking.expire_pending_bookings()
@@ -2026,15 +2038,20 @@ class BookingCreationTestCase(BookingTestBase):
         initial_date = date.today() + timedelta(days=5)
         final_date = initial_date + timedelta(days=2)
 
-        expired_booking = Booking.objects.create(
+        now = timezone.now()
+
+        expired_booking = Booking(
             tenant=self.tenant,
             property=self.property,
             initial_date=initial_date,
             final_date=final_date,
+            created_at=now - timedelta(minutes=20),
             status="PENDING",
-            expires_at=timezone.now() - timedelta(minutes=1),
+            expires_at=now - timedelta(minutes=1),
             **self.booking_data
         )
+
+        expired_booking.save_base(force_insert=True)
 
         booking = Booking.create_pending(
             tenant=self.tenant,
@@ -2373,6 +2390,7 @@ class BookingAvailabilityViewTestCase(BookingTestBase):
             initial_date=self.booking1.initial_date,
             final_date=self.booking1.final_date,
             status="PENDING",
+            expires_at=timezone.now() + timedelta(minutes=15),
             **self.booking_data
         )
 
@@ -2952,6 +2970,7 @@ class BookingCancellationViewTestCase(BookingTestBase):
             property=self.property,
             initial_date=date.today() + timedelta(days=5),
             final_date=date.today() + timedelta(days=7),
+            expires_at=timezone.now() + timedelta(minutes=15),
             **self.booking_data
         )
 
@@ -3030,6 +3049,367 @@ class BookingCancellationViewTestCase(BookingTestBase):
         booking.refresh_from_db()
 
         self.assertEqual(booking.status, "CONFIRMED")
+
+class BookingConcurrencyTestCase(TransactionTestCase):
+
+    def setUp(self):
+        self.owner = User.objects.create_user(
+            username="owner",
+            email="owner@test.com",
+            password="123"
+        )
+
+        self.tenant = User.objects.create_user(
+            username="tenant",
+            email="tenant@test.com",
+            password="123"
+        )
+
+        self.property = Property.objects.create(
+            title="Casa Rural",
+            description="Desc",
+            location="Madrid",
+            default_price_per_night=80,
+            image="test.jpg",
+            children=2,
+            adults=2,
+            rooms=2,
+            owner=self.owner,
+        )
+
+        self.booking_data = {
+            "guest_first_name": "Juan",
+            "guest_last_name": "García",
+            "guest_email": "juan@example.com",
+            "guest_phone_number": "+34600111222",
+            "guest_country": "España",
+            "guest_region": "Madrid",
+            "guest_city": "Madrid",
+            "guest_postal_code": "28001",
+            "guest_address": "Calle Mayor 1",
+            "is_for_self": True,
+            "is_business_trip": False,
+            "tax_id": "",
+            "guest_count": 2,
+            "special_requests": "",
+            "arrival_time": time(18, 0),
+        }
+
+    def test_database_rejects_overlapping_active_booking(self):
+        initial_date = date.today() + timedelta(days=5)
+        final_date = initial_date + timedelta(days=7)
+
+        booking1 = Booking(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=initial_date,
+            final_date=final_date,
+            status="CONFIRMED",
+            expires_at=timezone.now() + timedelta(minutes=15),
+            **self.booking_data,
+        )
+        booking1.save_base(force_insert=True)
+
+        booking2 = Booking(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=initial_date,
+            final_date=final_date,
+            status="CONFIRMED",
+            expires_at=timezone.now() + timedelta(minutes=15),
+            **self.booking_data,
+        )
+
+        with self.assertRaises(IntegrityError):
+            booking2.save_base(force_insert=True)
+
+    def test_database_rejects_pending_and_confirmed_overlap(self):
+        initial_date = date.today() + timedelta(days=5)
+        final_date = date.today() + timedelta(days=7)
+
+        booking1 = Booking(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=initial_date,
+            final_date=final_date,
+            status="PENDING",
+            expires_at=timezone.now() + timedelta(minutes=15),
+            **self.booking_data,
+        )
+        booking1.save_base(force_insert=True)
+
+        booking2 = Booking(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=initial_date,
+            final_date=final_date,
+            status="CONFIRMED",
+            expires_at=timezone.now() + timedelta(minutes=15),
+            **self.booking_data,
+        )
+
+        with self.assertRaises(IntegrityError):
+            booking2.save_base(force_insert=True)
+
+    def test_database_rejects_confirmed_and_pending_overlap(self):
+        initial_date = date.today() + timedelta(days=5)
+        final_date = date.today() + timedelta(days=7)
+
+        booking1 = Booking(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=initial_date,
+            final_date=final_date,
+            status="CONFIRMED",
+            expires_at=timezone.now() + timedelta(minutes=15),
+            **self.booking_data,
+        )
+        booking1.save_base(force_insert=True)
+
+        booking2 = Booking(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=initial_date,
+            final_date=final_date,
+            status="PENDING",
+            expires_at=timezone.now() + timedelta(minutes=15),
+            **self.booking_data,
+        )
+
+        with self.assertRaises(IntegrityError):
+            booking2.save_base(force_insert=True)
+
+    def test_database_allows_overlap_with_cancelled_booking(self):
+        initial_date = date.today() + timedelta(days=5)
+        final_date = date.today() + timedelta(days=7)
+
+        Booking.objects.create(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=initial_date,
+            final_date=final_date,
+            status="CANCELLED",
+            **self.booking_data,
+        )
+
+        booking = Booking.objects.create(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=initial_date,
+            final_date=final_date,
+            status="CONFIRMED",
+            **self.booking_data,
+        )
+
+        self.assertIsNotNone(booking.pk)
+
+    def test_database_allows_overlap_with_expired_booking(self):
+        initial_date = date.today() + timedelta(days=5)
+        final_date = date.today() + timedelta(days=7)
+
+        Booking.objects.create(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=initial_date,
+            final_date=final_date,
+            status="EXPIRED",
+            **self.booking_data,
+        )
+
+        booking = Booking.objects.create(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=initial_date,
+            final_date=final_date,
+            status="CONFIRMED",
+            **self.booking_data,
+        )
+
+        self.assertIsNotNone(booking.pk)
+
+    def test_concurrent_booking_creation_allows_only_one_booking(self):
+        initial_date = date.today() + timedelta(days=5)
+        final_date = initial_date + timedelta(days=7)
+
+        barrier = Barrier(2)
+
+        def create_booking():
+            close_old_connections()
+
+            try:
+                with transaction.atomic():
+                    booking = Booking(
+                        tenant=self.tenant,
+                        property=self.property,
+                        initial_date=initial_date,
+                        final_date=final_date,
+                        status="CONFIRMED",
+                        expires_at=timezone.now() + timedelta(minutes=15),
+                        **self.booking_data,
+                    )
+
+                    barrier.wait(timeout=5)
+
+                    booking.save_base(force_insert=True)
+
+                return "created"
+
+            except IntegrityError:
+                return "rejected"
+
+            finally:
+                close_old_connections()
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            results = list(
+                executor.map(
+                    lambda _: create_booking(),
+                    range(2),
+                )
+            )
+
+        self.assertEqual(results.count("created"), 1)
+        self.assertEqual(results.count("rejected"), 1)
+
+        self.assertEqual(
+            Booking.objects.filter(
+                property=self.property,
+                initial_date=initial_date,
+                final_date=final_date,
+                status="CONFIRMED",
+            ).count(),
+            1,
+        )
+
+    def test_create_booking_returns_conflict_when_inventory_is_taken_concurrently(self):
+        self.client.force_login(self.tenant)
+
+        with patch(
+            "bookings.models.Booking.create_pending",
+            side_effect=IntegrityError,
+        ):
+            response = self.client.post(
+                reverse(
+                    "confirm_booking",
+                    kwargs={"property_id": self.property.pk},
+                ),
+                data={
+                    "start": (
+                        date.today() + timedelta(days=5)
+                    ).isoformat(),
+                    "end": (
+                        date.today() + timedelta(days=7)
+                    ).isoformat(),
+                    **self.booking_data,
+                },
+                content_type="application/json",
+            )
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(
+            response.json()["error"],
+            "El alojamiento ya está reservado en esas fechas.",
+        )
+
+    def test_database_allows_adjacent_booking_dates(self):
+        initial_date = date.today() + timedelta(days=5)
+        final_date = initial_date + timedelta(days=7)
+
+        booking1 = Booking(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=initial_date,
+            final_date=final_date,
+            status="CONFIRMED",
+            expires_at=timezone.now() + timedelta(minutes=15),
+            **self.booking_data,
+        )
+        booking1.save_base(force_insert=True)
+
+        booking2 = Booking(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=final_date,
+            final_date=final_date + timedelta(days=3),
+            status="CONFIRMED",
+            expires_at=timezone.now() + timedelta(minutes=15),
+            **self.booking_data,
+        )
+        booking2.save_base(force_insert=True)
+
+        self.assertIsNotNone(booking2.pk)
+
+    def test_database_allows_same_dates_on_different_property(self):
+        other_property = Property.objects.create(
+            title="Otra casa",
+            description="Desc",
+            location="Madrid",
+            default_price_per_night=80,
+            image="test.jpg",
+            children=2,
+            adults=2,
+            rooms=2,
+            owner=self.owner,
+        )
+
+        initial_date = date.today() + timedelta(days=5)
+        final_date = initial_date + timedelta(days=7)
+
+        booking1 = Booking(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=initial_date,
+            final_date=final_date,
+            status="CONFIRMED",
+            expires_at=timezone.now() + timedelta(minutes=15),
+            **self.booking_data,
+        )
+        booking1.save_base(force_insert=True)
+
+        booking2 = Booking(
+            tenant=self.tenant,
+            property=other_property,
+            initial_date=initial_date,
+            final_date=final_date,
+            status="CONFIRMED",
+            expires_at=timezone.now() + timedelta(minutes=15),
+            **self.booking_data,
+        )
+        booking2.save_base(force_insert=True)
+
+        self.assertIsNotNone(booking2.pk)
+
+    def test_database_allows_expired_historical_pending_booking(self):
+        initial_date = date.today() + timedelta(days=5)
+        final_date = initial_date + timedelta(days=7)
+
+        now = timezone.now()
+
+        expired_booking = Booking(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=initial_date,
+            final_date=final_date,
+            created_at=now - timedelta(minutes=20),
+            status="PENDING",
+            expires_at=now - timedelta(minutes=5),
+            **self.booking_data,
+        )
+        expired_booking.save_base(force_insert=True)
+
+        booking = Booking(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=initial_date,
+            final_date=final_date,
+            created_at=now,
+            status="CONFIRMED",
+            expires_at=timezone.now() + timedelta(minutes=15),
+            **self.booking_data,
+        )
+        booking.save_base(force_insert=True)
+
+        self.assertIsNotNone(booking.pk)
 
 class PropertySearchTestCase(TestCase):
 

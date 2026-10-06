@@ -7,7 +7,9 @@ from datetime import date, timedelta
 from django.utils import timezone
 from builtins import property as python_property
 from decimal import Decimal
-from django.db.models import Q
+from django.db.models import Q, DateTimeField, F, Func, Value
+from django.contrib.postgres.constraints import ExclusionConstraint
+from django.contrib.postgres.fields import DateRangeField, DateTimeRangeField, RangeOperators
 
 class User(AbstractUser):
     first_name = models.CharField("Nombre", max_length=150, blank=False)
@@ -93,6 +95,70 @@ class Property(models.Model):
         self.full_clean()
         super().save(*args, **kwargs)
 
+class BookingDateRange(Func):
+    function = "DATERANGE"
+    output_field = DateRangeField()
+
+    def __init__(self, start, end, **extra):
+        super().__init__(
+            start,
+            end,
+            Value("[)"),
+            **extra,
+        )
+
+class BookingInventoryRange(Func):
+    output_field = DateTimeRangeField()
+
+    def __init__(
+        self,
+        created_at="created_at",
+        expires_at="expires_at",
+        status="status",
+        **extra,
+    ):
+        super().__init__(
+            F(created_at),
+            F(expires_at),
+            F(status),
+            **extra,
+        )
+
+    def as_sql(self, compiler, connection, **extra_context):
+        created_at, expires_at, status = self.source_expressions
+
+        created_sql, created_params = compiler.compile(created_at)
+        expires_sql, expires_params = compiler.compile(expires_at)
+        status_sql, status_params = compiler.compile(status)
+
+        sql = (
+            "CASE "
+            f"WHEN {status_sql} = 'CONFIRMED' "
+            f"THEN TSTZRANGE("
+            f"{created_sql}, "
+            f"'infinity'::timestamptz, "
+            f"'[)'"
+            f") "
+            f"WHEN {status_sql} = 'PENDING' "
+            f"AND {expires_sql} IS NOT NULL "
+            f"AND {expires_sql} > {created_sql} "
+            f"THEN TSTZRANGE("
+            f"{created_sql}, "
+            f"{expires_sql}, "
+            f"'[)'"
+            f") "
+            "ELSE TSTZRANGE(NULL, NULL, '[)') "
+            "END"
+        )
+
+        params = (
+            *created_params,
+            *expires_params,
+            *status_params,
+        )
+
+        return sql, params
+        
 class Booking(models.Model):
     STATUS_CHOICES = [
         ("PENDING", "Pendiente"),
@@ -134,13 +200,16 @@ class Booking(models.Model):
     property = models.ForeignKey(Property, on_delete=models.CASCADE, related_name="bookings")
     initial_date = models.DateField()
     final_date = models.DateField()
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(default=timezone.now, editable=False)
     status = models.CharField(
         max_length=10,
         choices=STATUS_CHOICES,
         default="PENDING",
     )
-    expires_at = models.DateTimeField(null=True, blank=True)
+    expires_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
 
     def is_expired(self):
         if self.status != "PENDING":
@@ -169,7 +238,6 @@ class Booking(models.Model):
 
             return True
 
-
     def expire(self):
         with transaction.atomic():
             booking = type(self).objects.select_for_update().get(pk=self.pk)
@@ -183,7 +251,6 @@ class Booking(models.Model):
             self.status = booking.status
 
             return True
-
 
     def cancel(self):
         with transaction.atomic():
@@ -265,6 +332,43 @@ class Booking(models.Model):
     class Meta:
         verbose_name = "Reserva"
         verbose_name_plural = "Reservas"
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(initial_date__lt=F("final_date")),
+                name="booking_valid_date_range",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    ~Q(status="PENDING")
+                    | Q(expires_at__isnull=False)
+                ),
+                name="booking_pending_requires_expiration",
+            ),
+            ExclusionConstraint(
+                name="booking_no_concurrent_inventory_overlap",
+                condition=(
+                    Q(initial_date__lt=F("final_date"))
+                    & Q(status__in=["PENDING", "CONFIRMED"])
+                ),
+                expressions=[
+                    (
+                        BookingDateRange(
+                            "initial_date",
+                            "final_date",
+                        ),
+                        RangeOperators.OVERLAPS,
+                    ),
+                    (
+                        F("property"),
+                        RangeOperators.EQUAL,
+                    ),
+                    (
+                        BookingInventoryRange(),
+                        RangeOperators.OVERLAPS,
+                    ),
+                ],
+            ),
+        ]
 
     def __str__(self):
         return f"Reserva de {self.tenant} en {self.property.title}"
@@ -324,6 +428,22 @@ class Booking(models.Model):
                 f"{arrival_availability['min_nights']} noches."
             )
 
+        if self.status == "PENDING":
+            if self.expires_at is None:
+                raise ValidationError(
+                    "Una reserva pendiente debe tener una fecha de expiración."
+                )
+
+            if self.expires_at <= timezone.now():
+                raise ValidationError(
+                    "La fecha de expiración debe ser posterior al momento actual."
+                )
+
+            if self.expires_at <= self.created_at:
+                raise ValidationError(
+                    "La fecha de expiración debe ser posterior a la fecha de creación."
+                )
+
         # Buscamos reservas existentes que choquen.
         # Una reserva CONFIRMED siempre bloquea.
         # Una reserva PENDING solo bloquea mientras no haya expirado.
@@ -336,14 +456,9 @@ class Booking(models.Model):
         ).filter(
             Q(status="CONFIRMED")
             |
-            (
-                Q(status="PENDING")
-                &
-                (
-                    Q(expires_at__isnull=True)
-                    |
-                    Q(expires_at__gt=now)
-                )
+            Q(
+                status="PENDING",
+                expires_at__gt=now,
             )
         )
 
@@ -353,6 +468,22 @@ class Booking(models.Model):
         if bookings.exists():
             raise ValidationError(
                 "Ya hay una reserva en esas fechas"
+            )
+
+    def validate_constraints(self, exclude=None):
+        exclude = exclude or set()
+
+        for constraint in self._meta.constraints:
+            # Django no puede validar correctamente esta ExclusionConstraint
+            # dinámica en Python sobre instancias nuevas. PostgreSQL la aplica
+            # como garantía definitiva de concurrencia.
+            if constraint.name == "booking_no_concurrent_inventory_overlap":
+                continue
+
+            constraint.validate(
+                self.__class__,
+                self,
+                exclude=exclude,
             )
     
     def save(self, *args, **kwargs):
@@ -371,6 +502,9 @@ class BookingNight(models.Model):
         decimal_places=2,
     )
 
+    def __str__(self):
+        return f"{self.booking} - {self.date}"
+
     class Meta:
         constraints = [
             models.UniqueConstraint(
@@ -378,9 +512,6 @@ class BookingNight(models.Model):
                 name="unique_booking_night_date",
             ),
         ]
-
-    def __str__(self):
-        return f"{self.booking} - {self.date}"
 
 class PropertyAvailability(models.Model):
     STATUS_CHOICES = [
