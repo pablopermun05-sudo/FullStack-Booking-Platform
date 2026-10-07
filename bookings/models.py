@@ -1,6 +1,6 @@
 from django.contrib.auth.models import AbstractUser
 from django.conf import settings
-from django.db import models, transaction
+from django.db import OperationalError, models, transaction
 from phonenumber_field.modelfields import PhoneNumberField
 from django.core.exceptions import ValidationError
 from datetime import date, timedelta
@@ -10,6 +10,8 @@ from decimal import Decimal
 from django.db.models import Q, DateTimeField, F, Func, Value
 from django.contrib.postgres.constraints import ExclusionConstraint
 from django.contrib.postgres.fields import DateRangeField, DateTimeRangeField, RangeOperators
+import random
+import time
 
 class User(AbstractUser):
     first_name = models.CharField("Nombre", max_length=150, blank=False)
@@ -278,49 +280,67 @@ class Booking(models.Model):
 
     @classmethod
     def create_pending(cls, *, tenant, property, initial_date, final_date, expires_at, guest_first_name, guest_last_name, guest_email, guest_phone_number, guest_country, guest_city, guest_address, guest_count, arrival_time, guest_region="", guest_postal_code="", is_for_self=True, is_business_trip=False, tax_id="", special_requests=""):
-        with transaction.atomic():
-            booking = cls.objects.create(
-                tenant=tenant,
-                property=property,
-                initial_date=initial_date,
-                final_date=final_date,
-                status="PENDING",
-                expires_at=expires_at,
-                guest_first_name=guest_first_name,
-                guest_last_name=guest_last_name,
-                guest_email=guest_email,
-                guest_phone_number=guest_phone_number,
-                guest_country=guest_country,
-                guest_region=guest_region,
-                guest_city=guest_city,
-                guest_postal_code=guest_postal_code,
-                guest_address=guest_address,
-                is_for_self=is_for_self,
-                is_business_trip=is_business_trip,
-                tax_id=tax_id,
-                guest_count=guest_count,
-                special_requests=special_requests,
-                arrival_time=arrival_time,
-            )
+        max_retries = 3
 
-            availability = PropertyAvailability.get_for_range(
-                property,
-                initial_date,
-                final_date,
-            )
-
-            BookingNight.objects.bulk_create(
-                [
-                    BookingNight(
-                        booking=booking,
-                        date=night["date"],
-                        price_per_night=night["price_per_night"],
+        for attempt in range(max_retries):
+            try:
+                with transaction.atomic():
+                    booking = cls.objects.create(
+                        tenant=tenant,
+                        property=property,
+                        initial_date=initial_date,
+                        final_date=final_date,
+                        status="PENDING",
+                        expires_at=expires_at,
+                        guest_first_name=guest_first_name,
+                        guest_last_name=guest_last_name,
+                        guest_email=guest_email,
+                        guest_phone_number=guest_phone_number,
+                        guest_country=guest_country,
+                        guest_region=guest_region,
+                        guest_city=guest_city,
+                        guest_postal_code=guest_postal_code,
+                        guest_address=guest_address,
+                        is_for_self=is_for_self,
+                        is_business_trip=is_business_trip,
+                        tax_id=tax_id,
+                        guest_count=guest_count,
+                        special_requests=special_requests,
+                        arrival_time=arrival_time,
                     )
-                    for night in availability
-                ]
-            )
 
-            return booking
+                    availability = PropertyAvailability.get_for_range(
+                        property,
+                        initial_date,
+                        final_date,
+                    )
+
+                    BookingNight.objects.bulk_create(
+                        [
+                            BookingNight(
+                                booking=booking,
+                                date=night["date"],
+                                price_per_night=night["price_per_night"],
+                            )
+                            for night in availability
+                        ]
+                    )
+
+                    return booking
+
+            except OperationalError as exc:
+                # PostgreSQL: 40P01 = deadlock_detected
+                cause = exc.__cause__
+
+                if getattr(cause, "pgcode", None) != "40P01":
+                    raise
+
+                if attempt == max_retries - 1:
+                    raise
+
+                # Pequeña espera aleatoria para evitar que ambos hilos
+                # vuelvan a chocar inmediatamente.
+                time.sleep(random.uniform(0.05, 0.20))
 
     @python_property
     def total_price(self):

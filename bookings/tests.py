@@ -1,5 +1,3 @@
-from asyncio import Barrier
-
 from django.test import TestCase, TransactionTestCase
 from django.urls import reverse
 from .models import User, OwnerProfile, Property, Booking, BookingNight, PropertyAvailability, can_manage_properties
@@ -3277,6 +3275,83 @@ class BookingConcurrencyTestCase(TransactionTestCase):
                 initial_date=initial_date,
                 final_date=final_date,
                 status="CONFIRMED",
+            ).count(),
+            1,
+        )
+
+    def test_concurrent_pending_booking_creation_allows_only_one_booking(self):
+        initial_date = date.today() + timedelta(days=5)
+        final_date = initial_date + timedelta(days=7)
+        expires_at = timezone.now() + timedelta(minutes=15)
+
+        barrier = Barrier(2)
+        original_create = Booking.objects.create
+
+        def synchronized_create(*args, **kwargs):
+            barrier.wait(timeout=5)
+            return original_create(*args, **kwargs)
+
+        def create_pending_booking():
+            close_old_connections()
+
+            try:
+                Booking.create_pending(
+                    tenant=self.tenant,
+                    property=self.property,
+                    initial_date=initial_date,
+                    final_date=final_date,
+                    expires_at=expires_at,
+                    **self.booking_data,
+                )
+                return "created"
+
+            except IntegrityError:
+                return "rejected"
+
+            finally:
+                close_old_connections()
+
+        with patch.object(
+            Booking.objects,
+            "create",
+            side_effect=synchronized_create,
+        ):
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                results = list(
+                    executor.map(
+                        lambda _: create_pending_booking(),
+                        range(2),
+                    )
+                )
+
+        self.assertEqual(results.count("created"), 1)
+        self.assertEqual(results.count("rejected"), 1)
+
+        bookings = Booking.objects.filter(
+            property=self.property,
+            initial_date=initial_date,
+            final_date=final_date,
+            status="PENDING",
+        )
+
+        self.assertEqual(bookings.count(), 1)
+
+        booking = bookings.get()
+
+        expected_nights = (final_date - initial_date).days
+
+        self.assertEqual(
+            BookingNight.objects.filter(
+                booking=booking,
+            ).count(),
+            expected_nights,
+        )
+
+        self.assertEqual(
+            Booking.objects.filter(
+                property=self.property,
+                initial_date=initial_date,
+                final_date=final_date,
             ).count(),
             1,
         )
