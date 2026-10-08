@@ -3562,6 +3562,91 @@ class BookingConcurrencyTestCase(TransactionTestCase):
 
         self.assertIsNotNone(booking.pk)
 
+    def test_concurrent_confirm_and_cancel_are_serialized(self):
+        initial_date = date.today() + timedelta(days=5)
+        final_date = initial_date + timedelta(days=7)
+
+        booking = Booking.create_pending(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=initial_date,
+            final_date=final_date,
+            expires_at=timezone.now() + timedelta(minutes=15),
+            **self.booking_data,
+        )
+
+        barrier = Barrier(2)
+
+        def confirm_booking():
+            close_old_connections()
+            try:
+                barrier.wait(timeout=5)
+                return booking.confirm()
+            finally:
+                close_old_connections()
+
+        def cancel_booking():
+            close_old_connections()
+            try:
+                barrier.wait(timeout=5)
+                return booking.cancel()
+            finally:
+                close_old_connections()
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            confirm_future = executor.submit(confirm_booking)
+            cancel_future = executor.submit(cancel_booking)
+
+            confirm_result = confirm_future.result()
+            cancel_result = cancel_future.result()
+
+        booking.refresh_from_db()
+
+        self.assertTrue(confirm_result)
+        self.assertIn(booking.status, {"CONFIRMED", "CANCELLED"})
+
+        if booking.status == "CONFIRMED":
+            self.assertFalse(cancel_result)
+        else:
+            self.assertTrue(cancel_result)
+
+    def test_concurrent_confirm_calls_allow_only_one_confirmation(self):
+        initial_date = date.today() + timedelta(days=5)
+        final_date = initial_date + timedelta(days=7)
+
+        booking = Booking.create_pending(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=initial_date,
+            final_date=final_date,
+            expires_at=timezone.now() + timedelta(minutes=15),
+            **self.booking_data,
+        )
+
+        barrier = Barrier(2)
+
+        def confirm_booking():
+            close_old_connections()
+            try:
+                barrier.wait(timeout=5)
+                return booking.confirm()
+            finally:
+                close_old_connections()
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            results = list(
+                executor.map(
+                    lambda _: confirm_booking(),
+                    range(2),
+                )
+            )
+
+        booking.refresh_from_db()
+
+        self.assertEqual(results.count(True), 1)
+        self.assertEqual(results.count(False), 1)
+        self.assertEqual(booking.status, "CONFIRMED")
+
 class PropertySearchTestCase(TestCase):
 
     def setUp(self):
