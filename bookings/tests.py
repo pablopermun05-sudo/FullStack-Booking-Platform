@@ -3034,6 +3034,104 @@ class BookingModCreateBookingViewTestCase(BookingTestBase):
         self.assertEqual(booking.special_requests, "")
         self.assertEqual(booking.arrival_time, time(18, 0))
 
+    def test_create_booking_ignores_client_status(self):
+        self.client.force_login(self.tenant)
+
+        arrival_date = date.today() + timedelta(days=5)
+        checkout_date = arrival_date + timedelta(days=7)
+
+        payload = {
+            "start": arrival_date.isoformat(),
+            "end": checkout_date.isoformat(),
+            **self.booking_payload,
+            "status": "CONFIRMED",
+        }
+
+        response = self.client.post(
+            reverse(
+                "confirm_booking",
+                kwargs={"property_id": self.property.pk},
+            ),
+            data=json.dumps(payload),
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+            response.content.decode(),
+        )
+
+        booking = Booking.objects.get(
+            pk=response.json()["booking_id"]
+        )
+
+        self.assertEqual(booking.status, "PENDING")
+
+    def test_create_booking_ignores_client_tenant_and_expiration(self):
+        self.client.force_login(self.tenant)
+
+        other_user = User.objects.create_user(
+            username="other-user",
+            email="other@example.com",
+            password="testpass123",
+        )
+
+        arrival_date = date.today() + timedelta(days=5)
+        checkout_date = arrival_date + timedelta(days=7)
+
+        requested_expires_at = timezone.now() + timedelta(days=365)
+
+        payload = {
+            "start": arrival_date.isoformat(),
+            "end": checkout_date.isoformat(),
+            **self.booking_payload,
+            "tenant": other_user.pk,
+            "expires_at": requested_expires_at.isoformat(),
+        }
+
+        before_request = timezone.now()
+
+        response = self.client.post(
+            reverse(
+                "confirm_booking",
+                kwargs={"property_id": self.property.pk},
+            ),
+            data=json.dumps(payload),
+            content_type="application/json",
+        )
+
+        after_request = timezone.now()
+
+        self.assertEqual(
+            response.status_code,
+            200,
+            response.content.decode(),
+        )
+
+        booking = Booking.objects.get(
+            pk=response.json()["booking_id"]
+        )
+
+        self.assertEqual(booking.tenant, self.tenant)
+
+        self.assertNotEqual(
+            booking.expires_at,
+            requested_expires_at,
+        )
+
+        expected_min = before_request + timedelta(minutes=15)
+        expected_max = after_request + timedelta(minutes=15)
+
+        self.assertGreaterEqual(
+            booking.expires_at,
+            expected_min,
+        )
+        self.assertLessEqual(
+            booking.expires_at,
+            expected_max,
+        )
+
 class BookingCancellationViewTestCase(BookingTestBase):
 
     def test_delete_booking_rejects_non_post_request(self):
