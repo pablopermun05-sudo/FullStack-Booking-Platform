@@ -230,7 +230,7 @@ class Booking(models.Model):
 
             if booking.is_expired():
                 booking.status = "EXPIRED"
-                booking.save(update_fields=["status"])
+                booking.save_base(update_fields=["status"])
                 self.status = booking.status
                 return False
 

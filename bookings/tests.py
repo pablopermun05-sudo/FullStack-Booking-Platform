@@ -1599,6 +1599,44 @@ class BookingLifecycleTestCase(BookingTestBase):
         self.assertFalse(result)
         self.assertEqual(booking.status, "EXPIRED")
 
+    def test_confirm_expired_pending_booking_after_confirmed_booking_exists(self):
+        initial_date = date.today() + timedelta(days=5)
+        final_date = date.today() + timedelta(days=7)
+
+        now = timezone.now()
+
+        expired_pending = Booking(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=initial_date,
+            final_date=final_date,
+            created_at=now - timedelta(minutes=20),
+            status="PENDING",
+            expires_at=now - timedelta(minutes=5),
+            **self.booking_data
+        )
+        expired_pending.save_base(force_insert=True)
+
+        confirmed_booking = Booking(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=initial_date,
+            final_date=final_date,
+            created_at=now,
+            status="CONFIRMED",
+            **self.booking_data
+        )
+        confirmed_booking.save_base(force_insert=True)
+
+        result = expired_pending.confirm()
+
+        expired_pending.refresh_from_db()
+        confirmed_booking.refresh_from_db()
+
+        self.assertFalse(result)
+        self.assertEqual(expired_pending.status, "EXPIRED")
+        self.assertEqual(confirmed_booking.status, "CONFIRMED")
+
     def test_confirm_does_not_change_confirmed_booking(self):
         booking = Booking.objects.create(
             tenant=self.tenant,
