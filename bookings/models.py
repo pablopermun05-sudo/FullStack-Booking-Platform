@@ -249,9 +249,9 @@ class Booking(models.Model):
                 return False
 
             booking.status = "EXPIRED"
-            booking.save(update_fields=["status"])
-            self.status = booking.status
+            booking.save_base(update_fields=["status"])
 
+            self.status = booking.status
             return True
 
     def cancel(self):
