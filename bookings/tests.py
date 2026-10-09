@@ -3684,7 +3684,7 @@ class BookingConcurrencyTestCase(TransactionTestCase):
                 )
                 return "created"
 
-            except IntegrityError:
+            except (IntegrityError, ValidationError):
                 return "rejected"
 
             finally:
