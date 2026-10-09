@@ -2361,17 +2361,110 @@ class BookingCreationTestCase(BookingTestBase):
             initial_date=start_date,
             final_date=end_date,
             expires_at=timezone.now() + timedelta(minutes=15),
-            **self.booking_data
+            **self.booking_data,
         )
 
+        original_prices = list(
+            booking.nights.order_by("date").values_list(
+                "price_per_night",
+                flat=True,
+            )
+        )
+
+        self.assertEqual(
+            original_prices,
+            [Decimal("80.00"), Decimal("80.00")],
+        )
         self.assertEqual(booking.total_price, Decimal("160.00"))
 
         self.property.default_price_per_night = Decimal("500.00")
-        self.property.save(update_fields=["default_price_per_night"])
+        self.property.save(
+            update_fields=["default_price_per_night"]
+        )
 
         booking.refresh_from_db()
 
         self.assertEqual(booking.total_price, Decimal("160.00"))
+        self.assertEqual(
+            list(
+                booking.nights.order_by("date").values_list(
+                    "price_per_night",
+                    flat=True,
+                )
+            ),
+            original_prices,
+        )
+
+    def test_booking_total_price_is_unaffected_by_property_and_availability_price_changes(self):
+        start_date = date.today() + timedelta(days=5)
+        middle_date = start_date + timedelta(days=1)
+        end_date = start_date + timedelta(days=2)
+
+        availability_override = PropertyAvailability.objects.create(
+            property=self.property,
+            date=middle_date,
+            price_per_night=Decimal("150.00"),
+            status="OPEN",
+            min_nights=1,
+        )
+
+        booking = Booking.create_pending(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=start_date,
+            final_date=end_date,
+            expires_at=timezone.now() + timedelta(minutes=15),
+            **self.booking_data,
+        )
+
+        original_prices = list(
+            booking.nights.order_by("date").values_list(
+                "price_per_night",
+                flat=True,
+            )
+        )
+
+        expected_prices = [
+            self.property.default_price_per_night,
+            Decimal("150.00"),
+        ]
+
+        self.assertEqual(original_prices, expected_prices)
+        self.assertEqual(
+            booking.total_price,
+            sum(expected_prices, Decimal("0.00")),
+        )
+
+        original_total = booking.total_price
+
+        self.property.default_price_per_night = Decimal("500.00")
+        self.property.save(
+            update_fields=["default_price_per_night"]
+        )
+
+        availability_override.price_per_night = Decimal("900.00")
+        availability_override.save(
+            update_fields=["price_per_night"]
+        )
+
+        booking.refresh_from_db()
+
+        self.assertEqual(booking.total_price, original_total)
+
+        self.assertEqual(
+            list(
+                booking.nights.order_by("date").values_list(
+                    "price_per_night",
+                    flat=True,
+                )
+            ),
+            original_prices,
+        )
+
+        self.assertEqual(
+            availability_override.price_per_night,
+            Decimal("900.00"),
+        )
 
     def test_booking_total_price_is_zero_without_nights(self):
         booking = Booking.objects.create(
