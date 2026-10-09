@@ -332,7 +332,12 @@ class Booking(models.Model):
                 # PostgreSQL: 40P01 = deadlock_detected
                 cause = exc.__cause__
 
-                if getattr(cause, "pgcode", None) != "40P01":
+                sqlstate = (
+                    getattr(cause, "sqlstate", None)
+                    or getattr(cause, "pgcode", None)
+                )
+
+                if sqlstate != "40P01":
                     raise
 
                 if attempt == max_retries - 1:

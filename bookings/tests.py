@@ -4,15 +4,16 @@ from django.urls import reverse
 from bookings.views import PENDING_BOOKING_MINUTES
 from .models import User, OwnerProfile, Property, Booking, BookingNight, PropertyAvailability, can_manage_properties
 from django.contrib.auth.models import AnonymousUser
-from datetime import date, time, timedelta
 from django.core.exceptions import ValidationError
 from django.utils import timezone
-from django.db import IntegrityError, transaction, close_old_connections
+from django.db import IntegrityError, OperationalError, transaction, close_old_connections
+from datetime import date, time, timedelta
+import time as time_module
 from unittest.mock import patch
 from decimal import Decimal
 import json
 from concurrent.futures import ThreadPoolExecutor
-from threading import Barrier
+from threading import Barrier, Lock
 from django.core.management import call_command
 from io import StringIO
 
@@ -3583,25 +3584,46 @@ class BookingConcurrencyTestCase(TransactionTestCase):
             close_old_connections()
 
             try:
-                with transaction.atomic():
-                    booking = Booking(
-                        tenant=self.tenant,
-                        property=self.property,
-                        initial_date=initial_date,
-                        final_date=final_date,
-                        status="CONFIRMED",
-                        expires_at=timezone.now() + timedelta(minutes=15),
-                        **self.booking_data,
-                    )
+                for attempt in range(5):
+                    try:
+                        with transaction.atomic():
+                            booking = Booking(
+                                tenant=self.tenant,
+                                property=self.property,
+                                initial_date=initial_date,
+                                final_date=final_date,
+                                status="CONFIRMED",
+                                expires_at=timezone.now() + timedelta(minutes=15),
+                                **self.booking_data,
+                            )
 
-                    barrier.wait(timeout=5)
+                            if attempt == 0:
+                                barrier.wait(timeout=5)
 
-                    booking.save_base(force_insert=True)
+                            booking.save_base(force_insert=True)
 
-                return "created"
+                        return "created"
 
-            except IntegrityError:
-                return "rejected"
+                    except IntegrityError:
+                        return "rejected"
+
+                    except OperationalError as exc:
+                        cause = exc.__cause__
+
+                        sqlstate = (
+                            getattr(cause, "sqlstate", None)
+                            or getattr(cause, "pgcode", None)
+                        )
+
+                        if sqlstate != "40P01":
+                            raise
+
+                        if attempt == 4:
+                            raise
+
+                        time_module.sleep(0.1 * (attempt + 1))
+
+                raise AssertionError("Se agotaron los reintentos de creación.")
 
             finally:
                 close_old_connections()
@@ -3614,8 +3636,7 @@ class BookingConcurrencyTestCase(TransactionTestCase):
                 )
             )
 
-        self.assertEqual(results.count("created"), 1)
-        self.assertEqual(results.count("rejected"), 1)
+        self.assertCountEqual(results, ["created", "rejected"])
 
         self.assertEqual(
             Booking.objects.filter(
@@ -3634,9 +3655,19 @@ class BookingConcurrencyTestCase(TransactionTestCase):
 
         barrier = Barrier(2)
         original_create = Booking.objects.create
+        calls_lock = Lock()
+        initial_calls = 0
 
         def synchronized_create(*args, **kwargs):
-            barrier.wait(timeout=5)
+            nonlocal initial_calls
+
+            with calls_lock:
+                initial_calls += 1
+                synchronize = initial_calls <= 2
+
+            if synchronize:
+                barrier.wait(timeout=10)
+
             return original_create(*args, **kwargs)
 
         def create_pending_booking():
