@@ -1,5 +1,7 @@
 from django.test import TestCase, TransactionTestCase
 from django.urls import reverse
+
+from bookings.views import PENDING_BOOKING_MINUTES
 from .models import User, OwnerProfile, Property, Booking, BookingNight, PropertyAvailability, can_manage_properties
 from django.contrib.auth.models import AnonymousUser
 from datetime import date, time, timedelta
@@ -1997,31 +1999,78 @@ class BookingCreationTestCase(BookingTestBase):
     def test_create_pending_rolls_back_booking_if_booking_nights_creation_fails(self):
         initial_date = date.today() + timedelta(days=5)
         final_date = initial_date + timedelta(days=2)
+        attempted_booking_ids = []
+
+        original_bulk_create = BookingNight.objects.bulk_create
+
+        def insert_first_night_then_fail(nights, *args, **kwargs):
+            attempted_booking_ids.append(nights[0].booking_id)
+
+            # Simulamos una inserción parcial antes del error.
+            original_bulk_create(nights[:1], *args, **kwargs)
+
+            raise RuntimeError("Error después de insertar la primera noche")
 
         with patch.object(
             BookingNight.objects,
             "bulk_create",
-            side_effect=Exception("Error creando noches"),
+            side_effect=insert_first_night_then_fail,
         ):
-            with self.assertRaises(Exception):
+            with self.assertRaisesRegex(
+                RuntimeError,
+                "Error después de insertar la primera noche",
+            ):
                 Booking.create_pending(
                     tenant=self.tenant,
                     property=self.property,
                     initial_date=initial_date,
                     final_date=final_date,
                     expires_at=timezone.now() + timedelta(minutes=15),
-                    **self.booking_data
+                    **self.booking_data,
                 )
 
+        self.assertEqual(len(attempted_booking_ids), 1)
+        booking_id = attempted_booking_ids[0]
+
+        # No debe persistir la reserva.
         self.assertFalse(
-            Booking.objects.filter(
-                tenant=self.tenant,
-                property=self.property,
-                initial_date=initial_date,
-                final_date=final_date,
-            ).exists()
+            Booking.objects.filter(pk=booking_id).exists()
         )
 
+        # Tampoco debe persistir la primera noche insertada.
+        self.assertFalse(
+            BookingNight.objects.filter(booking_id=booking_id).exists()
+        )
+
+    def test_deleting_booking_deletes_its_booking_nights(self):
+        initial_date = date.today() + timedelta(days=5)
+        final_date = initial_date + timedelta(days=3)
+
+        booking = Booking.create_pending(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=initial_date,
+            final_date=final_date,
+            expires_at=timezone.now() + timedelta(minutes=15),
+            **self.booking_data,
+        )
+
+        booking_id = booking.pk
+
+        self.assertEqual(
+            BookingNight.objects.filter(booking_id=booking_id).count(),
+            3,
+        )
+
+        booking.delete()
+
+        self.assertFalse(
+            Booking.objects.filter(pk=booking_id).exists()
+        )
+        self.assertFalse(
+            BookingNight.objects.filter(booking_id=booking_id).exists()
+        )
+    
     def test_create_pending_rolls_back_when_booking_validation_fails(self):
         initial_date = date.today() + timedelta(days=5)
         final_date = initial_date + timedelta(days=2)
@@ -3120,8 +3169,14 @@ class BookingModCreateBookingViewTestCase(BookingTestBase):
             requested_expires_at,
         )
 
-        expected_min = before_request + timedelta(minutes=15)
-        expected_max = after_request + timedelta(minutes=15)
+        expected_min = (
+            before_request
+            + timedelta(minutes=PENDING_BOOKING_MINUTES)
+        )
+        expected_max = (
+            after_request
+            + timedelta(minutes=PENDING_BOOKING_MINUTES)
+        )
 
         self.assertGreaterEqual(
             booking.expires_at,
