@@ -617,6 +617,16 @@ class BookingChangeProposal(models.Model):
             and timezone.now() >= self.expires_at
         )
 
+    @classmethod
+    def expire_pending_proposals(cls):
+        now = timezone.now()
+
+        return cls.objects.filter(
+            status=cls.Status.PENDING,
+            expires_at__isnull=False,
+            expires_at__lte=now,
+        ).update(status=cls.Status.EXPIRED)
+
     def __str__(self):
         return f"Change proposal for booking {self.booking_id} ({self.status})"
 

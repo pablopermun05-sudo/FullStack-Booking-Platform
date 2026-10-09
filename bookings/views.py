@@ -834,13 +834,14 @@ def propose_booking_change(request, booking_id):
         )
 
     if BookingChangeProposal.objects.filter(
-            booking=booking,
-            status=BookingChangeProposal.Status.PENDING,
-        ).exists():
-            return JsonResponse(
-                {"error": "Ya existe una propuesta pendiente para esta reserva."},
-                status=409,
-            )
+        booking=booking,
+        status=BookingChangeProposal.Status.PENDING,
+        expires_at__gt=timezone.now(),
+    ).exists():
+        return JsonResponse(
+            {"error": "Ya existe una propuesta pendiente para esta reserva."},
+            status=409,
+        )
 
     try:
         with transaction.atomic():
