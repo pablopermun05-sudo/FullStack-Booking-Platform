@@ -6,7 +6,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.db import IntegrityError
 from django.db.models import Exists, F, IntegerField, OuterRef, Subquery
 from django.db.models.functions import Coalesce
-from .models import User, OwnerProfile, Property, Booking, BookingChangeProposal, PropertyAvailability, can_manage_properties
+from .models import User, OwnerProfile, Property, Booking, BookingChangeProposal, BookingNight, PropertyAvailability, can_manage_properties
 from django import forms
 from django.forms import ModelForm
 from django.contrib.auth.forms import UserCreationForm
@@ -872,6 +872,188 @@ def propose_booking_change(request, booking_id):
             "expires_at": proposal.expires_at.isoformat(),
         },
         status=201,
+    )
+
+@login_required
+def accept_booking_change_proposal(request, proposal_id):
+    if request.method != "POST":
+        return JsonResponse(
+            {"error": "Método no permitido."},
+            status=405,
+        )
+
+    # Comprobación inicial de autorización.
+    proposal = get_object_or_404(
+        BookingChangeProposal.objects.select_related(
+            "booking",
+            "booking__property",
+        ),
+        pk=proposal_id,
+    )
+
+    if proposal.booking.tenant != request.user:
+        raise PermissionDenied
+
+    try:
+        with transaction.atomic():
+            # Bloquear primero la reserva y después la propuesta.
+            # Así serializamos los cambios sobre la misma reserva.
+            booking = get_object_or_404(
+                Booking.objects.select_for_update().select_related(
+                    "property",
+                    "property__owner",
+                ),
+                pk=proposal.booking_id,
+            )
+
+            proposal = get_object_or_404(
+                BookingChangeProposal.objects.select_for_update(),
+                pk=proposal_id,
+                booking=booking,
+            )
+
+            # Repetir la autorización dentro de la transacción.
+            if booking.tenant != request.user:
+                raise PermissionDenied
+
+            if proposal.status != BookingChangeProposal.Status.PENDING:
+                return JsonResponse(
+                    {"error": "La propuesta ya no está pendiente."},
+                    status=409,
+                )
+
+            if proposal.is_expired():
+                proposal.status = BookingChangeProposal.Status.EXPIRED
+                proposal.save(update_fields=["status"])
+
+                return JsonResponse(
+                    {"error": "La propuesta ha caducado."},
+                    status=409,
+                )
+
+            if booking.status not in Booking.ACTIVE_STATUSES:
+                return JsonResponse(
+                    {"error": "La reserva ya no admite cambios."},
+                    status=409,
+                )
+
+            property = booking.property
+            initial_date = proposal.proposed_initial_date
+            final_date = proposal.proposed_final_date
+            guest_count = proposal.proposed_guest_count
+
+            if initial_date >= final_date:
+                return JsonResponse(
+                    {"error": "El intervalo de fechas no es válido."},
+                    status=400,
+                )
+
+            if guest_count < 1:
+                return JsonResponse(
+                    {"error": "El número de huéspedes no es válido."},
+                    status=400,
+                )
+
+            if guest_count > property.adults + property.children:
+                return JsonResponse(
+                    {"error": "La capacidad de la vivienda es insuficiente."},
+                    status=400,
+                )
+
+            availability = PropertyAvailability.get_for_range(
+                property,
+                initial_date,
+                final_date,
+            )
+
+            if any(item["status"] != "OPEN" for item in availability):
+                return JsonResponse(
+                    {"error": "Hay noches que ya no están disponibles."},
+                    status=409,
+                )
+
+            if not availability:
+                return JsonResponse(
+                    {"error": "El intervalo de fechas no es válido."},
+                    status=400,
+                )
+
+            minimum_nights = availability[0]["min_nights"]
+
+            number_of_nights = (final_date - initial_date).days
+
+            if number_of_nights < minimum_nights:
+                return JsonResponse(
+                    {"error": "La estancia es inferior al mínimo requerido."},
+                    status=400,
+                )
+
+            # Actualizar la reserva existente, conservando su estado
+            # y su fecha de caducidad.
+            booking.initial_date = initial_date
+            booking.final_date = final_date
+            booking.guest_count = guest_count
+
+            # full_clean valida también las reglas definidas en Booking.
+            # save() vuelve a ejecutar full_clean() en este proyecto.
+            booking.save(
+                update_fields=[
+                    "initial_date",
+                    "final_date",
+                    "guest_count",
+                ]
+            )
+
+            # Reemplazar las noches dentro de la misma transacción,
+            # aplicando los precios vigentes.
+            booking.nights.all().delete()
+
+            BookingNight.objects.bulk_create([
+                BookingNight(
+                    booking=booking,
+                    date=item["date"],
+                    price_per_night=item["price_per_night"],
+                )
+                for item in availability
+            ])
+
+            proposal.status = BookingChangeProposal.Status.ACCEPTED
+            proposal.save(update_fields=["status"])
+
+    except ValidationError as exc:
+        return JsonResponse(
+            {
+                "error": "La reserva no supera las validaciones.",
+                "details": exc.message_dict
+                if hasattr(exc, "message_dict")
+                else exc.messages,
+            },
+            status=400,
+        )
+    except IntegrityError:
+        # Incluye conflictos detectados por las restricciones de la BD.
+        # La transacción completa se revierte.
+        return JsonResponse(
+            {
+                "error": (
+                    "No se puede aceptar la propuesta porque "
+                    "existe un conflicto con la disponibilidad."
+                )
+            },
+            status=409,
+        )
+
+    return JsonResponse(
+        {
+            "id": proposal.pk,
+            "status": proposal.status,
+            "booking_id": booking.pk,
+            "initial_date": booking.initial_date.isoformat(),
+            "final_date": booking.final_date.isoformat(),
+            "guest_count": booking.guest_count,
+            "total_price": str(booking.total_price),
+        },
+        status=200,
     )
 
 @login_required

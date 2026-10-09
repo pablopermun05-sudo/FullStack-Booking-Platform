@@ -4553,6 +4553,163 @@ class PropertySearchTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, self.other_property.title)
 
+class BookingChangeProposalAcceptViewTestCase(BookingTestBase):
+    def setUp(self):
+        super().setUp()
+
+        from datetime import timedelta
+        from decimal import Decimal
+
+        from django.urls import reverse
+        from django.utils import timezone
+
+        self.timedelta = timedelta
+        self.Decimal = Decimal
+        self.reverse = reverse
+        self.timezone = timezone
+
+        self.booking1.initial_date = timezone.localdate() + timedelta(days=30)
+        self.booking1.final_date = timezone.localdate() + timedelta(days=33)
+        self.booking1.status = "CONFIRMED"
+        self.booking1.expires_at = None
+        self.booking1.save()
+
+        self.initial_status = self.booking1.status
+        self.initial_expires_at = self.booking1.expires_at
+
+        self.proposal = BookingChangeProposal.objects.create(
+            booking=self.booking1,
+            proposed_initial_date=timezone.localdate() + timedelta(days=40),
+            proposed_final_date=timezone.localdate() + timedelta(days=44),
+            proposed_guest_count=3,
+        )
+
+        self.client.force_login(self.tenant)
+
+    def accept_url(self):
+        return self.reverse(
+            "accept_booking_change_proposal",
+            args=[self.proposal.pk],
+        )
+
+    def test_guest_can_accept_proposal(self):
+        response = self.client.post(self.accept_url())
+
+        self.assertEqual(response.status_code, 200)
+
+        self.proposal.refresh_from_db()
+        self.booking1.refresh_from_db()
+
+        self.assertEqual(
+            self.proposal.status,
+            BookingChangeProposal.Status.ACCEPTED,
+        )
+        self.assertEqual(
+            self.booking1.initial_date,
+            self.proposal.proposed_initial_date,
+        )
+        self.assertEqual(
+            self.booking1.final_date,
+            self.proposal.proposed_final_date,
+        )
+        self.assertEqual(
+            self.booking1.guest_count,
+            self.proposal.proposed_guest_count,
+        )
+        self.assertEqual(self.booking1.status, self.initial_status)
+        self.assertEqual(self.booking1.expires_at, self.initial_expires_at)
+
+        nights = list(
+            self.booking1.nights.order_by("date").values_list("date", flat=True)
+        )
+
+        expected_nights = [
+            self.proposal.proposed_initial_date + self.timedelta(days=offset)
+            for offset in range(
+                (
+                    self.proposal.proposed_final_date
+                    - self.proposal.proposed_initial_date
+                ).days
+            )
+        ]
+
+        self.assertEqual(nights, expected_nights)
+
+    def test_acceptance_uses_current_nightly_prices(self):
+        from bookings.models import PropertyAvailability
+
+        start_date = self.proposal.proposed_initial_date
+        end_date = self.proposal.proposed_final_date
+
+        current_date = start_date
+        expected_prices = {}
+
+        while current_date < end_date:
+            price = self.Decimal("175.00")
+            PropertyAvailability.objects.update_or_create(
+                property=self.booking1.property,
+                date=current_date,
+                defaults={
+                    "price_per_night": price,
+                    "status": "OPEN",
+                    "min_nights": 1,
+                },
+            )
+            expected_prices[current_date] = price
+            current_date += self.timedelta(days=1)
+
+        response = self.client.post(self.accept_url())
+
+        self.assertEqual(response.status_code, 200)
+
+        actual_prices = dict(
+            self.booking1.nights.values_list("date", "price_per_night")
+        )
+
+        self.assertEqual(actual_prices, expected_prices)
+        self.assertEqual(
+            self.booking1.total_price,
+            sum(expected_prices.values(), self.Decimal("0.00")),
+        )
+
+    def test_non_guest_cannot_accept_proposal(self):
+        self.client.force_login(self.owner)
+
+        response = self.client.post(self.accept_url())
+
+        self.assertEqual(response.status_code, 403)
+
+        self.proposal.refresh_from_db()
+        self.booking1.refresh_from_db()
+
+        self.assertEqual(
+            self.proposal.status,
+            BookingChangeProposal.Status.PENDING,
+        )
+        self.assertNotEqual(
+            self.booking1.initial_date,
+            self.proposal.proposed_initial_date,
+        )
+
+    def test_get_request_is_not_allowed(self):
+        response = self.client.get(self.accept_url())
+
+        self.assertEqual(response.status_code, 405)
+
+    def test_already_rejected_proposal_cannot_be_accepted(self):
+        self.proposal.status = BookingChangeProposal.Status.REJECTED
+        self.proposal.save(update_fields=["status"])
+
+        response = self.client.post(self.accept_url())
+
+        self.assertEqual(response.status_code, 409)
+
+        self.booking1.refresh_from_db()
+        self.assertNotEqual(
+            self.booking1.initial_date,
+            self.proposal.proposed_initial_date,
+        )
+
 class PropertyAvailabilityTestCase(TestCase):
 
     def setUp(self):
