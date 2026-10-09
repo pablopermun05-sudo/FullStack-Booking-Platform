@@ -13,6 +13,8 @@ from decimal import Decimal
 import json
 from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier
+from django.core.management import call_command
+from io import StringIO
 
 class OwnerProfileTestCase(TestCase):
     def test_owner_profile_is_pending_by_default(self):
@@ -3892,6 +3894,72 @@ class BookingConcurrencyTestCase(TransactionTestCase):
         self.assertEqual(results.count(True), 1)
         self.assertEqual(results.count(False), 1)
         self.assertEqual(booking.status, "CONFIRMED")
+
+class ExpirePendingBookingsCommandTestCase(TestCase):
+
+    def test_command_reports_zero_when_no_bookings_expire(self):
+        output = StringIO()
+        call_command("expire_pending_bookings", stdout=output)
+        self.assertIn("Reservas expiradas: 0", output.getvalue())
+
+    def test_command_expires_overdue_pending_bookings(self):
+        booking = Booking.objects.create(
+            tenant=User.objects.create_user(
+                username="command_tenant",
+                password="password123",
+                email="command_tenant@example.com",
+            ),
+            property=Property.objects.create(
+                owner=User.objects.create_user(
+                    username="command_owner",
+                    password="password123",
+                    email="command_owner@example.com",
+                ),
+                title="Command test property",
+                description="Property for expiration command test",
+                location="Test location",
+                default_price_per_night=Decimal("80.00"),
+                image="properties/test.jpg",
+                children=0,
+                adults=2,
+                rooms=1,
+            ),
+            initial_date=date.today() + timedelta(days=10),
+            final_date=date.today() + timedelta(days=12),
+            status="PENDING",
+            expires_at=timezone.now() + timedelta(minutes=5),
+            guest_first_name="Test",
+            guest_last_name="Tenant",
+            guest_email="guest@example.com",
+            guest_phone_number="+34611456789",
+            guest_country="Spain",
+            guest_city="Madrid",
+            guest_address="Test address",
+            guest_count=1,
+            arrival_time=time(15, 0),
+        )
+
+        Booking.objects.filter(pk=booking.pk).update(
+            expires_at=timezone.now() - timedelta(minutes=5)
+        )
+
+        output = StringIO()
+        call_command("expire_pending_bookings", stdout=output)
+
+        booking.refresh_from_db()
+
+        self.assertEqual(booking.status, "EXPIRED")
+        self.assertIn("Reservas expiradas: 1", output.getvalue())
+
+    def test_command_is_idempotent(self):
+        output_first = StringIO()
+        output_second = StringIO()
+
+        call_command("expire_pending_bookings", stdout=output_first)
+        call_command("expire_pending_bookings", stdout=output_second)
+
+        self.assertIn("Reservas expiradas: 0", output_first.getvalue())
+        self.assertIn("Reservas expiradas: 0", output_second.getvalue())
 
 class PropertySearchTestCase(TestCase):
 
