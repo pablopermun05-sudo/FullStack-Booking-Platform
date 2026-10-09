@@ -4236,6 +4236,117 @@ class BookingChangeProposalViewTestCase(BookingTestBase):
         self.assertEqual(first_response.status_code, 201)
         self.assertEqual(second_response.status_code, 409)
 
+class BookingChangeProposalRejectViewTestCase(BookingTestBase):
+    def setUp(self):
+        super().setUp()
+
+        self.booking1.initial_date = date.today() + timedelta(days=30)
+        self.booking1.final_date = date.today() + timedelta(days=33)
+        self.booking1.expires_at = timezone.now() + timedelta(minutes=15)
+        self.booking1.save()
+
+        self.url = reverse(
+            "reject_booking_change_proposal",
+            kwargs={"proposal_id": self._create_proposal().pk},
+        )
+
+    def _create_proposal(self):
+        return BookingChangeProposal.objects.create(
+            booking=self.booking1,
+            proposed_initial_date=self.booking1.initial_date + timedelta(days=1),
+            proposed_final_date=self.booking1.final_date + timedelta(days=1),
+            proposed_guest_count=2,
+        )
+
+    def test_guest_can_reject_pending_proposal(self):
+        self.client.force_login(self.tenant)
+
+        response = self.client.post(self.url)
+
+        self.assertEqual(response.status_code, 200)
+
+        proposal = BookingChangeProposal.objects.get(
+            booking=self.booking1
+        )
+        self.assertEqual(
+            proposal.status,
+            BookingChangeProposal.Status.REJECTED,
+        )
+
+    def test_non_guest_cannot_reject_proposal(self):
+        self.client.force_login(self.owner)
+
+        response = self.client.post(self.url)
+
+        self.assertEqual(response.status_code, 403)
+
+        proposal = BookingChangeProposal.objects.get(
+            booking=self.booking1
+        )
+        self.assertEqual(
+            proposal.status,
+            BookingChangeProposal.Status.PENDING,
+        )
+
+    def test_rejecting_proposal_does_not_modify_booking_or_nights(self):
+        from decimal import Decimal
+
+        BookingNight.objects.create(
+            booking=self.booking1,
+            date=self.booking1.initial_date,
+            price_per_night=Decimal("80.00"),
+        )
+        BookingNight.objects.create(
+            booking=self.booking1,
+            date=self.booking1.initial_date + timedelta(days=1),
+            price_per_night=Decimal("95.00"),
+        )
+
+        original_initial_date = self.booking1.initial_date
+        original_final_date = self.booking1.final_date
+        original_status = self.booking1.status
+        original_guest_count = self.booking1.guest_count
+
+        original_nights = list(
+            self.booking1.nights.order_by("date").values_list(
+                "date", "price_per_night"
+            )
+        )
+
+        self.client.force_login(self.tenant)
+        response = self.client.post(self.url)
+
+        self.assertEqual(response.status_code, 200)
+
+        self.booking1.refresh_from_db()
+        self.assertEqual(self.booking1.initial_date, original_initial_date)
+        self.assertEqual(self.booking1.final_date, original_final_date)
+        self.assertEqual(self.booking1.status, original_status)
+        self.assertEqual(self.booking1.guest_count, original_guest_count)
+
+        current_nights = list(
+            self.booking1.nights.order_by("date").values_list(
+                "date", "price_per_night"
+            )
+        )
+        self.assertEqual(current_nights, original_nights)
+
+    def test_rejecting_already_rejected_proposal_returns_conflict(self):
+        self.client.force_login(self.tenant)
+
+        first_response = self.client.post(self.url)
+        self.assertEqual(first_response.status_code, 200)
+
+        second_response = self.client.post(self.url)
+        self.assertEqual(second_response.status_code, 409)
+
+    def test_get_request_is_not_allowed(self):
+        self.client.force_login(self.tenant)
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 405)
+
 class PropertySearchTestCase(TestCase):
 
     def setUp(self):
