@@ -6,7 +6,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.db import IntegrityError
 from django.db.models import Exists, F, IntegerField, OuterRef, Subquery
 from django.db.models.functions import Coalesce
-from .models import User, OwnerProfile, Property, Booking, PropertyAvailability, can_manage_properties
+from .models import User, OwnerProfile, Property, Booking, BookingChangeProposal, PropertyAvailability, can_manage_properties
 from django import forms
 from django.forms import ModelForm
 from django.contrib.auth.forms import UserCreationForm
@@ -21,6 +21,7 @@ import json
 from django.core.exceptions import ValidationError
 from django.core.exceptions import PermissionDenied
 from django.shortcuts import get_object_or_404
+from django.db import transaction
 
 # Create your views here.
 class SearchForm(forms.Form):
@@ -725,6 +726,153 @@ def booking(request, property_id):
 
     except ValueError:
         return JsonResponse({"error": "Formato de fecha inválido."}, status=400)
+
+@login_required
+def propose_booking_change(request, booking_id):
+    if request.method != "POST":
+        return JsonResponse(
+            {"error": "Método no permitido."},
+            status=405,
+        )
+
+    if not can_manage_properties(request.user):
+        raise PermissionDenied
+
+    booking = get_object_or_404(
+        Booking.objects.select_related("property", "property__owner"),
+        pk=booking_id,
+    )
+
+    # Solo el propietario de la vivienda o un administrador.
+    if (
+        booking.property.owner != request.user
+        and not request.user.is_staff
+    ):
+        raise PermissionDenied
+
+    # Las reservas anónimas y las reservas ya finalizadas no se editan aquí.
+    if booking.tenant is None:
+        return JsonResponse(
+            {"error": "Las reservas anónimas no admiten propuestas de cambio."},
+            status=400,
+        )
+
+    if booking.status not in ("PENDING", "CONFIRMED"):
+        return JsonResponse(
+            {"error": "No se pueden proponer cambios para esta reserva."},
+            status=400,
+        )
+
+    try:
+        data = json.loads(request.body)
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return JsonResponse(
+            {"error": "JSON inválido."},
+            status=400,
+        )
+
+    if not isinstance(data, dict):
+        return JsonResponse(
+            {"error": "El cuerpo debe ser un objeto JSON."},
+            status=400,
+        )
+
+    initial_date_raw = data.get("proposed_initial_date")
+    final_date_raw = data.get("proposed_final_date")
+    guest_count_raw = data.get("proposed_guest_count")
+
+    if (
+        not initial_date_raw
+        or not final_date_raw
+        or guest_count_raw is None
+    ):
+        return JsonResponse(
+            {
+                "error": "Debes indicar las fechas propuestas y el número de huéspedes.",
+                "fields": [
+                    "proposed_initial_date",
+                    "proposed_final_date",
+                    "proposed_guest_count",
+                ],
+            },
+            status=400,
+        )
+
+    try:
+        proposed_initial_date = date.fromisoformat(initial_date_raw)
+        proposed_final_date = date.fromisoformat(final_date_raw)
+    except (TypeError, ValueError):
+        return JsonResponse(
+            {"error": "Formato de fecha inválido. Usa YYYY-MM-DD."},
+            status=400,
+        )
+
+    if isinstance(guest_count_raw, bool):
+        return JsonResponse(
+            {"error": "El número de huéspedes debe ser un entero."},
+            status=400,
+        )
+
+    try:
+        proposed_guest_count = int(guest_count_raw)
+    except (TypeError, ValueError):
+        return JsonResponse(
+            {"error": "El número de huéspedes debe ser un entero."},
+            status=400,
+        )
+
+    if isinstance(guest_count_raw, float) and not guest_count_raw.is_integer():
+        return JsonResponse(
+            {"error": "El número de huéspedes debe ser un entero."},
+            status=400,
+        )
+
+    if isinstance(guest_count_raw, str) and str(proposed_guest_count) != guest_count_raw.strip():
+        return JsonResponse(
+            {"error": "El número de huéspedes debe ser un entero."},
+            status=400,
+        )
+
+    if BookingChangeProposal.objects.filter(
+            booking=booking,
+            status=BookingChangeProposal.Status.PENDING,
+        ).exists():
+            return JsonResponse(
+                {"error": "Ya existe una propuesta pendiente para esta reserva."},
+                status=409,
+            )
+
+    try:
+        with transaction.atomic():
+            proposal = BookingChangeProposal.objects.create(
+                booking=booking,
+                proposed_initial_date=proposed_initial_date,
+                proposed_final_date=proposed_final_date,
+                proposed_guest_count=proposed_guest_count,
+            )
+    except ValidationError as exc:
+        return JsonResponse(
+            {"error": exc.messages},
+            status=400,
+        )
+    except IntegrityError:
+        return JsonResponse(
+            {"error": "Ya existe una propuesta pendiente para esta reserva."},
+            status=409,
+        )
+
+    return JsonResponse(
+        {
+            "id": proposal.pk,
+            "booking_id": booking.pk,
+            "status": proposal.status,
+            "proposed_initial_date": proposal.proposed_initial_date.isoformat(),
+            "proposed_final_date": proposal.proposed_final_date.isoformat(),
+            "proposed_guest_count": proposal.proposed_guest_count,
+            "expires_at": proposal.expires_at.isoformat(),
+        },
+        status=201,
+    )
 
 PENDING_BOOKING_MINUTES = 15
 

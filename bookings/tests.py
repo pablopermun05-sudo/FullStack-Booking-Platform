@@ -4093,6 +4093,149 @@ class BookingChangeProposalModelTestCase(BookingTestBase):
         with patch("bookings.models.timezone.now", return_value=future_time):
             self.assertTrue(proposal.is_expired())
 
+class BookingChangeProposalViewTestCase(BookingTestBase):
+    def setUp(self):
+        super().setUp()
+
+        OwnerProfile.objects.create(
+            user=self.owner,
+            status="APPROVED",
+        )
+
+        self.booking1.initial_date = date.today() + timedelta(days=30)
+        self.booking1.final_date = date.today() + timedelta(days=33)
+        self.booking1.expires_at = timezone.now() + timedelta(minutes=15)
+        self.booking1.save()
+
+        self.url = reverse(
+            "propose_booking_change",
+            kwargs={"booking_id": self.booking1.pk},
+        )
+
+        self.payload = {
+            "proposed_initial_date": (
+                self.booking1.initial_date + timedelta(days=1)
+            ).isoformat(),
+            "proposed_final_date": (
+                self.booking1.final_date + timedelta(days=1)
+            ).isoformat(),
+            "proposed_guest_count": 2,
+        }
+
+    def test_approved_owner_can_create_proposal(self):
+        self.client.force_login(self.owner)
+
+        response = self.client.post(
+            self.url,
+            data=json.dumps(self.payload),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(
+            BookingChangeProposal.objects.filter(
+                booking=self.booking1,
+                status=BookingChangeProposal.Status.PENDING,
+            ).count(),
+            1,
+        )
+
+        self.booking1.refresh_from_db()
+        self.assertEqual(
+            self.booking1.initial_date,
+            date.today() + timedelta(days=30),
+        )
+
+    def test_non_owner_cannot_create_proposal(self):
+        self.client.force_login(self.tenant)
+
+        response = self.client.post(
+            self.url,
+            data=json.dumps(self.payload),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(
+            BookingChangeProposal.objects.filter(
+                booking=self.booking1,
+            ).exists()
+        )
+
+    def test_anonymous_user_is_redirected_to_login(self):
+        response = self.client.post(
+            self.url,
+            data=json.dumps(self.payload),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 302)
+
+    def test_anonymous_booking_cannot_have_change_proposal(self):
+        self.booking1.tenant = None
+        self.booking1.save()
+
+        self.client.force_login(self.owner)
+
+        response = self.client.post(
+            self.url,
+            data=json.dumps(self.payload),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_invalid_date_range_is_rejected(self):
+        self.client.force_login(self.owner)
+
+        payload = {
+            **self.payload,
+            "proposed_initial_date": "2030-08-10",
+            "proposed_final_date": "2030-08-09",
+        }
+
+        response = self.client.post(
+            self.url,
+            data=json.dumps(payload),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_guest_count_over_capacity_is_rejected(self):
+        self.client.force_login(self.owner)
+
+        payload = {
+            **self.payload,
+            "proposed_guest_count": 5,
+        }
+
+        response = self.client.post(
+            self.url,
+            data=json.dumps(payload),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_duplicate_pending_proposal_returns_conflict(self):
+        self.client.force_login(self.owner)
+
+        first_response = self.client.post(
+            self.url,
+            data=json.dumps(self.payload),
+            content_type="application/json",
+        )
+
+        second_response = self.client.post(
+            self.url,
+            data=json.dumps(self.payload),
+            content_type="application/json",
+        )
+
+        self.assertEqual(first_response.status_code, 201)
+        self.assertEqual(second_response.status_code, 409)
+
 class PropertySearchTestCase(TestCase):
 
     def setUp(self):
