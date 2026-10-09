@@ -515,6 +515,111 @@ class Booking(models.Model):
         self.full_clean()
         super().save(*args, **kwargs)
 
+class BookingChangeProposal(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "PENDING", "Pending"
+        ACCEPTED = "ACCEPTED", "Accepted"
+        REJECTED = "REJECTED", "Rejected"
+        EXPIRED = "EXPIRED", "Expired"
+
+    booking = models.ForeignKey(
+        Booking,
+        on_delete=models.CASCADE,
+        related_name="change_proposals",
+    )
+    proposed_initial_date = models.DateField()
+    proposed_final_date = models.DateField()
+    proposed_guest_count = models.PositiveIntegerField()
+
+    status = models.CharField(
+        max_length=10,
+        choices=Status.choices,
+        default=Status.PENDING,
+    )
+    created_at = models.DateTimeField(
+        default=timezone.now,
+        editable=False,
+    )
+    expires_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["booking"],
+                condition=Q(status="PENDING"),
+                name="one_pending_change_proposal_per_booking",
+            ),
+            models.CheckConstraint(
+                condition=Q(proposed_initial_date__lt=models.F("proposed_final_date")),
+                name="change_proposal_valid_date_range",
+            ),
+            models.CheckConstraint(
+                condition=Q(proposed_guest_count__gte=1),
+                name="change_proposal_positive_guest_count",
+            ),
+        ]
+        ordering = ["-created_at"]
+
+    def clean(self):
+        super().clean()
+
+        errors = {}
+
+        if (
+            self.proposed_initial_date
+            and self.proposed_final_date
+            and self.proposed_initial_date >= self.proposed_final_date
+        ):
+            errors["proposed_final_date"] = (
+                "The check-out date must be after the check-in date."
+            )
+
+        if self.proposed_guest_count is not None:
+            if self.proposed_guest_count < 1:
+                errors["proposed_guest_count"] = (
+                    "At least one guest is required."
+                )
+            elif self.booking_id and self.booking.property_id:
+                property_obj = self.booking.property
+                capacity = property_obj.adults + property_obj.children
+
+                if self.proposed_guest_count > capacity:
+                    errors["proposed_guest_count"] = (
+                        f"This property accommodates at most {capacity} guests."
+                    )
+
+        if self.created_at and self.expires_at:
+            if self.expires_at <= self.created_at:
+                errors["expires_at"] = (
+                    "The expiration time must be after the creation time."
+                )
+
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        if self.created_at is None:
+            self.created_at = timezone.now()
+
+        if self.expires_at is None:
+            self.expires_at = self.created_at + timedelta(hours=48)
+
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    def is_expired(self):
+        return (
+            self.status == self.Status.PENDING
+            and self.expires_at is not None
+            and timezone.now() >= self.expires_at
+        )
+
+    def __str__(self):
+        return f"Change proposal for booking {self.booking_id} ({self.status})"
+
 class BookingNight(models.Model):
     booking = models.ForeignKey(
         Booking,

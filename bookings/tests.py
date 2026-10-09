@@ -2,7 +2,7 @@ from django.test import TestCase, TransactionTestCase
 from django.urls import reverse
 
 from bookings.views import PENDING_BOOKING_MINUTES
-from .models import User, OwnerProfile, Property, Booking, BookingNight, PropertyAvailability, can_manage_properties
+from .models import User, OwnerProfile, Property, Booking, BookingChangeProposal, BookingNight, PropertyAvailability, can_manage_properties
 from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import ValidationError
 from django.utils import timezone
@@ -16,6 +16,7 @@ from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier, Lock
 from django.core.management import call_command
 from io import StringIO
+from unittest.mock import patch
 
 class OwnerProfileTestCase(TestCase):
     def test_owner_profile_is_pending_by_default(self):
@@ -4015,6 +4016,82 @@ class ExpirePendingBookingsCommandTestCase(TestCase):
 
         self.assertIn("Reservas expiradas: 0", output_first.getvalue())
         self.assertIn("Reservas expiradas: 0", output_second.getvalue())
+
+
+class BookingChangeProposalModelTestCase(BookingTestBase):
+
+    def create_proposal(self, **overrides):
+        if not self.booking1.pk:
+            self.booking1.save()
+
+        data = {
+            "booking": self.booking1,
+            "proposed_initial_date": self.booking1.initial_date,
+            "proposed_final_date": self.booking1.final_date,
+            "proposed_guest_count": 2,
+        }
+        data.update(overrides)
+        return BookingChangeProposal.objects.create(**data)
+
+    def test_creates_pending_proposal_with_48_hour_expiration(self):
+        proposal = self.create_proposal()
+
+        self.assertEqual(
+            proposal.status,
+            BookingChangeProposal.Status.PENDING,
+        )
+        self.assertEqual(
+            proposal.expires_at,
+            proposal.created_at + timedelta(hours=48),
+        )
+
+    def test_rejects_invalid_date_range(self):
+        with self.assertRaises(ValidationError):
+            self.create_proposal(
+                proposed_initial_date=date(2026, 8, 20),
+                proposed_final_date=date(2026, 8, 20),
+            )
+
+    def test_rejects_guest_count_above_property_capacity(self):
+        capacity = self.property.adults + self.property.children
+
+        with self.assertRaises(ValidationError):
+            self.create_proposal(
+                proposed_guest_count=capacity + 1,
+            )
+
+    def test_rejects_zero_guests(self):
+        with self.assertRaises(ValidationError):
+            self.create_proposal(proposed_guest_count=0)
+
+    def test_only_one_pending_proposal_per_booking(self):
+        self.create_proposal()
+
+        with self.assertRaises(ValidationError):
+            self.create_proposal()
+
+    def test_allows_new_proposal_after_previous_is_rejected(self):
+        first = self.create_proposal()
+        first.status = BookingChangeProposal.Status.REJECTED
+        first.save()
+
+        second = self.create_proposal()
+
+        self.assertNotEqual(first.pk, second.pk)
+        self.assertEqual(
+            second.status,
+            BookingChangeProposal.Status.PENDING,
+        )
+
+    def test_proposal_expires_after_48_hours(self):
+        proposal = self.create_proposal()
+
+        self.assertFalse(proposal.is_expired())
+
+        future_time = proposal.expires_at + timedelta(seconds=1)
+
+        with patch("bookings.models.timezone.now", return_value=future_time):
+            self.assertTrue(proposal.is_expired())
 
 class PropertySearchTestCase(TestCase):
 
