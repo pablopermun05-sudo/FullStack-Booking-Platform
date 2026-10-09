@@ -3282,6 +3282,30 @@ class BookingModCreateBookingViewTestCase(BookingTestBase):
             expected_max,
         )
 
+    def test_create_booking_rejects_non_string_guest_name(self):
+        payload = self.booking_payload.copy()
+        payload["guest_first_name"] = 123
+
+        response = self.client.post(
+            reverse(
+                "confirm_booking",
+                kwargs={"property_id": self.property.pk},
+            ),
+            data=json.dumps({
+                "start": (
+                    date.today() + timedelta(days=5)
+                ).isoformat(),
+                "end": (
+                    date.today() + timedelta(days=7)
+                ).isoformat(),
+                **payload,
+            }),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("error", response.json())
+
 class BookingCancellationViewTestCase(BookingTestBase):
 
     def test_delete_booking_rejects_non_post_request(self):

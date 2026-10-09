@@ -772,6 +772,35 @@ def create_booking(request, property_id):
         pk=property_id,
     )
 
+    text_fields = (
+        "guest_first_name",
+        "guest_last_name",
+        "guest_email",
+        "guest_phone_number",
+        "guest_country",
+        "guest_region",
+        "guest_city",
+        "guest_postal_code",
+        "guest_address",
+        "tax_id",
+        "special_requests",
+    )
+
+    invalid_fields = [
+        field
+        for field in text_fields
+        if field in data and not isinstance(data[field], str)
+    ]
+
+    if invalid_fields:
+        return JsonResponse(
+            {
+                "error": "Los campos de texto deben ser cadenas.",
+                "fields": invalid_fields,
+            },
+            status=400,
+        )
+
     guest_first_name = data.get("guest_first_name", "").strip()
     guest_last_name = data.get("guest_last_name", "").strip()
     guest_email = data.get("guest_email", "").strip()
