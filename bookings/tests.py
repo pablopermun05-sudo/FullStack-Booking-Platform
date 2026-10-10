@@ -1,4 +1,4 @@
-from django.test import TestCase, TransactionTestCase
+from django.test import Client, TestCase, TransactionTestCase
 from django.urls import reverse
 
 from bookings.views import PENDING_BOOKING_MINUTES
@@ -16,7 +16,6 @@ from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier, Lock
 from django.core.management import call_command
 from io import StringIO
-from unittest.mock import patch
 
 class OwnerProfileTestCase(TestCase):
     def test_owner_profile_is_pending_by_default(self):
@@ -3950,6 +3949,88 @@ class BookingConcurrencyTestCase(TransactionTestCase):
         self.assertEqual(results.count(True), 1)
         self.assertEqual(results.count(False), 1)
         self.assertEqual(booking.status, "CONFIRMED")
+
+    def test_concurrent_change_proposal_creation_allows_only_one_pending_proposal(self):
+        initial_date = date.today() + timedelta(days=30)
+        final_date = initial_date + timedelta(days=33)
+
+        booking = Booking.objects.create(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=initial_date,
+            final_date=final_date,
+            status="CONFIRMED",
+            expires_at=None,
+            **self.booking_data,
+        )
+
+        OwnerProfile.objects.update_or_create(
+            user_id=self.owner.pk,
+            defaults={"status": "APPROVED"},
+        )
+
+        self.assertEqual(booking.property.owner_id, self.owner.pk)
+
+        owner_check = User.objects.select_related("owner_profile").get(
+            pk=self.owner.pk
+        )
+        self.assertTrue(owner_check.is_approved_owner)
+
+        barrier = Barrier(2)
+
+        def create_proposal():
+            close_old_connections()
+
+            try:
+                client = Client()
+                owner = User.objects.select_related("owner_profile").get(
+                    pk=self.owner.pk
+                )
+
+                client.force_login(owner)
+
+                payload = {
+                    "proposed_initial_date": (
+                        initial_date + timedelta(days=1)
+                    ).isoformat(),
+                    "proposed_final_date": (
+                        final_date + timedelta(days=1)
+                    ).isoformat(),
+                    "proposed_guest_count": 2,
+                }
+
+                barrier.wait(timeout=10)
+
+                response = client.post(
+                    reverse(
+                        "propose_booking_change",
+                        kwargs={"booking_id": booking.pk},
+                    ),
+                    data=json.dumps(payload),
+                    content_type="application/json",
+                )
+
+                return response.status_code
+
+            finally:
+                close_old_connections()
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            futures = [
+                executor.submit(create_proposal)
+                for _ in range(2)
+            ]
+            results = [future.result(timeout=20) for future in futures]
+
+        self.assertCountEqual(results, [201, 409])
+
+        self.assertEqual(
+            BookingChangeProposal.objects.filter(
+                booking_id=booking.pk,
+                status=BookingChangeProposal.Status.PENDING,
+            ).count(),
+            1,
+        )
 
 class ExpirePendingBookingsCommandTestCase(TestCase):
 
