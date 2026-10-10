@@ -424,19 +424,35 @@ def property_availability_save(request, property_id):
         updated_count = 0
         current_date = start_date
 
-        while current_date <= end_date:
-            PropertyAvailability.objects.update_or_create(
-                property=property,
-                date=current_date,
-                defaults={
-                    "status": status,
-                    "min_nights": min_nights,
-                    "price_per_night": price_per_night,
-                },
-            )
+        try:
+            while current_date <= end_date:
+                PropertyAvailability.objects.update_or_create(
+                    property=property,
+                    date=current_date,
+                    defaults={
+                        "status": status,
+                        "min_nights": min_nights,
+                        "price_per_night": price_per_night,
+                    },
+                )
 
-            updated_count += 1
-            current_date += timedelta(days=1)
+                updated_count += 1
+                current_date += timedelta(days=1)
+
+        except ValidationError as exc:
+            error_message = "Invalid availability"
+
+            if "min_nights" in exc.message_dict:
+                error_message = "Invalid minimum nights"
+            elif "price_per_night" in exc.message_dict:
+                error_message = "Invalid price"
+
+            transaction.set_rollback(True)
+
+            return JsonResponse(
+                {"error": error_message},
+                status=400,
+            )
 
     return JsonResponse({
         "updated_count": updated_count,

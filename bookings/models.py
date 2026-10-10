@@ -6,7 +6,7 @@ from django.core.exceptions import ValidationError
 from datetime import date, timedelta
 from django.utils import timezone
 from builtins import property as python_property
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from django.db.models import Q, DateTimeField, F, Func, Value
 from django.contrib.postgres.constraints import ExclusionConstraint
 from django.contrib.postgres.fields import DateRangeField, DateTimeRangeField, RangeOperators
@@ -757,20 +757,49 @@ class PropertyAvailability(models.Model):
         return availability
 
     def clean(self):
-        if self.price_per_night <= 0:
-            raise ValidationError(
+        super().clean()
+
+        errors = {}
+
+        if self.price_per_night in (None, ""):
+            errors["price_per_night"] = (
                 "El precio por noche debe ser mayor que 0"
             )
+        else:
+            try:
+                price = Decimal(str(self.price_per_night))
+                if not price.is_finite() or price <= 0:
+                    errors["price_per_night"] = (
+                        "El precio por noche debe ser mayor que 0"
+                    )
+            except (InvalidOperation, TypeError, ValueError):
+                errors["price_per_night"] = (
+                    "Introduce un precio por noche válido"
+                )
 
-        if self.min_nights < 1:
-            raise ValidationError(
+        if isinstance(self.min_nights, bool):
+            errors["min_nights"] = (
                 "El número mínimo de noches debe ser al menos 1"
             )
+        else:
+            try:
+                min_nights = int(self.min_nights)
+                if str(min_nights) != str(self.min_nights).strip() or min_nights < 1:
+                    errors["min_nights"] = (
+                        "El número mínimo de noches debe ser al menos 1"
+                    )
+            except (TypeError, ValueError):
+                errors["min_nights"] = (
+                    "El número mínimo de noches debe ser al menos 1"
+                )
 
-        if self.date < date.today():
-            raise ValidationError(
+        if self.date is not None and self.date < date.today():
+            errors["date"] = (
                 "No se puede configurar la disponibilidad de una fecha pasada"
             )
+
+        if errors:
+            raise ValidationError(errors)
 
     def save(self, *args, **kwargs):
         self.full_clean()
