@@ -2,7 +2,7 @@ from django.test import Client, TestCase, TransactionTestCase
 from django.urls import reverse
 
 from bookings.views import PENDING_BOOKING_MINUTES
-from .models import User, OwnerProfile, Property, Booking, BookingChangeProposal, BookingNight, PropertyAvailability, can_manage_properties
+from .models import User, OwnerProfile, Property, Booking, BookingChangeProposal, BookingChangeAudit, BookingNight, PropertyAvailability, can_manage_properties
 from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import ValidationError
 from django.utils import timezone
@@ -4996,6 +4996,247 @@ class BookingChangeProposalAcceptViewTestCase(BookingTestBase):
             200,
             response.content.decode(),
         )
+
+class AdminForcedBookingChangeViewTestCase(BookingTestBase):
+    def setUp(self):
+        super().setUp()
+
+        from datetime import timedelta
+        from django.urls import reverse
+        from django.utils import timezone
+
+        self.timedelta = timedelta
+        self.reverse = reverse
+        self.today = timezone.localdate()
+
+        self.booking1.initial_date = self.today + timedelta(days=30)
+        self.booking1.final_date = self.today + timedelta(days=33)
+        self.booking1.status = "CONFIRMED"
+        self.booking1.expires_at = None
+        self.booking1.save()
+
+        self.original_initial_date = self.booking1.initial_date
+        self.original_final_date = self.booking1.final_date
+        self.original_guest_count = self.booking1.guest_count
+        self.original_nights = list(
+            self.booking1.nights.order_by("date").values_list(
+                "date", "price_per_night"
+            )
+        )
+
+        self.admin_user = User.objects.create_superuser(
+            username="forced-change-admin",
+            email="forced-change-admin@example.com",
+            password="test-password",
+        )
+
+        self.url = self.reverse(
+            "admin_force_booking_change",
+            args=[self.booking1.pk],
+        )
+
+        self.payload = {
+            "initial_date": (self.today + timedelta(days=40)).isoformat(),
+            "final_date": (self.today + timedelta(days=44)).isoformat(),
+            "guest_count": 2,
+        }
+
+    def test_anonymous_user_cannot_force_booking_change(self):
+        response = self.client.post(self.url, self.payload)
+
+        self.assertIn(response.status_code, (302, 401, 403, 404))
+
+        self.booking1.refresh_from_db()
+        self.assertEqual(
+            self.booking1.initial_date,
+            self.original_initial_date,
+        )
+        self.assertEqual(
+            self.booking1.final_date,
+            self.original_final_date,
+        )
+
+    def test_owner_cannot_force_booking_change(self):
+        self.client.force_login(self.owner)
+
+        response = self.client.post(self.url, self.payload)
+
+        self.assertEqual(response.status_code, 403)
+        self.booking1.refresh_from_db()
+        self.assertEqual(
+            self.booking1.initial_date,
+            self.original_initial_date,
+        )
+        self.assertEqual(
+            self.booking1.final_date,
+            self.original_final_date,
+        )
+
+    def test_guest_cannot_force_booking_change(self):
+        self.client.force_login(self.tenant)
+
+        response = self.client.post(self.url, self.payload)
+
+        self.assertEqual(response.status_code, 403)
+        self.booking1.refresh_from_db()
+        self.assertEqual(
+            self.booking1.initial_date,
+            self.original_initial_date,
+        )
+        self.assertEqual(
+            self.booking1.final_date,
+            self.original_final_date,
+        )
+
+    def test_get_request_is_not_allowed(self):
+        self.client.force_login(self.admin_user)
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 405)
+
+    def test_admin_force_change_updates_booking_and_creates_audit(self):
+
+        self.client.force_login(self.admin_user)
+
+        response = self.client.post(self.url, self.payload)
+
+        self.assertEqual(response.status_code, 200)
+
+        self.booking1.refresh_from_db()
+
+        self.assertEqual(
+            self.booking1.initial_date,
+            self.today + self.timedelta(days=40),
+        )
+        self.assertEqual(
+            self.booking1.final_date,
+            self.today + self.timedelta(days=44),
+        )
+        self.assertEqual(self.booking1.guest_count, 2)
+        self.assertEqual(self.booking1.status, "CONFIRMED")
+
+        audit = BookingChangeAudit.objects.get(
+            booking=self.booking1,
+        )
+
+        self.assertEqual(audit.actor, self.admin_user)
+
+        self.assertEqual(
+            audit.before_values["initial_date"],
+            self.original_initial_date.isoformat(),
+        )
+        self.assertEqual(
+            audit.before_values["final_date"],
+            self.original_final_date.isoformat(),
+        )
+        self.assertEqual(
+            audit.before_values["guest_count"],
+            self.original_guest_count,
+        )
+
+        self.assertEqual(
+            audit.after_values["initial_date"],
+            self.booking1.initial_date.isoformat(),
+        )
+        self.assertEqual(
+            audit.after_values["final_date"],
+            self.booking1.final_date.isoformat(),
+        )
+        self.assertEqual(
+            audit.after_values["guest_count"],
+            2,
+        )
+
+        actual_nights = list(
+            self.booking1.nights.order_by("date").values_list(
+                "date", "price_per_night"
+            )
+        )
+
+        expected_nights = [
+            (
+                self.today + self.timedelta(days=40 + offset),
+                __import__("decimal").Decimal(str(night["price_per_night"]))
+            )
+            for offset, night in enumerate(
+                audit.after_values["nights"]
+            )
+        ]
+
+        self.assertEqual(actual_nights, expected_nights)
+
+
+    def test_audit_failure_rolls_back_booking_and_nights(self):
+
+        self.client.force_login(self.admin_user)
+
+        proposal = BookingChangeProposal.objects.create(
+            booking=self.booking1,
+            proposed_initial_date=self.today + self.timedelta(days=50),
+            proposed_final_date=self.today + self.timedelta(days=54),
+            proposed_guest_count=2,
+        )
+
+        with patch(
+            "bookings.views.BookingChangeAudit.objects.create",
+            side_effect=IntegrityError("Simulated audit failure"),
+        ):
+            response = self.client.post(self.url, self.payload)
+
+        self.assertEqual(response.status_code, 409)
+
+        self.booking1.refresh_from_db()
+
+        self.assertEqual(
+            self.booking1.initial_date,
+            self.original_initial_date,
+        )
+        self.assertEqual(
+            self.booking1.final_date,
+            self.original_final_date,
+        )
+        self.assertEqual(
+            self.booking1.guest_count,
+            self.original_guest_count,
+        )
+
+        self.assertEqual(
+            list(
+                self.booking1.nights.order_by("date").values_list(
+                    "date", "price_per_night"
+                )
+            ),
+            self.original_nights,
+        )
+
+        self.assertFalse(
+            BookingChangeAudit.objects.filter(
+                booking=self.booking1,
+            ).exists()
+        )
+
+        proposal.refresh_from_db()
+        self.assertEqual(proposal.status, "PENDING")
+
+    def test_admin_force_change_expires_pending_proposals(self):
+        from bookings.models import BookingChangeProposal
+
+        proposal = BookingChangeProposal.objects.create(
+            booking=self.booking1,
+            proposed_initial_date=self.today + self.timedelta(days=50),
+            proposed_final_date=self.today + self.timedelta(days=54),
+            proposed_guest_count=2,
+        )
+
+        self.client.force_login(self.admin_user)
+
+        response = self.client.post(self.url, self.payload)
+
+        self.assertEqual(response.status_code, 200)
+
+        proposal.refresh_from_db()
+        self.assertEqual(proposal.status, "EXPIRED")
 
 class PropertySearchTestCase(TestCase):
 

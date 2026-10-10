@@ -644,6 +644,30 @@ class BookingChangeProposal(models.Model):
     def __str__(self):
         return f"Change proposal for booking {self.booking_id} ({self.status})"
 
+class BookingChangeAudit(models.Model):
+    booking = models.ForeignKey(
+        Booking,
+        on_delete=models.PROTECT,
+        related_name="change_audits",
+    )
+    actor = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name="booking_change_audits",
+    )
+    changed_at = models.DateTimeField(auto_now_add=True)
+    before_values = models.JSONField()
+    after_values = models.JSONField()
+
+    class Meta:
+        ordering = ["-changed_at"]
+
+    def __str__(self):
+        return (
+            f"Booking change audit #{self.pk} "
+            f"for booking #{self.booking_id}"
+        )
+
 class BookingNight(models.Model):
     booking = models.ForeignKey(
         Booking,

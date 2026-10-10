@@ -6,7 +6,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.db import IntegrityError
 from django.db.models import Exists, F, IntegerField, OuterRef, Subquery
 from django.db.models.functions import Coalesce
-from .models import User, OwnerProfile, Property, Booking, BookingChangeProposal, BookingNight, PropertyAvailability, can_manage_properties
+from .models import User, OwnerProfile, Property, Booking, BookingChangeProposal, BookingChangeAudit, BookingNight, PropertyAvailability, can_manage_properties
 from django import forms
 from django.forms import ModelForm
 from django.contrib.auth.forms import UserCreationForm
@@ -715,6 +715,241 @@ def booking(request, property_id):
 
     except ValueError:
         return JsonResponse({"error": "Formato de fecha inválido."}, status=400)
+
+@login_required
+def admin_force_booking_change(request, booking_id):
+    if request.method != "POST":
+        return JsonResponse(
+            {"error": "Method not allowed."},
+            status=405,
+        )
+
+    if not request.user.is_staff:
+        return JsonResponse(
+            {"error": "Only administrators can force booking changes."},
+            status=403,
+        )
+
+    from django.utils.dateparse import parse_date
+
+    initial_date = parse_date(request.POST.get("initial_date", ""))
+    final_date = parse_date(request.POST.get("final_date", ""))
+
+    try:
+        guest_count = int(request.POST.get("guest_count", ""))
+    except (TypeError, ValueError):
+        return JsonResponse(
+            {"error": "Invalid guest count."},
+            status=400,
+        )
+
+    if initial_date is None or final_date is None:
+        return JsonResponse(
+            {"error": "Invalid booking dates."},
+            status=400,
+        )
+
+    try:
+        with transaction.atomic():
+            booking = (
+                Booking.objects.select_for_update()
+                .get(pk=booking_id)
+            )
+
+            property_obj = (
+                Property.objects.select_for_update()
+                .get(pk=booking.property_id)
+            )
+
+            booking.refresh_from_db()
+
+            if booking.status not in Booking.ACTIVE_STATUSES:
+                return JsonResponse(
+                    {"error": "This booking cannot be changed."},
+                    status=409,
+                )
+
+            if booking.is_expired():
+                return JsonResponse(
+                    {"error": "This booking has expired."},
+                    status=409,
+                )
+
+            if initial_date >= final_date:
+                return JsonResponse(
+                    {
+                        "error": (
+                            "The final date must be after "
+                            "the initial date."
+                        )
+                    },
+                    status=400,
+                )
+
+            if guest_count < 1:
+                return JsonResponse(
+                    {"error": "Guest count must be at least 1."},
+                    status=400,
+                )
+
+            capacity = property_obj.adults + property_obj.children
+
+            if guest_count > capacity:
+                return JsonResponse(
+                    {"error": "Guest count exceeds property capacity."},
+                    status=400,
+                )
+
+            availability = list(
+                PropertyAvailability.get_for_range(
+                    property_obj,
+                    initial_date,
+                    final_date,
+                )
+            )
+
+            expected_nights = (final_date - initial_date).days
+
+            if len(availability) != expected_nights:
+                return JsonResponse(
+                    {
+                        "error": (
+                            "Availability is incomplete for "
+                            "the selected dates."
+                        )
+                    },
+                    status=409,
+                )
+
+            if any(
+                item["status"] != "OPEN"
+                for item in availability
+            ):
+                return JsonResponse(
+                    {
+                        "error": (
+                            "The property is unavailable for "
+                            "the selected dates."
+                        )
+                    },
+                    status=409,
+                )
+
+            if expected_nights < availability[0]["min_nights"]:
+                return JsonResponse(
+                    {
+                        "error": (
+                            "The stay does not meet the minimum "
+                            "number of nights."
+                        )
+                    },
+                    status=400,
+                )
+
+            before_values = {
+                "initial_date": booking.initial_date.isoformat(),
+                "final_date": booking.final_date.isoformat(),
+                "guest_count": booking.guest_count,
+                "status": booking.status,
+                "nights": [
+                    {
+                        "date": night.date.isoformat(),
+                        "price_per_night": str(night.price_per_night),
+                    }
+                    for night in booking.nights.order_by("date")
+                ],
+            }
+
+            booking.initial_date = initial_date
+            booking.final_date = final_date
+            booking.guest_count = guest_count
+            booking.save(
+                update_fields=[
+                    "initial_date",
+                    "final_date",
+                    "guest_count",
+                ]
+            )
+
+            booking.nights.all().delete()
+
+            BookingNight.objects.bulk_create(
+                [
+                    BookingNight(
+                        booking=booking,
+                        date=item["date"],
+                        price_per_night=item["price_per_night"],
+                    )
+                    for item in availability
+                ]
+            )
+
+            after_values = {
+                "initial_date": booking.initial_date.isoformat(),
+                "final_date": booking.final_date.isoformat(),
+                "guest_count": booking.guest_count,
+                "status": booking.status,
+                "nights": [
+                    {
+                        "date": item["date"].isoformat(),
+                        "price_per_night": str(item["price_per_night"]),
+                    }
+                    for item in availability
+                ],
+            }
+
+            BookingChangeAudit.objects.create(
+                booking=booking,
+                actor=request.user,
+                before_values=before_values,
+                after_values=after_values,
+            )
+
+            pending_proposals = (
+                BookingChangeProposal.objects.select_for_update()
+                .filter(
+                    booking=booking,
+                    status="PENDING",
+                )
+            )
+            pending_proposals.update(status="EXPIRED")
+
+        return JsonResponse(
+            {
+                "success": True,
+                "booking_id": booking.pk,
+                "initial_date": booking.initial_date.isoformat(),
+                "final_date": booking.final_date.isoformat(),
+                "guest_count": booking.guest_count,
+            },
+            status=200,
+        )
+
+    except Booking.DoesNotExist:
+        return JsonResponse(
+            {"error": "Booking not found."},
+            status=404,
+        )
+    except Property.DoesNotExist:
+        return JsonResponse(
+            {"error": "Property not found."},
+            status=404,
+        )
+    except ValidationError as exc:
+        return JsonResponse(
+            {"error": exc.messages},
+            status=400,
+        )
+    except IntegrityError:
+        return JsonResponse(
+            {
+                "error": (
+                    "The requested change conflicts with "
+                    "existing bookings."
+                )
+            },
+            status=409,
+        )
 
 @login_required
 def propose_booking_change(request, booking_id):
