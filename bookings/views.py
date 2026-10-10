@@ -961,6 +961,16 @@ def accept_booking_change_proposal(request, proposal_id):
                     status=409,
                 )
 
+            if (
+                booking.status == "PENDING"
+                and booking.expires_at is not None
+                and booking.expires_at <= timezone.now()
+            ):
+                return JsonResponse(
+                    {"error": "La reserva pendiente ha caducado."},
+                    status=409,
+                )
+
             property = booking.property
             initial_date = proposal.proposed_initial_date
             final_date = proposal.proposed_final_date

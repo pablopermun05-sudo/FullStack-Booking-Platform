@@ -4237,7 +4237,7 @@ class BookingChangeProposalViewTestCase(BookingTestBase):
         self.assertEqual(second_response.status_code, 409)
 
     def test_new_proposal_can_be_created_after_previous_one_expires(self):
-        
+
         self.client.force_login(self.owner)
 
         first_response = self.client.post(
@@ -4621,6 +4621,111 @@ class BookingChangeProposalAcceptViewTestCase(BookingTestBase):
             ),
             original_nights,
         )
+
+    def test_cannot_accept_proposal_when_original_pending_booking_expired(self):
+
+        Booking.objects.filter(pk=self.booking1.pk).update(
+            status="PENDING",
+            expires_at=self.timezone.now() - self.timedelta(minutes=1),
+        )
+
+        response = self.client.post(self.accept_url())
+
+        self.assertEqual(response.status_code, 409)
+
+        self.booking1.refresh_from_db()
+        self.proposal.refresh_from_db()
+
+        self.assertEqual(self.booking1.status, "PENDING")
+        self.assertLessEqual(
+            self.booking1.expires_at,
+            self.timezone.now(),
+        )
+        self.assertEqual(
+            self.booking1.initial_date,
+            self.timezone.localdate() + self.timedelta(days=30),
+        )
+        self.assertEqual(
+            self.booking1.final_date,
+            self.timezone.localdate() + self.timedelta(days=33),
+        )
+        self.assertEqual(
+            self.proposal.status,
+            BookingChangeProposal.Status.PENDING,
+        )
+
+    def test_failed_night_creation_rolls_back_booking_and_proposal(self):
+
+        original_initial_date = self.booking1.initial_date
+        original_final_date = self.booking1.final_date
+        original_guest_count = self.booking1.guest_count
+        original_status = self.booking1.status
+        original_expires_at = self.booking1.expires_at
+
+        original_nights = list(
+            self.booking1.nights.order_by("date").values_list(
+                "date", "price_per_night"
+            )
+        )
+
+        with patch(
+            "bookings.views.BookingNight.objects.bulk_create",
+            side_effect=RuntimeError("Simulated night creation failure"),
+        ):
+            with self.assertRaises(RuntimeError):
+                self.client.post(self.accept_url())
+
+        self.booking1.refresh_from_db()
+        self.proposal.refresh_from_db()
+
+        self.assertEqual(self.booking1.initial_date, original_initial_date)
+        self.assertEqual(self.booking1.final_date, original_final_date)
+        self.assertEqual(self.booking1.guest_count, original_guest_count)
+        self.assertEqual(self.booking1.status, original_status)
+        self.assertEqual(self.booking1.expires_at, original_expires_at)
+
+        self.assertEqual(
+            list(
+                self.booking1.nights.order_by("date").values_list(
+                    "date", "price_per_night"
+                )
+            ),
+            original_nights,
+        )
+
+        self.assertEqual(
+            self.proposal.status,
+            BookingChangeProposal.Status.PENDING,
+        )
+
+    
+    def test_pending_proposal_does_not_block_proposed_dates(self):
+
+        competing_booking = Booking(
+            tenant=self.tenant,
+            property=self.booking1.property,
+            initial_date=self.proposal.proposed_initial_date,
+            final_date=self.proposal.proposed_final_date,
+            status="CONFIRMED",
+            expires_at=None,
+            guest_first_name="Otra",
+            guest_last_name="Reserva",
+            guest_email="other@example.com",
+            guest_phone_number="+34600111223",
+            guest_country="España",
+            guest_city="Madrid",
+            guest_address="Otra dirección",
+            guest_count=2,
+            arrival_time=time(18, 0),
+        )
+
+        try:
+            with transaction.atomic():
+                competing_booking.save()
+        except (IntegrityError, ValidationError):
+            self.fail(
+                "Una propuesta pendiente no debe bloquear las fechas propuestas."
+            )
 
 class PropertySearchTestCase(TestCase):
 
