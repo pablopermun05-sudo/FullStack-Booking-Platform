@@ -4490,6 +4490,32 @@ class BookingChangeProposalViewTestCase(BookingTestBase):
         }
 
     def test_approved_owner_can_create_proposal(self):
+
+        # Preparar noches existentes con precios distintos.
+        BookingNight.objects.create(
+            booking=self.booking1,
+            date=self.booking1.initial_date,
+            price_per_night=Decimal("80.00"),
+        )
+        BookingNight.objects.create(
+            booking=self.booking1,
+            date=self.booking1.initial_date + timedelta(days=1),
+            price_per_night=Decimal("95.00"),
+        )
+
+        # Guardar el estado original completo que debe permanecer intacto.
+        original_initial_date = self.booking1.initial_date
+        original_final_date = self.booking1.final_date
+        original_guest_count = self.booking1.guest_count
+        original_status = self.booking1.status
+        original_expires_at = self.booking1.expires_at
+
+        original_nights = list(
+            self.booking1.nights.order_by("date").values_list(
+                "date", "price_per_night"
+            )
+        )
+
         self.client.force_login(self.owner)
 
         response = self.client.post(
@@ -4499,6 +4525,7 @@ class BookingChangeProposalViewTestCase(BookingTestBase):
         )
 
         self.assertEqual(response.status_code, 201)
+
         self.assertEqual(
             BookingChangeProposal.objects.filter(
                 booking=self.booking1,
@@ -4507,11 +4534,21 @@ class BookingChangeProposalViewTestCase(BookingTestBase):
             1,
         )
 
+        # La propuesta no debe modificar la reserva original.
         self.booking1.refresh_from_db()
-        self.assertEqual(
-            self.booking1.initial_date,
-            date.today() + timedelta(days=30),
+
+        self.assertEqual(self.booking1.initial_date, original_initial_date)
+        self.assertEqual(self.booking1.final_date, original_final_date)
+        self.assertEqual(self.booking1.guest_count, original_guest_count)
+        self.assertEqual(self.booking1.status, original_status)
+        self.assertEqual(self.booking1.expires_at, original_expires_at)
+
+        current_nights = list(
+            self.booking1.nights.order_by("date").values_list(
+                "date", "price_per_night"
+            )
         )
+        self.assertEqual(current_nights, original_nights)
 
     def test_non_owner_cannot_create_proposal(self):
         self.client.force_login(self.tenant)
