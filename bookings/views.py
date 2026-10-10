@@ -242,28 +242,32 @@ def property_availability_reset(request, property_id):
             {"error": "Start date must be before or equal to end date"},
             status=400,
         )
+    
+    with transaction.atomic():
+        Property.objects.select_for_update().get(pk=property.pk)
 
-    has_bookings = Booking.objects.filter(
-        property=property,
-        initial_date__lte=end_date,
-        final_date__gt=start_date,
-        status__in=Booking.ACTIVE_STATUSES,
-    ).exists()
+        has_bookings = Booking.objects.filter(
+            property=property,
+            initial_date__lte=end_date,
+            final_date__gt=start_date,
+            status__in=Booking.ACTIVE_STATUSES,
+        ).exists()
 
-    if has_bookings:
-        return JsonResponse(
-            {"error": "No se pueden restaurar días que tienen reservas."},
-            status=400,
-        )
+        if has_bookings:
+            return JsonResponse(
+                {"error": "No se pueden restaurar días que tienen reservas."},
+                status=400,
+            )
 
-    deleted_count, _ = PropertyAvailability.objects.filter(
-        property=property,
-        date__range=[start_date, end_date],
-    ).delete()
+        deleted_count, _ = PropertyAvailability.objects.filter(
+            property=property,
+            date__range=[start_date, end_date],
+        ).delete()
 
     return JsonResponse({
         "deleted_count": deleted_count,
     })
+
 
 def property_availability_data(request, property_id):
     
@@ -400,70 +404,39 @@ def property_availability_save(request, property_id):
             {"error": "Start date must be before or equal to end date"},
             status=400,
         )
+    
+    with transaction.atomic():
+        Property.objects.select_for_update().get(pk=property.pk)
 
-    has_bookings = Booking.objects.filter(
-        property=property,
-        initial_date__lte=end_date,
-        final_date__gt=start_date,
-        status__in=Booking.ACTIVE_STATUSES,
-    ).exists()
-
-    if has_bookings:
-        return JsonResponse(
-            {"error": "No se pueden modificar días que tienen reservas."},
-            status=400,
-        )
-
-    try:
-        min_nights = int(min_nights)
-    except ValueError:
-        return JsonResponse(
-            {"error": "Invalid minimum nights"},
-            status=400,
-        )
-
-    if min_nights < 1:
-        return JsonResponse(
-            {"error": "Minimum nights must be at least 1"},
-            status=400,
-        )
-
-    try:
-        price_per_night = Decimal(price_per_night)
-    except (InvalidOperation, ValueError):
-        return JsonResponse(
-            {"error": "Invalid price"},
-            status=400,
-        )
-
-    if price_per_night <= 0:
-        return JsonResponse(
-            {"error": "Price must be greater than 0"},
-            status=400,
-        )
-
-    if price_per_night > Decimal("99999.99"):
-        return JsonResponse(
-            {"error": "Price must not exceed 99999.99"},
-            status=400,
-        )
-
-    updated_count = 0
-    current_date = start_date
-
-    while current_date <= end_date:
-        PropertyAvailability.objects.update_or_create(
+        has_bookings = Booking.objects.filter(
             property=property,
-            date=current_date,
-            defaults={
-                "status": status,
-                "min_nights": min_nights,
-                "price_per_night": price_per_night,
-            },
-        )
+            initial_date__lte=end_date,
+            final_date__gt=start_date,
+            status__in=Booking.ACTIVE_STATUSES,
+        ).exists()
 
-        updated_count += 1
-        current_date += timedelta(days=1)
+        if has_bookings:
+            return JsonResponse(
+                {"error": "No se pueden modificar días que tienen reservas."},
+                status=400,
+            )
+
+        updated_count = 0
+        current_date = start_date
+
+        while current_date <= end_date:
+            PropertyAvailability.objects.update_or_create(
+                property=property,
+                date=current_date,
+                defaults={
+                    "status": status,
+                    "min_nights": min_nights,
+                    "price_per_night": price_per_night,
+                },
+            )
+
+            updated_count += 1
+            current_date += timedelta(days=1)
 
     return JsonResponse({
         "updated_count": updated_count,

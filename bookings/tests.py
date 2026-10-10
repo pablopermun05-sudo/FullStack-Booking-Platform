@@ -3654,21 +3654,11 @@ class BookingConcurrencyTestCase(TransactionTestCase):
         expires_at = timezone.now() + timedelta(minutes=15)
 
         barrier = Barrier(2)
-        original_create = Booking.objects.create
-        calls_lock = Lock()
-        initial_calls = 0
+        original_create_pending = Booking.create_pending
 
-        def synchronized_create(*args, **kwargs):
-            nonlocal initial_calls
-
-            with calls_lock:
-                initial_calls += 1
-                synchronize = initial_calls <= 2
-
-            if synchronize:
-                barrier.wait(timeout=10)
-
-            return original_create(*args, **kwargs)
+        def synchronized_create_pending(*args, **kwargs):
+            barrier.wait(timeout=10)
+            return original_create_pending(*args, **kwargs)
 
         def create_pending_booking():
             close_old_connections()
@@ -3691,9 +3681,9 @@ class BookingConcurrencyTestCase(TransactionTestCase):
                 close_old_connections()
 
         with patch.object(
-            Booking.objects,
-            "create",
-            side_effect=synchronized_create,
+            Booking,
+            "create_pending",
+            side_effect=synchronized_create_pending,
         ):
             with ThreadPoolExecutor(max_workers=2) as executor:
                 results = list(

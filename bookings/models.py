@@ -285,9 +285,13 @@ class Booking(models.Model):
         for attempt in range(max_retries):
             try:
                 with transaction.atomic():
+                    locked_property = Property.objects.select_for_update().get(
+                        pk=property.pk
+                    )
+
                     booking = cls.objects.create(
                         tenant=tenant,
-                        property=property,
+                        property=locked_property,
                         initial_date=initial_date,
                         final_date=final_date,
                         status="PENDING",
