@@ -22,6 +22,7 @@ from django.core.exceptions import ValidationError
 from django.core.exceptions import PermissionDenied
 from django.shortcuts import get_object_or_404
 from django.db import transaction
+from .services import generate_proposal_access_token, hash_proposal_access_token
 
 # Create your views here.
 class SearchForm(forms.Form):
@@ -951,6 +952,53 @@ def admin_force_booking_change(request, booking_id):
             status=409,
         )
 
+def view_booking_change_proposal_by_token(request, token):
+    if request.method != "GET":
+        return JsonResponse(
+            {"error": "Método no permitido."},
+            status=405,
+        )
+
+    token_hash = hash_proposal_access_token(token)
+
+    proposal = BookingChangeProposal.objects.select_related(
+        "booking",
+        "booking__property",
+    ).filter(
+        access_token_hash=token_hash,
+    ).first()
+
+    if proposal is None:
+        return JsonResponse(
+            {"error": "El enlace no es válido."},
+            status=404,
+        )
+
+    if proposal.status != BookingChangeProposal.Status.PENDING:
+        return JsonResponse(
+            {"error": "Esta propuesta ya no está disponible."},
+            status=410,
+        )
+
+    if proposal.is_expired():
+        proposal.status = BookingChangeProposal.Status.EXPIRED
+        proposal.save(update_fields=["status"])
+
+        return JsonResponse(
+            {"error": "Esta propuesta ha caducado."},
+            status=410,
+        )
+
+    return JsonResponse({
+        "booking_id": proposal.booking_id,
+        "property_title": proposal.booking.property.title,
+        "proposed_initial_date": proposal.proposed_initial_date.isoformat(),
+        "proposed_final_date": proposal.proposed_final_date.isoformat(),
+        "proposed_guest_count": proposal.proposed_guest_count,
+        "expires_at": proposal.expires_at.isoformat(),
+        "status": proposal.status,
+    })
+
 @login_required
 def propose_booking_change(request, booking_id):
     if request.method != "POST":
@@ -973,13 +1021,6 @@ def propose_booking_change(request, booking_id):
         and not request.user.is_staff
     ):
         raise PermissionDenied
-
-    # Las reservas anónimas y las reservas ya finalizadas no se editan aquí.
-    if booking.tenant is None:
-        return JsonResponse(
-            {"error": "Las reservas anónimas no admiten propuestas de cambio."},
-            status=400,
-        )
 
     if booking.status not in ("PENDING", "CONFIRMED"):
         return JsonResponse(
@@ -1091,11 +1132,14 @@ def propose_booking_change(request, booking_id):
                     status=409,
                 )
 
+            raw_token, token_hash = generate_proposal_access_token()
+
             proposal = BookingChangeProposal.objects.create(
                 booking=booking,
                 proposed_initial_date=proposed_initial_date,
                 proposed_final_date=proposed_final_date,
                 proposed_guest_count=proposed_guest_count,
+                access_token_hash=token_hash,
             )
 
     except ValidationError as exc:

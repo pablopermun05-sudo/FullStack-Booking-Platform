@@ -535,6 +535,14 @@ class BookingChangeProposal(models.Model):
     proposed_final_date = models.DateField()
     proposed_guest_count = models.PositiveIntegerField()
 
+    access_token_hash = models.CharField(
+        max_length=64,
+        unique=True,
+        null=True,
+        blank=True,
+        editable=False,
+    )
+
     status = models.CharField(
         max_length=10,
         choices=Status.choices,

@@ -10,12 +10,16 @@ from django.db import IntegrityError, OperationalError, transaction, close_old_c
 from datetime import date, time, timedelta
 import time as time_module
 from unittest.mock import patch
+import hashlib
+import secrets
+from urllib.parse import urlparse, parse_qs
 from decimal import Decimal
 import json
 from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier, Lock
 from django.core.management import call_command
 from io import StringIO
+from bookings.services import generate_proposal_access_token
 
 class OwnerProfileTestCase(TestCase):
     def test_owner_profile_is_pending_by_default(self):
@@ -4388,16 +4392,21 @@ class ExpirePendingBookingsCommandTestCase(TestCase):
 class BookingChangeProposalModelTestCase(BookingTestBase):
 
     def create_proposal(self, **overrides):
+        
         if not self.booking1.pk:
             self.booking1.save()
+
+        _, token_hash = generate_proposal_access_token()
 
         data = {
             "booking": self.booking1,
             "proposed_initial_date": self.booking1.initial_date,
             "proposed_final_date": self.booking1.final_date,
             "proposed_guest_count": 2,
+            "access_token_hash": token_hash,
         }
         data.update(overrides)
+
         return BookingChangeProposal.objects.create(**data)
 
     def test_creates_pending_proposal_with_48_hour_expiration(self):
@@ -4459,6 +4468,21 @@ class BookingChangeProposalModelTestCase(BookingTestBase):
 
         with patch("bookings.models.timezone.now", return_value=future_time):
             self.assertTrue(proposal.is_expired())
+
+    def test_each_proposal_has_an_access_token_hash(self):
+        first = self.create_proposal()
+
+        first.status = BookingChangeProposal.Status.REJECTED
+        first.save(update_fields=["status"])
+
+        second = self.create_proposal()
+
+        self.assertTrue(first.access_token_hash)
+        self.assertTrue(second.access_token_hash)
+        self.assertNotEqual(
+            first.access_token_hash,
+            second.access_token_hash,
+        )
 
 class BookingChangeProposalViewTestCase(BookingTestBase):
     def setUp(self):
@@ -4550,6 +4574,17 @@ class BookingChangeProposalViewTestCase(BookingTestBase):
         )
         self.assertEqual(current_nights, original_nights)
 
+        proposal = BookingChangeProposal.objects.get(
+            booking=self.booking1,
+            status=BookingChangeProposal.Status.PENDING,
+        )
+
+        self.assertTrue(proposal.access_token_hash)
+        self.assertNotIn(
+            proposal.access_token_hash,
+            response.content.decode(),
+        )
+
     def test_non_owner_cannot_create_proposal(self):
         self.client.force_login(self.tenant)
 
@@ -4575,7 +4610,8 @@ class BookingChangeProposalViewTestCase(BookingTestBase):
 
         self.assertEqual(response.status_code, 302)
 
-    def test_anonymous_booking_cannot_have_change_proposal(self):
+    def test_anonymous_booking_can_have_change_proposal(self):
+
         self.booking1.tenant = None
         self.booking1.save()
 
@@ -4587,7 +4623,22 @@ class BookingChangeProposalViewTestCase(BookingTestBase):
             content_type="application/json",
         )
 
-        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.status_code, 201)
+
+        proposal = BookingChangeProposal.objects.get(
+            booking=self.booking1,
+            status=BookingChangeProposal.Status.PENDING,
+        )
+
+        self.assertIsNotNone(proposal.expires_at)
+
+        self.booking1.refresh_from_db()
+        self.assertEqual(
+            self.booking1.initial_date,
+            date.today() + timedelta(days=30),
+        )
+        self.assertIsNone(self.booking1.tenant)
+        self.assertTrue(proposal.access_token_hash)
 
     def test_invalid_date_range_is_rejected(self):
         self.client.force_login(self.owner)
@@ -5328,6 +5379,150 @@ class BookingChangeProposalAcceptViewTestCase(BookingTestBase):
             response.status_code,
             200,
             response.content.decode(),
+        )
+
+class BookingChangeProposalTokenTestCase(BookingTestBase):
+
+    def setUp(self):
+            super().setUp()
+    
+            from bookings.services import generate_proposal_access_token
+    
+            self.booking1.initial_date = date.today() + timedelta(days=30)
+            self.booking1.final_date = date.today() + timedelta(days=33)
+            self.booking1.save()
+    
+            raw_token, token_hash = generate_proposal_access_token()
+            self.raw_token = raw_token
+    
+            self.proposal = BookingChangeProposal.objects.create(
+                booking=self.booking1,
+                proposed_initial_date=self.booking1.initial_date + timedelta(days=1),
+                proposed_final_date=self.booking1.final_date + timedelta(days=1),
+                proposed_guest_count=2,
+                access_token_hash=token_hash,
+            )
+    
+            self.url = reverse(
+                "view_booking_change_proposal_by_token",
+                kwargs={"token": self.raw_token},
+            )
+
+    def test_access_token_hash_is_sha256_of_raw_token(self):
+        from bookings.services import (
+            generate_proposal_access_token,
+            hash_proposal_access_token,
+        )
+
+        raw_token, token_hash = generate_proposal_access_token()
+
+        self.assertTrue(raw_token)
+        self.assertEqual(len(token_hash), 64)
+        self.assertEqual(
+            token_hash,
+            hashlib.sha256(raw_token.encode("utf-8")).hexdigest(),
+        )
+        self.assertEqual(hash_proposal_access_token(raw_token), token_hash)
+
+    def test_different_tokens_produce_different_hashes(self):
+        from bookings.services import generate_proposal_access_token
+
+        _, first_hash = generate_proposal_access_token()
+        _, second_hash = generate_proposal_access_token()
+
+        self.assertNotEqual(first_hash, second_hash)
+
+    def test_raw_token_is_not_stored_on_proposal(self):
+        from bookings.services import generate_proposal_access_token
+
+        self.booking1.save()
+
+        # Evitar conflictos con la restricción de una propuesta pendiente por reserva.
+        BookingChangeProposal.objects.filter(
+            booking=self.booking1,
+            status=BookingChangeProposal.Status.PENDING,
+        ).update(status=BookingChangeProposal.Status.REJECTED)
+
+        raw_token, token_hash = generate_proposal_access_token()
+        proposal = BookingChangeProposal.objects.create(
+            booking=self.booking1,
+            proposed_initial_date=self.booking1.initial_date,
+            proposed_final_date=self.booking1.final_date,
+            proposed_guest_count=2,
+            access_token_hash=token_hash,
+        )
+
+        proposal.refresh_from_db()
+        self.assertEqual(proposal.access_token_hash, token_hash)
+        self.assertNotEqual(proposal.access_token_hash, raw_token)
+
+    def test_valid_token_can_view_pending_proposal_without_login(self):
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json()["proposed_initial_date"],
+            self.proposal.proposed_initial_date.isoformat(),
+        )
+        self.assertEqual(
+            response.json()["proposed_final_date"],
+            self.proposal.proposed_final_date.isoformat(),
+        )
+
+    def test_invalid_token_cannot_access_proposal(self):
+        response = self.client.get(
+            reverse(
+                "view_booking_change_proposal_by_token",
+                kwargs={"token": "invalid-token"},
+            )
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_expired_proposal_cannot_be_viewed(self):
+        BookingChangeProposal.objects.filter(
+            pk=self.proposal.pk,
+        ).update(
+            expires_at=timezone.now() - timedelta(minutes=1),
+        )
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 410)
+
+        self.proposal.refresh_from_db()
+        self.assertEqual(
+            self.proposal.status,
+            BookingChangeProposal.Status.EXPIRED,
+        )
+
+    def test_resolved_proposal_cannot_be_viewed(self):
+        self.proposal.status = BookingChangeProposal.Status.REJECTED
+        self.proposal.save(update_fields=["status"])
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 410)
+
+    def test_get_does_not_modify_booking(self):
+        original_dates = (
+            self.booking1.initial_date,
+            self.booking1.final_date,
+            self.booking1.guest_count,
+        )
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 200)
+
+        self.booking1.refresh_from_db()
+        self.assertEqual(
+            (
+                self.booking1.initial_date,
+                self.booking1.final_date,
+                self.booking1.guest_count,
+            ),
+            original_dates,
         )
 
 class AdminForcedBookingChangeViewTestCase(BookingTestBase):
