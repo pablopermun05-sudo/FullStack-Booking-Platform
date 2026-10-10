@@ -607,6 +607,16 @@ class BookingChangeProposal(models.Model):
         if self.expires_at is None:
             self.expires_at = self.created_at + timedelta(hours=48)
 
+        # Al cambiar únicamente el estado de una propuesta existente,
+        # no volver a validar la fecha de caducidad.
+        update_fields = kwargs.get("update_fields")
+        if update_fields is not None:
+            update_fields = set(update_fields)
+            kwargs["update_fields"] = update_fields
+
+            if update_fields.issubset({"status"}):
+                return super().save(*args, **kwargs)
+
         self.full_clean()
         super().save(*args, **kwargs)
 

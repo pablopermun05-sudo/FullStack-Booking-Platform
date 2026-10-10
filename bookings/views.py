@@ -833,24 +833,47 @@ def propose_booking_change(request, booking_id):
             status=400,
         )
 
-    if BookingChangeProposal.objects.filter(
-        booking=booking,
-        status=BookingChangeProposal.Status.PENDING,
-        expires_at__gt=timezone.now(),
-    ).exists():
-        return JsonResponse(
-            {"error": "Ya existe una propuesta pendiente para esta reserva."},
-            status=409,
-        )
-
     try:
         with transaction.atomic():
+            # Serializar las creaciones y modificaciones de propuestas
+            # asociadas a esta reserva.
+            booking = Booking.objects.select_for_update().get(
+                pk=booking_id
+            )
+
+            # Comprobar de nuevo que la reserva sigue admitiendo cambios.
+            if booking.status not in Booking.ACTIVE_STATUSES:
+                return JsonResponse(
+                    {"error": "No se pueden proponer cambios para esta reserva."},
+                    status=409,
+                )
+
+            # Caducar propuestas anteriores vencidas antes de crear otra.
+            BookingChangeProposal.objects.filter(
+                booking=booking,
+                status=BookingChangeProposal.Status.PENDING,
+                expires_at__isnull=False,
+                expires_at__lte=timezone.now(),
+            ).update(status=BookingChangeProposal.Status.EXPIRED)
+
+            # Una propuesta pendiente y vigente impide crear otra.
+            if BookingChangeProposal.objects.filter(
+                booking=booking,
+                status=BookingChangeProposal.Status.PENDING,
+                expires_at__gt=timezone.now(),
+            ).exists():
+                return JsonResponse(
+                    {"error": "Ya existe una propuesta pendiente para esta reserva."},
+                    status=409,
+                )
+
             proposal = BookingChangeProposal.objects.create(
                 booking=booking,
                 proposed_initial_date=proposed_initial_date,
                 proposed_final_date=proposed_final_date,
                 proposed_guest_count=proposed_guest_count,
             )
+
     except ValidationError as exc:
         return JsonResponse(
             {"error": exc.messages},
@@ -1074,12 +1097,19 @@ def reject_booking_change_proposal(request, proposal_id):
         raise PermissionDenied
 
     with transaction.atomic():
+        # Bloquear primero la reserva, igual que en la aceptación.
+        booking = get_object_or_404(
+            Booking.objects.select_for_update(),
+            pk=proposal.booking_id,
+        )
+
         proposal = get_object_or_404(
             BookingChangeProposal.objects.select_for_update(),
             pk=proposal_id,
+            booking=booking,
         )
 
-        if proposal.booking.tenant != request.user:
+        if booking.tenant != request.user:
             raise PermissionDenied
 
         if proposal.status != BookingChangeProposal.Status.PENDING:
@@ -1089,6 +1119,9 @@ def reject_booking_change_proposal(request, proposal_id):
             )
 
         if proposal.is_expired():
+            proposal.status = BookingChangeProposal.Status.EXPIRED
+            proposal.save(update_fields=["status"])
+
             return JsonResponse(
                 {"error": "La propuesta ha caducado."},
                 status=409,
@@ -1097,13 +1130,13 @@ def reject_booking_change_proposal(request, proposal_id):
         proposal.status = BookingChangeProposal.Status.REJECTED
         proposal.save(update_fields=["status"])
 
-    return JsonResponse(
-        {
-            "id": proposal.pk,
-            "status": proposal.status,
-        },
-        status=200,
-    )
+        return JsonResponse(
+            {
+                "id": proposal.pk,
+                "status": proposal.status,
+            },
+            status=200,
+        )
 
 PENDING_BOOKING_MINUTES = 15
 
