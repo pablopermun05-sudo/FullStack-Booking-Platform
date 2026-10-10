@@ -4021,6 +4021,302 @@ class BookingConcurrencyTestCase(TransactionTestCase):
             ).count(),
             1,
         )
+    
+    def test_concurrent_admin_changes_to_same_booking_keep_audits_consistent(self):
+
+        admin = User.objects.create_superuser(
+            username="concurrent-admin",
+            email="concurrent-admin@example.com",
+            password="test-password",
+        )
+
+        initial_date = date.today() + timedelta(days=30)
+        final_date = initial_date + timedelta(days=3)
+
+        booking = Booking.create_pending(
+            tenant=self.tenant,
+            property=self.property,
+            initial_date=initial_date,
+            final_date=final_date,
+            expires_at=timezone.now() + timedelta(minutes=15),
+            **self.booking_data,
+        )
+        self.assertTrue(booking.confirm())
+        booking.refresh_from_db()
+
+        original_night_count = booking.nights.count()
+
+        payloads = [
+            {
+                "initial_date": (
+                    date.today() + timedelta(days=40)
+                ).isoformat(),
+                "final_date": (
+                    date.today() + timedelta(days=44)
+                ).isoformat(),
+                "guest_count": 2,
+            },
+            {
+                "initial_date": (
+                    date.today() + timedelta(days=50)
+                ).isoformat(),
+                "final_date": (
+                    date.today() + timedelta(days=54)
+                ).isoformat(),
+                "guest_count": 2,
+            },
+        ]
+
+        barrier = Barrier(2)
+        url = reverse(
+            "admin_force_booking_change",
+            args=[booking.pk],
+        )
+
+        def force_change(payload):
+            close_old_connections()
+            try:
+                client = Client()
+                client.force_login(admin)
+                barrier.wait(timeout=10)
+
+                response = client.post(url, payload)
+
+                return response.status_code, response.json()
+            finally:
+                close_old_connections()
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            futures = [
+                executor.submit(force_change, payload)
+                for payload in payloads
+            ]
+            results = [
+                future.result(timeout=30)
+                for future in futures
+            ]
+
+        self.assertEqual(
+            [status for status, _ in results],
+            [200, 200],
+        )
+
+        booking.refresh_from_db()
+
+        audits = list(
+            BookingChangeAudit.objects.filter(
+                booking=booking,
+            ).order_by("changed_at", "pk")
+        )
+
+        self.assertEqual(len(audits), 2)
+
+        # Cada auditoría debe reflejar uno de los cambios solicitados.
+        requested_ranges = {
+            (
+                payload["initial_date"],
+                payload["final_date"],
+            )
+            for payload in payloads
+        }
+
+        audit_after_ranges = {
+            (
+                audit.after_values["initial_date"],
+                audit.after_values["final_date"],
+            )
+            for audit in audits
+        }
+
+        self.assertEqual(audit_after_ranges, requested_ranges)
+
+        # El estado final de la reserva debe coincidir con una auditoría.
+        self.assertIn(
+            (
+                booking.initial_date.isoformat(),
+                booking.final_date.isoformat(),
+            ),
+            audit_after_ranges,
+        )
+
+        # Las noches deben corresponder al intervalo final.
+        actual_nights = list(
+            booking.nights.order_by("date").values_list("date", flat=True)
+        )
+
+        expected_nights = [
+            booking.initial_date + timedelta(days=offset)
+            for offset in range(
+                (booking.final_date - booking.initial_date).days
+            )
+        ]
+
+        self.assertEqual(actual_nights, expected_nights)
+        self.assertNotEqual(len(actual_nights), 0)
+        self.assertEqual(original_night_count, 3)
+
+    def test_concurrent_admin_changes_cannot_double_book_inventory(self):
+        from datetime import timedelta
+        from django.test import Client
+        from django.urls import reverse
+        from django.utils import timezone
+
+        admin = User.objects.create_superuser(
+            username="inventory-admin",
+            email="inventory-admin@example.com",
+            password="test-password",
+        )
+
+        def create_confirmed_booking(start_day):
+            start = date.today() + timedelta(days=start_day)
+
+            booking = Booking.create_pending(
+                tenant=self.tenant,
+                property=self.property,
+                initial_date=start,
+                final_date=start + timedelta(days=3),
+                expires_at=timezone.now() + timedelta(minutes=15),
+                **self.booking_data,
+            )
+
+            self.assertTrue(booking.confirm())
+            booking.refresh_from_db()
+            return booking
+
+        booking1 = create_confirmed_booking(30)
+        booking2 = create_confirmed_booking(60)
+
+        original_dates = {
+            booking1.pk: (
+                booking1.initial_date,
+                booking1.final_date,
+            ),
+            booking2.pk: (
+                booking2.initial_date,
+                booking2.final_date,
+            ),
+        }
+
+        original_nights = {
+            booking.pk: list(
+                booking.nights.order_by("date").values_list(
+                    "date", "price_per_night"
+                )
+            )
+            for booking in (booking1, booking2)
+        }
+
+        proposals = {
+            booking.pk: BookingChangeProposal.objects.create(
+                booking=booking,
+                proposed_initial_date=date.today() + timedelta(days=130),
+                proposed_final_date=date.today() + timedelta(days=134),
+                proposed_guest_count=2,
+            )
+            for booking in (booking1, booking2)
+        }
+
+        target_start = date.today() + timedelta(days=90)
+        target_end = target_start + timedelta(days=4)
+
+        barrier = Barrier(2)
+
+        def force_change(booking_id):
+            close_old_connections()
+            try:
+                client = Client()
+                client.force_login(admin)
+
+                payload = {
+                    "initial_date": target_start.isoformat(),
+                    "final_date": target_end.isoformat(),
+                    "guest_count": 2,
+                }
+
+                url = reverse(
+                    "admin_force_booking_change",
+                    args=[booking_id],
+                )
+
+                barrier.wait(timeout=10)
+                response = client.post(url, payload)
+
+                return booking_id, response.status_code, response.json()
+            finally:
+                close_old_connections()
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            futures = [
+                executor.submit(force_change, booking1.pk),
+                executor.submit(force_change, booking2.pk),
+            ]
+            results = [
+                future.result(timeout=30)
+                for future in futures
+            ]
+
+        successful = [
+            result for result in results
+            if result[1] == 200
+        ]
+        rejected = [
+            result for result in results
+            if result[1] in (400, 409)
+        ]
+
+        self.assertEqual(len(successful), 1)
+        self.assertEqual(len(rejected), 1)
+
+        winner_id = successful[0][0]
+        loser_id = rejected[0][0]
+
+        winner = Booking.objects.get(pk=winner_id)
+        loser = Booking.objects.get(pk=loser_id)
+
+        self.assertEqual(winner.initial_date, target_start)
+        self.assertEqual(winner.final_date, target_end)
+
+        # El perdedor debe conservar sus fechas y noches originales.
+        self.assertEqual(
+            (loser.initial_date, loser.final_date),
+            original_dates[loser_id],
+        )
+        self.assertEqual(
+            list(
+                loser.nights.order_by("date").values_list(
+                    "date", "price_per_night"
+                )
+            ),
+            original_nights[loser_id],
+        )
+
+        # Solo el cambio exitoso debe crear una auditoría.
+        self.assertEqual(
+            BookingChangeAudit.objects.filter(
+                booking_id__in=[booking1.pk, booking2.pk],
+            ).count(),
+            1,
+        )
+
+        proposals[winner_id].refresh_from_db()
+        proposals[loser_id].refresh_from_db()
+
+        self.assertEqual(proposals[winner_id].status, "EXPIRED")
+        self.assertEqual(proposals[loser_id].status, "PENDING")
+
+        # No pueden quedar dos reservas activas ocupando el mismo intervalo.
+        overlapping_bookings = Booking.objects.filter(
+            property=self.property,
+            initial_date__lt=target_end,
+            final_date__gt=target_start,
+            status__in=Booking.ACTIVE_STATUSES,
+        )
+
+        self.assertEqual(overlapping_bookings.count(), 1)
+        self.assertEqual(
+            overlapping_bookings.get().pk,
+            winner_id,
+        )
 
 class ExpirePendingBookingsCommandTestCase(TestCase):
 
