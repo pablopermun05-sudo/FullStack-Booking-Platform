@@ -4463,6 +4463,53 @@ class BookingChangeProposalRejectViewTestCase(BookingTestBase):
 
         self.assertEqual(response.status_code, 405)
 
+    def test_rejecting_proposal_allows_booking_proposed_dates(self):
+        proposal = BookingChangeProposal.objects.get(
+            booking=self.booking1
+        )
+        proposed_start = self.booking1.initial_date + timedelta(days=10)
+        proposed_end = self.booking1.final_date + timedelta(days=10)
+
+        proposal.proposed_initial_date = proposed_start
+        proposal.proposed_final_date = proposed_end
+        proposal.save(
+            update_fields=[
+                "proposed_initial_date",
+                "proposed_final_date",
+            ]
+        )
+
+        self.client.force_login(self.tenant)
+        response = self.client.post(self.url)
+        self.assertEqual(response.status_code, 200)
+
+        proposal.refresh_from_db()
+        self.assertEqual(
+            proposal.status,
+            BookingChangeProposal.Status.REJECTED,
+        )
+
+        payload = {
+            "start": proposed_start.isoformat(),
+            "end": proposed_end.isoformat(),
+            **self.booking_payload,
+        }
+
+        response = self.client.post(
+            reverse(
+                "confirm_booking",
+                kwargs={"property_id": self.booking1.property_id},
+            ),
+            data=json.dumps(payload),
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+            response.content.decode(),
+        )
+
 class BookingChangeProposalAcceptViewTestCase(BookingTestBase):
     def setUp(self):
         super().setUp()
@@ -4908,6 +4955,47 @@ class BookingChangeProposalAcceptViewTestCase(BookingTestBase):
             self.fail(
                 "Una propuesta pendiente no debe bloquear las fechas propuestas."
             )
+
+    def test_accepting_proposal_releases_original_dates_for_new_booking(self):
+        original_start = self.booking1.initial_date
+        original_end = self.booking1.final_date
+        property_id = self.booking1.property_id
+
+        # Aceptar la propuesta libera la estancia original.
+        accept_response = self.client.post(self.accept_url())
+        self.assertEqual(accept_response.status_code, 200)
+
+        self.booking1.refresh_from_db()
+        self.assertEqual(
+            self.booking1.initial_date,
+            self.proposal.proposed_initial_date,
+        )
+        self.assertEqual(
+            self.booking1.final_date,
+            self.proposal.proposed_final_date,
+        )
+
+        # Verificar la disponibilidad mediante el endpoint real.
+        payload = {
+            "start": original_start.isoformat(),
+            "end": original_end.isoformat(),
+            **self.booking_payload,
+        }
+
+        response = self.client.post(
+            self.reverse(
+                "confirm_booking",
+                kwargs={"property_id": property_id},
+            ),
+            data=json.dumps(payload),
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+            response.content.decode(),
+        )
 
 class PropertySearchTestCase(TestCase):
 
