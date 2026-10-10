@@ -944,7 +944,9 @@ def accept_booking_change_proposal(request, proposal_id):
                     status=409,
                 )
 
-            property = booking.property
+            property = Property.objects.select_for_update().get(
+                pk=booking.property_id
+            )
             initial_date = proposal.proposed_initial_date
             final_date = proposal.proposed_final_date
             guest_count = proposal.proposed_guest_count

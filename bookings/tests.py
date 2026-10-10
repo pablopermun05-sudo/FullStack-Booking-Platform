@@ -4769,6 +4769,117 @@ class BookingChangeProposalAcceptViewTestCase(BookingTestBase):
             BookingChangeProposal.Status.PENDING,
         )
 
+    def test_failed_proposal_status_save_rolls_back_acceptance(self):
+        original_initial_date = self.booking1.initial_date
+        original_final_date = self.booking1.final_date
+        original_guest_count = self.booking1.guest_count
+        original_nights = list(
+            self.booking1.nights.order_by("date").values_list(
+                "date", "price_per_night"
+            )
+        )
+
+        original_proposal_save = BookingChangeProposal.save
+
+        def fail_when_accepting(proposal, *args, **kwargs):
+            if (
+                proposal.pk == self.proposal.pk
+                and proposal.status == BookingChangeProposal.Status.ACCEPTED
+            ):
+                raise RuntimeError("Simulated proposal status save failure")
+
+            return original_proposal_save(proposal, *args, **kwargs)
+
+        with patch.object(
+            BookingChangeProposal,
+            "save",
+            new=fail_when_accepting,
+        ):
+            with self.assertRaises(RuntimeError):
+                self.client.post(self.accept_url())
+
+        self.booking1.refresh_from_db()
+        self.proposal.refresh_from_db()
+
+        self.assertEqual(self.booking1.initial_date, original_initial_date)
+        self.assertEqual(self.booking1.final_date, original_final_date)
+        self.assertEqual(self.booking1.guest_count, original_guest_count)
+
+        self.assertEqual(
+            list(
+                self.booking1.nights.order_by("date").values_list(
+                    "date", "price_per_night"
+                )
+            ),
+            original_nights,
+        )
+
+        self.assertEqual(
+            self.proposal.status,
+            BookingChangeProposal.Status.PENDING,
+        )
+    
+    def test_failed_booking_save_preserves_original_state(self):
+        original_initial_date = self.booking1.initial_date
+        original_final_date = self.booking1.final_date
+        original_guest_count = self.booking1.guest_count
+        original_status = self.booking1.status
+        original_expires_at = self.booking1.expires_at
+
+        original_nights = list(
+            self.booking1.nights.order_by("date").values_list(
+                "date", "price_per_night"
+            )
+        )
+
+        original_booking_save = Booking.save
+
+        def fail_when_updating_dates(booking, *args, **kwargs):
+            update_fields = kwargs.get("update_fields")
+
+            if (
+                booking.pk == self.booking1.pk
+                and update_fields is not None
+                and {
+                    "initial_date",
+                    "final_date",
+                    "guest_count",
+                }.issubset(set(update_fields))
+            ):
+                raise RuntimeError("Simulated booking save failure")
+
+            return original_booking_save(booking, *args, **kwargs)
+
+        with patch.object(
+            Booking,
+            "save",
+            new=fail_when_updating_dates,
+        ):
+            with self.assertRaises(RuntimeError):
+                self.client.post(self.accept_url())
+
+        self.booking1.refresh_from_db()
+        self.proposal.refresh_from_db()
+
+        self.assertEqual(self.booking1.initial_date, original_initial_date)
+        self.assertEqual(self.booking1.final_date, original_final_date)
+        self.assertEqual(self.booking1.guest_count, original_guest_count)
+        self.assertEqual(self.booking1.status, original_status)
+        self.assertEqual(self.booking1.expires_at, original_expires_at)
+
+        self.assertEqual(
+            list(
+                self.booking1.nights.order_by("date").values_list(
+                    "date", "price_per_night"
+                )
+            ),
+            original_nights,
+        )
+
+        self.assertEqual(
+            self.proposal.status,
+            BookingChangeProposal.Status.PENDING,
+        )
     
     def test_pending_proposal_does_not_block_proposed_dates(self):
 
