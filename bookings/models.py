@@ -535,6 +535,14 @@ class BookingChangeProposal(models.Model):
     proposed_final_date = models.DateField()
     proposed_guest_count = models.PositiveIntegerField()
 
+    proposed_total_price = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal("0.00"),
+    )
+
+    proposed_nightly_prices = models.JSONField(default=list, blank=True)
+
     access_token_hash = models.CharField(
         max_length=64,
         unique=True,
@@ -631,6 +639,28 @@ class BookingChangeProposal(models.Model):
 
         self.full_clean()
         super().save(*args, **kwargs)
+    
+    def calculate_price_snapshot(self):
+        nightly_rates = PropertyAvailability.get_for_range(
+            self.booking.property,
+            self.proposed_initial_date,
+            self.proposed_final_date,
+        )
+
+        nightly_prices = [
+            {
+                "date": item["date"].isoformat(),
+                "price_per_night": str(item["price_per_night"]),
+            }
+            for item in nightly_rates
+        ]
+
+        total = sum(
+            (item["price_per_night"] for item in nightly_rates),
+            Decimal("0.00"),
+        )
+
+        return nightly_prices, total
 
     def is_expired(self):
         return (

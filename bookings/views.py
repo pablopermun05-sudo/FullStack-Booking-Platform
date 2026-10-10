@@ -1134,13 +1134,19 @@ def propose_booking_change(request, booking_id):
 
             raw_token, token_hash = generate_proposal_access_token()
 
-            proposal = BookingChangeProposal.objects.create(
+            proposal = BookingChangeProposal(
                 booking=booking,
                 proposed_initial_date=proposed_initial_date,
                 proposed_final_date=proposed_final_date,
                 proposed_guest_count=proposed_guest_count,
                 access_token_hash=token_hash,
             )
+
+            nightly_prices, total_price = proposal.calculate_price_snapshot()
+
+            proposal.proposed_nightly_prices = nightly_prices
+            proposal.proposed_total_price = total_price
+            proposal.save()
 
     except ValidationError as exc:
         return JsonResponse(
@@ -1161,6 +1167,8 @@ def propose_booking_change(request, booking_id):
             "proposed_initial_date": proposal.proposed_initial_date.isoformat(),
             "proposed_final_date": proposal.proposed_final_date.isoformat(),
             "proposed_guest_count": proposal.proposed_guest_count,
+            "proposed_total_price": str(proposal.proposed_total_price),
+            "proposed_nightly_prices": proposal.proposed_nightly_prices,
             "expires_at": proposal.expires_at.isoformat(),
         },
         status=201,
@@ -1189,7 +1197,6 @@ def accept_booking_change_proposal(request, proposal_id):
     try:
         with transaction.atomic():
             # Bloquear primero la reserva y después la propuesta.
-            # Así serializamos los cambios sobre la misma reserva.
             booking = get_object_or_404(
                 Booking.objects.select_for_update().select_related(
                     "property",
@@ -1204,7 +1211,7 @@ def accept_booking_change_proposal(request, proposal_id):
                 booking=booking,
             )
 
-            # Repetir la autorización dentro de la transacción.
+            # Repetir autorización dentro de la transacción.
             if booking.tenant != request.user:
                 raise PermissionDenied
 
@@ -1242,6 +1249,7 @@ def accept_booking_change_proposal(request, proposal_id):
             property = Property.objects.select_for_update().get(
                 pk=booking.property_id
             )
+
             initial_date = proposal.proposed_initial_date
             final_date = proposal.proposed_final_date
             guest_count = proposal.proposed_guest_count
@@ -1264,17 +1272,12 @@ def accept_booking_change_proposal(request, proposal_id):
                     status=400,
                 )
 
+            # Consultar las tarifas actuales usando la lógica existente.
             availability = PropertyAvailability.get_for_range(
                 property,
                 initial_date,
                 final_date,
             )
-
-            if any(item["status"] != "OPEN" for item in availability):
-                return JsonResponse(
-                    {"error": "Hay noches que ya no están disponibles."},
-                    status=409,
-                )
 
             if not availability:
                 return JsonResponse(
@@ -1282,24 +1285,133 @@ def accept_booking_change_proposal(request, proposal_id):
                     status=400,
                 )
 
-            minimum_nights = availability[0]["min_nights"]
+            if any(
+                item["status"] != "OPEN"
+                for item in availability
+            ):
+                return JsonResponse(
+                    {"error": "Hay noches que ya no están disponibles."},
+                    status=409,
+                )
 
+            minimum_nights = availability[0]["min_nights"]
             number_of_nights = (final_date - initial_date).days
 
             if number_of_nights < minimum_nights:
                 return JsonResponse(
-                    {"error": "La estancia es inferior al mínimo requerido."},
+                    {
+                        "error": (
+                            "La estancia es inferior al mínimo requerido."
+                        )
+                    },
                     status=400,
                 )
 
-            # Actualizar la reserva existente, conservando su estado
-            # y su fecha de caducidad.
+            # Comprobar que la propuesta tiene un snapshot válido.
+            if (
+                not proposal.proposed_nightly_prices
+                or proposal.proposed_total_price is None
+            ):
+                return JsonResponse(
+                    {
+                        "error": (
+                            "La propuesta no tiene un precio guardado válido. "
+                            "Debe crearse una nueva propuesta."
+                        )
+                    },
+                    status=409,
+                )
+
+            # Construir el desglose actual usando formato decimal estable.
+            current_nightly_prices = [
+                {
+                    "date": item["date"].isoformat(),
+                    "price_per_night": f'{Decimal(str(item["price_per_night"])):.2f}',
+                }
+                for item in availability
+            ]
+
+            current_total_price = sum(
+                (
+                    Decimal(str(item["price_per_night"]))
+                    for item in availability
+                ),
+                Decimal("0.00"),
+            )
+
+            if (
+                not proposal.proposed_nightly_prices
+                or proposal.proposed_total_price is None
+            ):
+                return JsonResponse(
+                    {"error": "The proposal has no valid price snapshot."},
+                    status=409,
+                )
+
+            proposed_nightly_prices = [
+                {
+                    "date": item["date"],
+                    "price_per_night": f'{Decimal(str(item["price_per_night"])):.2f}',
+                }
+                for item in proposal.proposed_nightly_prices
+            ]
+
+            proposed_total_price = Decimal(str(proposal.proposed_total_price))
+
+            if (
+                current_nightly_prices != proposed_nightly_prices
+                or current_total_price != proposed_total_price
+            ):
+                return JsonResponse(
+                    {
+                        "error": (
+                            "The nightly prices have changed since the proposal "
+                            "was created. A new proposal is required."
+                        )
+                    },
+                    status=409,
+                )
+            
+            # Evitar aceptar si cambió cualquier tarifa nocturna,
+            # aunque el total resultante fuese el mismo.
+            if (
+                current_nightly_prices != proposed_nightly_prices
+                or current_total_price != proposed_total_price
+            ):
+                return JsonResponse(
+                    {
+                        "error": (
+                            "El precio de la propuesta ha cambiado. "
+                            "Debe crearse una nueva propuesta."
+                        ),
+                        "proposed_total_price": str(
+                            proposed_total_price
+                        ),
+                        "current_total_price": str(
+                            current_total_price
+                        ),
+                    },
+                    status=409,
+                )
+
+            # Preparar las noches con los precios aceptados,
+            # no recalcular sus importes al guardar la reserva.
+            new_nights = [
+                BookingNight(
+                    booking=booking,
+                    date=date.fromisoformat(item["date"]),
+                    price_per_night=Decimal(
+                        str(item["price_per_night"])
+                    ),
+                )
+                for item in proposed_nightly_prices
+            ]
+
+            # Actualizar la reserva conservando estado y caducidad.
             booking.initial_date = initial_date
             booking.final_date = final_date
             booking.guest_count = guest_count
 
-            # full_clean valida también las reglas definidas en Booking.
-            # save() vuelve a ejecutar full_clean() en este proyecto.
             booking.save(
                 update_fields=[
                     "initial_date",
@@ -1308,19 +1420,11 @@ def accept_booking_change_proposal(request, proposal_id):
                 ]
             )
 
-            # Reemplazar las noches dentro de la misma transacción,
-            # aplicando los precios vigentes.
+            # Reemplazar las noches dentro de la transacción.
             booking.nights.all().delete()
+            BookingNight.objects.bulk_create(new_nights)
 
-            BookingNight.objects.bulk_create([
-                BookingNight(
-                    booking=booking,
-                    date=item["date"],
-                    price_per_night=item["price_per_night"],
-                )
-                for item in availability
-            ])
-
+            # Marcar la propuesta como aceptada.
             proposal.status = BookingChangeProposal.Status.ACCEPTED
             proposal.save(update_fields=["status"])
 
@@ -1328,15 +1432,16 @@ def accept_booking_change_proposal(request, proposal_id):
         return JsonResponse(
             {
                 "error": "La reserva no supera las validaciones.",
-                "details": exc.message_dict
-                if hasattr(exc, "message_dict")
-                else exc.messages,
+                "details": (
+                    exc.message_dict
+                    if hasattr(exc, "message_dict")
+                    else exc.messages
+                ),
             },
             status=400,
         )
+
     except IntegrityError:
-        # Incluye conflictos detectados por las restricciones de la BD.
-        # La transacción completa se revierte.
         return JsonResponse(
             {
                 "error": (
@@ -1356,6 +1461,9 @@ def accept_booking_change_proposal(request, proposal_id):
             "final_date": booking.final_date.isoformat(),
             "guest_count": booking.guest_count,
             "total_price": str(booking.total_price),
+            "proposed_total_price": str(
+                proposal.proposed_total_price
+            ),
         },
         status=200,
     )

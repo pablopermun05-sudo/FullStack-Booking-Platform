@@ -4925,6 +4925,17 @@ class BookingChangeProposalAcceptViewTestCase(BookingTestBase):
             proposed_guest_count=3,
         )
 
+        nightly_prices, total_price = self.proposal.calculate_price_snapshot()
+
+        self.proposal.proposed_nightly_prices = nightly_prices
+        self.proposal.proposed_total_price = total_price
+        self.proposal.save(
+            update_fields=[
+                "proposed_nightly_prices",
+                "proposed_total_price",
+            ]
+        )
+
         self.client.force_login(self.tenant)
 
     def accept_url(self):
@@ -4976,41 +4987,46 @@ class BookingChangeProposalAcceptViewTestCase(BookingTestBase):
 
         self.assertEqual(nights, expected_nights)
 
-    def test_acceptance_uses_current_nightly_prices(self):
-        from bookings.models import PropertyAvailability
+    def test_price_change_after_proposal_returns_conflict(self):
 
-        start_date = self.proposal.proposed_initial_date
-        end_date = self.proposal.proposed_final_date
-
-        current_date = start_date
-        expected_prices = {}
-
-        while current_date < end_date:
-            price = self.Decimal("175.00")
-            PropertyAvailability.objects.update_or_create(
-                property=self.booking1.property,
-                date=current_date,
-                defaults={
-                    "price_per_night": price,
-                    "status": "OPEN",
-                    "min_nights": 1,
-                },
+        original_initial_date = self.booking1.initial_date
+        original_final_date = self.booking1.final_date
+        original_nights = list(
+            self.booking1.nights.order_by("date").values_list(
+                "date", "price_per_night"
             )
-            expected_prices[current_date] = price
-            current_date += self.timedelta(days=1)
+        )
+
+        PropertyAvailability.objects.update_or_create(
+            property=self.booking1.property,
+            date=self.proposal.proposed_initial_date,
+            defaults={
+                "price_per_night": self.Decimal("175.00"),
+                "status": "OPEN",
+                "min_nights": 1,
+            },
+        )
 
         response = self.client.post(self.accept_url())
 
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 409)
 
-        actual_prices = dict(
-            self.booking1.nights.values_list("date", "price_per_night")
-        )
+        self.booking1.refresh_from_db()
+        self.proposal.refresh_from_db()
 
-        self.assertEqual(actual_prices, expected_prices)
+        self.assertEqual(self.booking1.initial_date, original_initial_date)
+        self.assertEqual(self.booking1.final_date, original_final_date)
         self.assertEqual(
-            self.booking1.total_price,
-            sum(expected_prices.values(), self.Decimal("0.00")),
+            self.proposal.status,
+            BookingChangeProposal.Status.PENDING,
+        )
+        self.assertEqual(
+            list(
+                self.booking1.nights.order_by("date").values_list(
+                    "date", "price_per_night"
+                )
+            ),
+            original_nights,
         )
 
     def test_non_guest_cannot_accept_proposal(self):
