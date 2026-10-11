@@ -673,11 +673,60 @@ class BookingChangeProposal(models.Model):
     def expire_pending_proposals(cls):
         now = timezone.now()
 
-        return cls.objects.filter(
-            status=cls.Status.PENDING,
-            expires_at__isnull=False,
-            expires_at__lte=now,
-        ).update(status=cls.Status.EXPIRED)
+        # Solo obtenemos candidatas; el estado definitivo se valida después de adquirir los bloqueos.
+        proposal_ids = list(
+            cls.objects.filter(
+                status=cls.Status.PENDING,
+                expires_at__isnull=False,
+                expires_at__lte=now,
+            ).values_list("pk", flat=True)
+        )
+
+        expired_count = 0
+
+        for proposal_id in proposal_ids:
+            with transaction.atomic():
+                # Leer la FK sin bloquear la propuesta para mantener el orden Booking -> BookingChangeProposal.
+                booking_id = (
+                    cls.objects.filter(pk=proposal_id)
+                    .values_list("booking_id", flat=True)
+                    .first()
+                )
+
+                if booking_id is None:
+                    continue
+
+                booking = (
+                    Booking.objects.select_for_update()
+                    .filter(pk=booking_id)
+                    .first()
+                )
+
+                if booking is None:
+                    continue
+
+                proposal = (
+                    cls.objects.select_for_update()
+                    .filter(pk=proposal_id)
+                    .first()
+                )
+
+                if proposal is None:
+                    continue
+
+                # Revalidar tras esperar por los bloqueos.
+                if (
+                    proposal.status != cls.Status.PENDING
+                    or proposal.expires_at is None
+                    or proposal.expires_at > timezone.now()
+                ):
+                    continue
+
+                proposal.status = cls.Status.EXPIRED
+                proposal.save(update_fields=["status"])
+                expired_count += 1
+
+        return expired_count
 
     def __str__(self):
         return f"Change proposal for booking {self.booking_id} ({self.status})"

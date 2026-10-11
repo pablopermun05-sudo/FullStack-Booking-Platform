@@ -4407,6 +4407,151 @@ class BookingChangeProposalModelTestCase(BookingTestBase):
         data.update(overrides)
 
         return BookingChangeProposal.objects.create(**data)
+    
+    def test_expire_pending_proposals_expires_overdue_proposal(self):
+        proposal = self.create_proposal()
+
+        BookingChangeProposal.objects.filter(
+            pk=proposal.pk
+        ).update(
+            expires_at=timezone.now() - timedelta(minutes=1)
+        )
+
+        expired_count = (
+            BookingChangeProposal.expire_pending_proposals()
+        )
+
+        proposal.refresh_from_db()
+
+        self.assertEqual(expired_count, 1)
+        self.assertEqual(
+            proposal.status,
+            BookingChangeProposal.Status.EXPIRED,
+        )
+
+    def test_expire_pending_proposals_keeps_future_proposal_pending(self):
+        proposal = self.create_proposal()
+
+        BookingChangeProposal.objects.filter(
+            pk=proposal.pk
+        ).update(
+            expires_at=timezone.now() + timedelta(hours=1)
+        )
+
+        expired_count = (
+            BookingChangeProposal.expire_pending_proposals()
+        )
+
+        proposal.refresh_from_db()
+
+        self.assertEqual(expired_count, 0)
+        self.assertEqual(
+            proposal.status,
+            BookingChangeProposal.Status.PENDING,
+        )
+
+    def test_expire_pending_proposals_does_not_change_resolved_proposal(self):
+        proposal = self.create_proposal()
+
+        BookingChangeProposal.objects.filter(
+            pk=proposal.pk
+        ).update(
+            status=BookingChangeProposal.Status.REJECTED,
+            expires_at=timezone.now() - timedelta(minutes=1),
+        )
+
+        expired_count = (
+            BookingChangeProposal.expire_pending_proposals()
+        )
+
+        proposal.refresh_from_db()
+
+        self.assertEqual(expired_count, 0)
+        self.assertEqual(
+            proposal.status,
+            BookingChangeProposal.Status.REJECTED,
+        )
+
+    def test_expire_pending_proposals_preserves_original_booking(self):
+        proposal = self.create_proposal()
+        booking = proposal.booking
+
+        original_state = (
+            booking.status,
+            booking.initial_date,
+            booking.final_date,
+            booking.guest_count,
+        )
+
+        BookingChangeProposal.objects.filter(
+            pk=proposal.pk
+        ).update(
+            expires_at=timezone.now() - timedelta(minutes=1)
+        )
+
+        BookingChangeProposal.expire_pending_proposals()
+
+        proposal.refresh_from_db()
+        booking.refresh_from_db()
+
+        self.assertEqual(
+            proposal.status,
+            BookingChangeProposal.Status.EXPIRED,
+        )
+        self.assertEqual(
+            (
+                booking.status,
+                booking.initial_date,
+                booking.final_date,
+                booking.guest_count,
+            ),
+            original_state,
+        )
+
+    def test_expire_pending_proposals_is_idempotent(self):
+        proposal = self.create_proposal()
+
+        BookingChangeProposal.objects.filter(
+            pk=proposal.pk
+        ).update(
+            expires_at=timezone.now() - timedelta(minutes=1)
+        )
+
+        first_count = (
+            BookingChangeProposal.expire_pending_proposals()
+        )
+        second_count = (
+            BookingChangeProposal.expire_pending_proposals()
+        )
+
+        self.assertEqual(first_count, 1)
+        self.assertEqual(second_count, 0)
+    
+    def test_expire_booking_change_proposals_command(self):
+        proposal = self.create_proposal()
+
+        BookingChangeProposal.objects.filter(
+            pk=proposal.pk
+        ).update(
+            expires_at=timezone.now() - timedelta(minutes=1)
+        )
+
+        output = StringIO()
+        call_command(
+            "expire_booking_change_proposals",
+            stdout=output,
+        )
+
+        proposal.refresh_from_db()
+
+        self.assertEqual(
+            proposal.status,
+            BookingChangeProposal.Status.EXPIRED,
+        )
+        self.assertIn(
+            "Propuestas de cambio expiradas: 1",
+            output.getvalue(),
+        )
 
     def test_creates_pending_proposal_with_48_hour_expiration(self):
         proposal = self.create_proposal()
