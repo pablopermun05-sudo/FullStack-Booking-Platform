@@ -23,6 +23,11 @@ from django.core.exceptions import PermissionDenied
 from django.shortcuts import get_object_or_404
 from django.db import transaction
 from .services import generate_proposal_access_token, hash_proposal_access_token
+import logging
+from django.conf import settings
+from django.core.mail import send_mail
+
+logger = logging.getLogger(__name__)
 
 # Create your views here.
 class SearchForm(forms.Form):
@@ -999,6 +1004,85 @@ def view_booking_change_proposal_by_token(request, token):
         "status": proposal.status,
     })
 
+def send_booking_change_proposal_email(request, booking, proposal, raw_token):
+    """
+    Envía al huésped los detalles de una propuesta de cambio.
+
+    Devuelve True si Django confirma el envío y False si se produce
+    un error. Nunca guarda el token original en la base de datos.
+    """
+    proposal_url = request.build_absolute_uri(
+        reverse(
+            "view_booking_change_proposal_by_token",
+            kwargs={"token": raw_token},
+        )
+    )
+
+    original_total = booking.total_price
+    proposed_total = proposal.proposed_total_price
+
+    subject = (
+        f"Nueva propuesta de cambio para tu reserva "
+        f"en {booking.property.title}"
+    )
+
+    message = f"""Hola {booking.guest_first_name},
+
+El alojamiento "{booking.property.title}" te ha enviado una propuesta
+para modificar tu reserva.
+
+RESERVA ORIGINAL
+Entrada: {booking.initial_date:%d/%m/%Y}
+Salida: {booking.final_date:%d/%m/%Y}
+Número de huéspedes: {booking.guest_count}
+Importe total original: {original_total:.2f} €
+
+CAMBIO PROPUESTO
+Entrada: {proposal.proposed_initial_date:%d/%m/%Y}
+Salida: {proposal.proposed_final_date:%d/%m/%Y}
+Número de huéspedes: {proposal.proposed_guest_count}
+Importe total propuesto: {proposed_total:.2f} €
+
+PLAZO DE RESPUESTA
+La propuesta caduca el {timezone.localtime(proposal.expires_at):%d/%m/%Y a las %H:%M}.
+
+Consulta la propuesta y sigue las instrucciones para responder:
+{proposal_url}
+
+Si tienes dudas, contacta con el alojamiento.
+
+Este correo es una notificación automática.
+"""
+
+    try:
+        sent_count = send_mail(
+            subject=subject,
+            message=message,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[booking.guest_email],
+            fail_silently=False,
+        )
+
+        if sent_count != 1:
+            logger.error(
+                "El backend de correo no confirmó el envío de la "
+                "propuesta %s a %s.",
+                proposal.pk,
+                booking.guest_email,
+            )
+            return False
+
+        return True
+
+    except Exception:
+        logger.exception(
+            "Error al enviar el correo de la propuesta %s "
+            "al huésped de la reserva %s.",
+            proposal.pk,
+            booking.pk,
+        )
+        return False
+
 @login_required
 def propose_booking_change(request, booking_id):
     if request.method != "POST":
@@ -1159,20 +1243,35 @@ def propose_booking_change(request, booking_id):
             status=409,
         )
 
-    return JsonResponse(
-        {
-            "id": proposal.pk,
-            "booking_id": booking.pk,
-            "status": proposal.status,
-            "proposed_initial_date": proposal.proposed_initial_date.isoformat(),
-            "proposed_final_date": proposal.proposed_final_date.isoformat(),
-            "proposed_guest_count": proposal.proposed_guest_count,
-            "proposed_total_price": str(proposal.proposed_total_price),
-            "proposed_nightly_prices": proposal.proposed_nightly_prices,
-            "expires_at": proposal.expires_at.isoformat(),
-        },
-        status=201,
+    # El bloque transaction.atomic() ya ha terminado.
+    # La propuesta está guardada antes de intentar enviar el correo.
+    notification_sent = send_booking_change_proposal_email(
+        request=request,
+        booking=booking,
+        proposal=proposal,
+        raw_token=raw_token,
     )
+
+    response_data = {
+        "id": proposal.pk,
+        "booking_id": booking.pk,
+        "status": proposal.status,
+        "proposed_initial_date": proposal.proposed_initial_date.isoformat(),
+        "proposed_final_date": proposal.proposed_final_date.isoformat(),
+        "proposed_guest_count": proposal.proposed_guest_count,
+        "proposed_total_price": str(proposal.proposed_total_price),
+        "proposed_nightly_prices": proposal.proposed_nightly_prices,
+        "expires_at": proposal.expires_at.isoformat(),
+        "notification_sent": notification_sent,
+    }
+
+    if not notification_sent:
+        response_data["notification_warning"] = (
+            "La propuesta se creó correctamente, pero no se pudo "
+            "enviar el correo de notificación."
+        )
+
+    return JsonResponse(response_data, status=201)
 
 @login_required
 def accept_booking_change_proposal(request, proposal_id):

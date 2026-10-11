@@ -20,6 +20,9 @@ from threading import Barrier, Lock
 from django.core.management import call_command
 from io import StringIO
 from bookings.services import generate_proposal_access_token
+from django.core import mail
+from django.test import override_settings, Client
+from datetime import timedelta
 
 class OwnerProfileTestCase(TestCase):
     def test_owner_profile_is_pending_by_default(self):
@@ -4160,10 +4163,6 @@ class BookingConcurrencyTestCase(TransactionTestCase):
         self.assertEqual(original_night_count, 3)
 
     def test_concurrent_admin_changes_cannot_double_book_inventory(self):
-        from datetime import timedelta
-        from django.test import Client
-        from django.urls import reverse
-        from django.utils import timezone
 
         admin = User.objects.create_superuser(
             username="inventory-admin",
@@ -4736,6 +4735,104 @@ class BookingChangeProposalViewTestCase(BookingTestBase):
             1,
         )
 
+    @override_settings(
+        EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend"
+    )
+    def test_proposal_sends_email_to_guest(self):
+
+        self.client.force_login(self.owner)
+
+        response = self.client.post(
+            reverse(
+                "propose_booking_change",
+                args=[self.booking1.pk],
+            ),
+            data=json.dumps({
+                "proposed_initial_date": (
+                    timezone.localdate()
+                    + timedelta(days=40)
+                ).isoformat(),
+                "proposed_final_date": (
+                    timezone.localdate()
+                    + timedelta(days=44)
+                ).isoformat(),
+                "proposed_guest_count": 3,
+            }),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(response.json()["notification_sent"])
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(
+            mail.outbox[0].to,
+            [self.booking1.guest_email],
+        )
+        self.assertIn(
+            "Importe total propuesto",
+            mail.outbox[0].body,
+        )
+        self.assertIn(
+            "booking-change-proposal/access/",
+            mail.outbox[0].body,
+        )
+        self.assertIn(
+            "Importe total original",
+            mail.outbox[0].body,
+        )
+        self.assertIn(
+            "caduca",
+            mail.outbox[0].body.lower(),
+        )
+    
+    @patch(
+        "bookings.views.send_mail",
+        side_effect=OSError("SMTP unavailable"),
+    )
+    def test_email_failure_does_not_undo_proposal(self, mock_send_mail):
+
+        self.client.force_login(self.owner)
+
+        response = self.client.post(
+            reverse(
+                "propose_booking_change",
+                args=[self.booking1.pk],
+            ),
+            data=json.dumps({
+                "proposed_initial_date": (
+                    timezone.localdate() + timedelta(days=40)
+                ).isoformat(),
+                "proposed_final_date": (
+                    timezone.localdate() + timedelta(days=44)
+                ).isoformat(),
+                "proposed_guest_count": 3,
+            }),
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            201,
+            response.content.decode(),
+        )
+        self.assertFalse(response.json()["notification_sent"])
+
+        self.assertTrue(
+            BookingChangeProposal.objects.filter(
+                booking=self.booking1,
+                status="PENDING",
+            ).exists()
+        )
+        self.assertEqual(
+            BookingChangeProposal.objects.filter(
+                booking=self.booking1,
+                status="PENDING",
+            ).count(),
+            1,
+        )
+
+        mock_send_mail.assert_called_once()
+
 class BookingChangeProposalRejectViewTestCase(BookingTestBase):
     def setUp(self):
         super().setUp()
@@ -4789,7 +4886,6 @@ class BookingChangeProposalRejectViewTestCase(BookingTestBase):
         )
 
     def test_rejecting_proposal_does_not_modify_booking_or_nights(self):
-        from decimal import Decimal
 
         BookingNight.objects.create(
             booking=self.booking1,
@@ -4897,12 +4993,6 @@ class BookingChangeProposalRejectViewTestCase(BookingTestBase):
 class BookingChangeProposalAcceptViewTestCase(BookingTestBase):
     def setUp(self):
         super().setUp()
-
-        from datetime import timedelta
-        from decimal import Decimal
-
-        from django.urls import reverse
-        from django.utils import timezone
 
         self.timedelta = timedelta
         self.Decimal = Decimal
@@ -5544,10 +5634,6 @@ class BookingChangeProposalTokenTestCase(BookingTestBase):
 class AdminForcedBookingChangeViewTestCase(BookingTestBase):
     def setUp(self):
         super().setUp()
-
-        from datetime import timedelta
-        from django.urls import reverse
-        from django.utils import timezone
 
         self.timedelta = timedelta
         self.reverse = reverse
