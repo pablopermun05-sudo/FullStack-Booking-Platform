@@ -25,17 +25,59 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     function attachBookingButton(button) {
-        button.addEventListener("click", () => {
+        button.addEventListener("click", async () => {
             if (!bookingReady) return;
+            
+            button.disabled = true;
 
-            const params = new URLSearchParams({
-                initial_date: startDate.value,
-                final_date: endDate.value
-            });
+            try {
+                const response = await fetch(`/booking/${propertyId}/hold`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "X-CSRFToken": getCookie("csrftoken"),
+                    },
+                    body: JSON.stringify({
+                        start: startDate.value,
+                        end: endDate.value,
+                    }),
+                });
 
-            window.location.href =
-                `/booking/${propertyId}/details?${params.toString()}`;
+                const result = await response.json();
+
+                if (!response.ok || !result.success) {
+                    alert(result.error || "No se pudieron retener las fechas.");
+                    return;
+                }
+
+                const params = new URLSearchParams({
+                    initial_date: startDate.value,
+                    final_date: endDate.value,
+                    hold_token: result.token,
+                });
+
+                window.location.href =
+                    `/booking/${propertyId}/details?${params.toString()}`;
+            } catch (error) {
+                alert("Error de conexión al intentar retener las fechas.");
+            } finally {
+                button.disabled = false;
+            }
         });
+    }
+
+    function getCookie(name) {
+        const cookies = document.cookie ? document.cookie.split(";") : [];
+
+        for (const cookie of cookies) {
+            const item = cookie.trim();
+
+            if (item.startsWith(`${name}=`)) {
+                return decodeURIComponent(item.substring(name.length + 1));
+            }
+        }
+
+        return null;
     }
 
     function createBookingButton() {

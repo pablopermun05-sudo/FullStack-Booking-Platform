@@ -12,6 +12,7 @@ from django.contrib.postgres.constraints import ExclusionConstraint
 from django.contrib.postgres.fields import DateRangeField, DateTimeRangeField, RangeOperators
 import random
 import time
+import uuid
 
 class User(AbstractUser):
     first_name = models.CharField("Nombre", max_length=150, blank=False)
@@ -160,6 +161,46 @@ class BookingInventoryRange(Func):
         )
 
         return sql, params
+
+class BookingHoldInventoryRange(Func):
+    output_field = DateTimeRangeField()
+
+    def __init__(
+        self,
+        created_at="created_at",
+        expires_at="expires_at",
+        **extra,
+    ):
+        super().__init__(
+            F(created_at),
+            F(expires_at),
+            **extra,
+        )
+
+    def as_sql(self, compiler, connection, **extra_context):
+        created_at, expires_at = self.source_expressions
+
+        created_sql, created_params = compiler.compile(created_at)
+        expires_sql, expires_params = compiler.compile(expires_at)
+
+        sql = (
+            "CASE "
+            f"WHEN {expires_sql} > {created_sql} "
+            f"THEN TSTZRANGE("
+            f"{created_sql}, {expires_sql}, '[)'"
+            f") "
+            "ELSE TSTZRANGE(NULL, NULL, '[)') "
+            "END"
+        )
+
+        params = (
+            *expires_params,
+            *created_params,
+            *created_params,
+            *expires_params,
+        )
+
+        return sql, params
         
 class Booking(models.Model):
     STATUS_CHOICES = [
@@ -279,7 +320,7 @@ class Booking(models.Model):
         ).update(status="EXPIRED")
 
     @classmethod
-    def create_pending(cls, *, tenant, property, initial_date, final_date, expires_at, guest_first_name, guest_last_name, guest_email, guest_phone_number, guest_country, guest_city, guest_address, guest_count, arrival_time, guest_region="", guest_postal_code="", is_for_self=True, is_business_trip=False, tax_id="", special_requests=""):
+    def create_pending(cls, *, tenant, property, initial_date, final_date, expires_at, guest_first_name, guest_last_name, guest_email, guest_phone_number, guest_country, guest_city, guest_address, guest_count, arrival_time, guest_region="", guest_postal_code="", is_for_self=True, is_business_trip=False, tax_id="", special_requests="", hold_token=None):
         max_retries = 3
 
         for attempt in range(max_retries):
@@ -288,6 +329,48 @@ class Booking(models.Model):
                     locked_property = Property.objects.select_for_update().get(
                         pk=property.pk
                     )
+
+                    now = timezone.now()
+
+                    if expires_at <= now:
+                        raise ValidationError(
+                            "La retención ha caducado. Selecciona las fechas de nuevo."
+                        )
+
+                    if not hold_token:
+                        raise ValidationError(
+                            "Es necesaria una retención válida para crear la reserva."
+                        )
+
+                    hold = BookingHold.objects.select_for_update().filter(
+                        token=hold_token,
+                        property=locked_property,
+                        initial_date=initial_date,
+                        final_date=final_date,
+                        expires_at__gt=now,
+                    ).first()
+
+                    if hold is None:
+                        raise ValidationError(
+                            "La retención ha caducado o ya no es válida."
+                        )
+
+                    if hold.expires_at != expires_at:
+                        raise ValidationError(
+                            "El vencimiento de la retención no coincide."
+                        )
+
+                    holds = BookingHold.objects.filter(
+                        property=locked_property,
+                        initial_date__lt=final_date,
+                        final_date__gt=initial_date,
+                        expires_at__gt=now,
+                    ).exclude(token=hold.token)
+
+                    if holds.exists():
+                        raise ValidationError(
+                            "Estas fechas están retenidas por otra sesión."
+                        )
 
                     booking = cls.objects.create(
                         tenant=tenant,
@@ -915,3 +998,57 @@ class PropertyAvailability(models.Model):
     def save(self, *args, **kwargs):
         self.full_clean()
         super().save(*args, **kwargs)
+
+class BookingHold(models.Model):
+    property = models.ForeignKey(
+        Property,
+        on_delete=models.CASCADE,
+        related_name="booking_holds",
+    )
+    initial_date = models.DateField()
+    final_date = models.DateField()
+    token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    created_at = models.DateTimeField(default=timezone.now, editable=False)
+    expires_at = models.DateTimeField()
+
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["property", "expires_at"]),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(initial_date__lt=F("final_date")),
+                name="booking_hold_valid_date_range",
+            ),
+            ExclusionConstraint(
+                name="booking_hold_no_concurrent_overlap",
+                condition=Q(initial_date__lt=F("final_date")),
+                expressions=[
+                    (
+                        BookingDateRange(
+                            "initial_date",
+                            "final_date",
+                        ),
+                        RangeOperators.OVERLAPS,
+                    ),
+                    (
+                        F("property"),
+                        RangeOperators.EQUAL,
+                    ),
+                    (
+                        BookingHoldInventoryRange(),
+                        RangeOperators.OVERLAPS,
+                    ),
+                ],
+            ),
+        ]
+
+    def is_expired(self):
+        return self.expires_at <= timezone.now()
+
+    def __str__(self):
+        return (
+            f"Retención {self.property_id}: "
+            f"{self.initial_date} - {self.final_date}"
+        )

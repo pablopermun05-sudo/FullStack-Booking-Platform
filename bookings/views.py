@@ -6,7 +6,8 @@ from django.views.decorators.csrf import csrf_exempt
 from django.db import IntegrityError
 from django.db.models import Exists, F, IntegerField, OuterRef, Subquery
 from django.db.models.functions import Coalesce
-from .models import User, OwnerProfile, Property, Booking, BookingChangeProposal, BookingChangeAudit, BookingNight, PropertyAvailability, can_manage_properties
+from .models import User, OwnerProfile, Property, Booking, BookingChangeProposal, BookingChangeAudit, BookingNight, PropertyAvailability, BookingHold, can_manage_properties
+from django.db.models import Q
 from django import forms
 from django.forms import ModelForm
 from django.contrib.auth.forms import UserCreationForm
@@ -60,6 +61,7 @@ def index(request):
     })
 
 def property(request, property_id):
+
     property = get_object_or_404(Property, pk=property_id)
 
     today = date.today()
@@ -71,10 +73,7 @@ def property(request, property_id):
 
     min_booking_date = today + timedelta(days=property.notice_period_days)
     availability_end_date = min_booking_date + timedelta(days=365)
-
-    availability_start_date = (
-        min_booking_date - timedelta(days=1)
-    )
+    availability_start_date = min_booking_date - timedelta(days=1)
 
     availability = PropertyAvailability.get_for_range(
         property,
@@ -91,11 +90,42 @@ def property(request, property_id):
 
     booked_dates = set()
 
+    # Fechas ocupadas por reservas existentes.
     for booking in bookings:
-        current_date = max(booking.initial_date, availability_start_date)
-        booking_end = min(booking.final_date, availability_end_date)
+        current_date = max(
+            booking.initial_date,
+            availability_start_date,
+        )
+        booking_end = min(
+            booking.final_date,
+            availability_end_date,
+        )
 
         while current_date < booking_end:
+            booked_dates.add(current_date.isoformat())
+            current_date += timedelta(days=1)
+
+    # Fechas ocupadas temporalmente por retenciones vigentes.
+    now = timezone.now()
+
+    holds = BookingHold.objects.filter(
+        property=property,
+        initial_date__lt=availability_end_date,
+        final_date__gt=availability_start_date,
+        expires_at__gt=now,
+    )
+
+    for hold in holds:
+        current_date = max(
+            hold.initial_date,
+            availability_start_date,
+        )
+        hold_end = min(
+            hold.final_date,
+            availability_end_date,
+        )
+
+        while current_date < hold_end:
             booked_dates.add(current_date.isoformat())
             current_date += timedelta(days=1)
 
@@ -1624,20 +1654,150 @@ def reject_booking_change_proposal(request, proposal_id):
             status=200,
         )
 
+def create_booking_hold(request, property_id):
+    if request.method != "POST":
+        return JsonResponse({"error": "Method not allowed"}, status=405)
+
+    try:
+        data = json.loads(request.body)
+        initial_date = date.fromisoformat(data.get("start", ""))
+        final_date = date.fromisoformat(data.get("end", ""))
+    except (json.JSONDecodeError, TypeError, ValueError):
+        return JsonResponse({"error": "Fechas inválidas."}, status=400)
+
+    if initial_date >= final_date:
+        return JsonResponse(
+            {"error": "La fecha de salida debe ser posterior a la entrada."},
+            status=400,
+        )
+
+    if initial_date < timezone.localdate():
+        return JsonResponse(
+            {"error": "La fecha de entrada no puede ser anterior a hoy."},
+            status=400,
+        )
+
+    try:
+        with transaction.atomic():
+            property_obj = Property.objects.select_for_update().get(
+                pk=property_id
+            )
+
+            now = timezone.now()
+
+            if (
+                request.user.is_authenticated
+                and request.user == property_obj.owner
+            ):
+                return JsonResponse(
+                    {"error": "No puedes reservar tu propia vivienda."},
+                    status=400,
+                )
+
+            availability = PropertyAvailability.get_for_range(
+                property_obj, initial_date, final_date
+            )
+
+            if any(day["status"] == "CLOSED" for day in availability):
+                return JsonResponse(
+                    {"error": "El alojamiento no está disponible en esas fechas."},
+                    status=409,
+                )
+
+            arrival = PropertyAvailability.get_for_date(
+                property_obj, initial_date
+            )
+
+            if (final_date - initial_date).days < arrival["min_nights"]:
+                return JsonResponse(
+                    {
+                        "error": (
+                            f"La estancia debe ser de al menos "
+                            f"{arrival['min_nights']} noches."
+                        )
+                    },
+                    status=400,
+                )
+
+            if initial_date < (
+                timezone.localdate()
+                + timedelta(days=property_obj.notice_period_days)
+            ):
+                return JsonResponse(
+                    {"error": "La fecha de entrada no cumple la antelación mínima."},
+                    status=400,
+                )
+
+            existing_booking = Booking.objects.filter(
+                property=property_obj,
+                initial_date__lt=final_date,
+                final_date__gt=initial_date,
+            ).filter(
+                Q(status="CONFIRMED")
+                | Q(status="PENDING", expires_at__gt=now)
+            ).exists()
+
+            existing_hold = BookingHold.objects.filter(
+                property=property_obj,
+                initial_date__lt=final_date,
+                final_date__gt=initial_date,
+                expires_at__gt=now,
+            ).exists()
+
+            if existing_booking or existing_hold:
+                return JsonResponse(
+                    {"error": "El alojamiento ya está reservado o retenido en esas fechas."},
+                    status=409,
+                )
+
+            hold = BookingHold.objects.create(
+                property=property_obj,
+                initial_date=initial_date,
+                final_date=final_date,
+                expires_at=now + timedelta(minutes=BOOKING_HOLD_MINUTES),
+            )
+
+            return JsonResponse(
+                {
+                    "success": True,
+                    "token": str(hold.token),
+                    "expires_at": hold.expires_at.isoformat(),
+                }
+            )
+
+    except Property.DoesNotExist:
+        return JsonResponse({"error": "Alojamiento no encontrado."}, status=404)
+    except IntegrityError:
+        return JsonResponse(
+            {"error": "No se pudieron retener esas fechas. Inténtalo de nuevo."},
+            status=409,
+        )
 
 def booking_details(request, property_id):
     property_obj = get_object_or_404(Property, pk=property_id)
 
     initial_date = request.GET.get("initial_date", "").strip()
     final_date = request.GET.get("final_date", "").strip()
+    token = request.GET.get("hold_token", "").strip()
 
-    if not initial_date or not final_date:
+    if not initial_date or not final_date or not token:
         return redirect("property", property_id=property_id)
 
     try:
-        date.fromisoformat(initial_date)
-        date.fromisoformat(final_date)
+        start = date.fromisoformat(initial_date)
+        end = date.fromisoformat(final_date)
     except ValueError:
+        return redirect("property", property_id=property_id)
+
+    hold = BookingHold.objects.filter(
+        token=token,
+        property=property_obj,
+        initial_date=start,
+        final_date=end,
+        expires_at__gt=timezone.now(),
+    ).first()
+
+    if hold is None:
         return redirect("property", property_id=property_id)
 
     return render(
@@ -1647,10 +1807,12 @@ def booking_details(request, property_id):
             "property": property_obj,
             "initial_date": initial_date,
             "final_date": final_date,
+            "hold_token": str(hold.token),
         },
     )
 
 PENDING_BOOKING_MINUTES = 15
+BOOKING_HOLD_MINUTES = 15
 
 def create_booking(request, property_id):
     if request.method != "POST":
@@ -1670,6 +1832,14 @@ def create_booking(request, property_id):
     if not isinstance(data, dict):
         return JsonResponse(
             {"error": "JSON inválido"},
+            status=400,
+        )
+
+    hold_token = data.get("hold_token")
+
+    if not isinstance(hold_token, str) or not hold_token:
+        return JsonResponse(
+            {"error": "Falta la retención temporal de las fechas."},
             status=400,
         )
 
@@ -1814,32 +1984,57 @@ def create_booking(request, property_id):
     )
 
     try:
-        expires_at = timezone.now() + timedelta(
-            minutes=PENDING_BOOKING_MINUTES
-        )
+        with transaction.atomic():
+            locked_property = Property.objects.select_for_update().get(
+                pk=property_id
+            )
 
-        booking = Booking.create_pending(
-            tenant=tenant,
-            property=property,
-            initial_date=initial_date,
-            final_date=final_date,
-            expires_at=expires_at,
-            guest_first_name=guest_first_name,
-            guest_last_name=guest_last_name,
-            guest_email=guest_email,
-            guest_phone_number=guest_phone_number,
-            guest_country=guest_country,
-            guest_region=guest_region,
-            guest_city=guest_city,
-            guest_postal_code=guest_postal_code,
-            guest_address=guest_address,
-            is_for_self=is_for_self,
-            is_business_trip=is_business_trip,
-            tax_id=tax_id,
-            guest_count=guest_count,
-            special_requests=special_requests,
-            arrival_time=arrival_time,
-        )
+            hold = BookingHold.objects.select_for_update().filter(
+                token=hold_token,
+                property=locked_property,
+                initial_date=initial_date,
+                final_date=final_date,
+                expires_at__gt=timezone.now(),
+            ).first()
+
+            if hold is None:
+                return JsonResponse(
+                    {
+                        "error": (
+                            "La retención ha vencido o ya no es válida. "
+                            "Selecciona las fechas de nuevo."
+                        )
+                    },
+                    status=409,
+                )
+
+            expires_at = hold.expires_at
+
+            booking = Booking.create_pending(
+                tenant=tenant,
+                property=locked_property,
+                initial_date=initial_date,
+                final_date=final_date,
+                expires_at=expires_at,
+                guest_first_name=guest_first_name,
+                guest_last_name=guest_last_name,
+                guest_email=guest_email,
+                guest_phone_number=guest_phone_number,
+                guest_country=guest_country,
+                guest_region=guest_region,
+                guest_city=guest_city,
+                guest_postal_code=guest_postal_code,
+                guest_address=guest_address,
+                is_for_self=is_for_self,
+                is_business_trip=is_business_trip,
+                tax_id=tax_id,
+                guest_count=guest_count,
+                special_requests=special_requests,
+                arrival_time=arrival_time,
+                hold_token=hold.token,
+            )
+
+            hold.delete()
 
     except IntegrityError:
         return JsonResponse(

@@ -46,7 +46,8 @@ document.addEventListener("DOMContentLoaded", () => {
             is_for_self: formData.has("is_for_self"),
             is_business_trip: formData.has("is_business_trip"),
             tax_id: formData.get("tax_id").trim(),
-            special_requests: formData.get("special_requests").trim()
+            special_requests: formData.get("special_requests").trim(),
+            hold_token: document.getElementById("booking-hold-token").value,
         };
 
         submitButton.disabled = true;
