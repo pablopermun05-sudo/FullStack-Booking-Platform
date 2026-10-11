@@ -1,0 +1,144 @@
+{% extends "bookings/layout.html" %}
+
+{% block body %}
+<div class="container py-4" style="max-width: 760px;">
+    <h2 class="mb-2">Datos de la reserva</h2>
+    <p class="text-muted">
+        Completa los datos del huésped para continuar.
+    </p>
+
+    <div class="card shadow-sm">
+        <div class="card-body p-4">
+            <p>
+                <strong>Entrada:</strong> {{ initial_date }}
+                <br>
+                <strong>Salida:</strong> {{ final_date }}
+            </p>
+
+            <form
+                id="booking-details-form"
+                data-create-url="{% url 'confirm_booking' property.id %}"
+                {% if request.user.is_authenticated %}
+                data-success-url="{% url 'my_bookings' %}"
+                {% endif %}
+            >
+                {% csrf_token %}
+
+                <input type="hidden" name="start" value="{{ initial_date }}">
+                <input type="hidden" name="end" value="{{ final_date }}">
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="guest-first-name" class="form-label">Nombre *</label>
+                        <input id="guest-first-name" name="guest_first_name"
+                               class="form-control" maxlength="150" required>
+                    </div>
+
+                    <div class="col-md-6 mb-3">
+                        <label for="guest-last-name" class="form-label">Apellidos *</label>
+                        <input id="guest-last-name" name="guest_last_name"
+                               class="form-control" maxlength="150" required>
+                    </div>
+
+                    <div class="col-md-6 mb-3">
+                        <label for="guest-email" class="form-label">Email *</label>
+                        <input id="guest-email" name="guest_email" type="email"
+                               class="form-control" required>
+                    </div>
+
+                    <div class="col-md-6 mb-3">
+                        <label for="guest-phone" class="form-label">Teléfono *</label>
+                        <input id="guest-phone" name="guest_phone_number"
+                               type="tel" class="form-control" required>
+                    </div>
+
+                    <div class="col-md-6 mb-3">
+                        <label for="guest-country" class="form-label">País *</label>
+                        <input id="guest-country" name="guest_country"
+                               class="form-control" maxlength="100" required>
+                    </div>
+
+                    <div class="col-md-6 mb-3">
+                        <label for="guest-region" class="form-label">Región</label>
+                        <input id="guest-region" name="guest_region"
+                               class="form-control" maxlength="100">
+                    </div>
+
+                    <div class="col-md-6 mb-3">
+                        <label for="guest-city" class="form-label">Ciudad *</label>
+                        <input id="guest-city" name="guest_city"
+                               class="form-control" maxlength="100" required>
+                    </div>
+
+                    <div class="col-md-6 mb-3">
+                        <label for="guest-postal-code" class="form-label">Código postal</label>
+                        <input id="guest-postal-code" name="guest_postal_code"
+                               class="form-control" maxlength="20">
+                    </div>
+
+                    <div class="col-12 mb-3">
+                        <label for="guest-address" class="form-label">Dirección *</label>
+                        <input id="guest-address" name="guest_address"
+                               class="form-control" maxlength="255" required>
+                    </div>
+
+                    <div class="col-md-6 mb-3">
+                        <label for="guest-count" class="form-label">Número de huéspedes *</label>
+                        <input id="guest-count" name="guest_count" type="number"
+                               class="form-control" min="1" required>
+                    </div>
+
+                    <div class="col-md-6 mb-3">
+                        <label for="arrival-time" class="form-label">Hora de llegada *</label>
+                        <input id="arrival-time" name="arrival_time" type="time"
+                               class="form-control" required>
+                    </div>
+
+                    <div class="col-12 mb-3">
+                        <label for="tax-id" class="form-label">Identificación fiscal</label>
+                        <input id="tax-id" name="tax_id" class="form-control">
+                    </div>
+
+                    <div class="col-12 mb-3">
+                        <label for="special-requests" class="form-label">
+                            Peticiones especiales
+                        </label>
+                        <textarea id="special-requests" name="special_requests"
+                                  class="form-control" rows="3"></textarea>
+                    </div>
+                </div>
+
+                <div class="form-check mb-2">
+                    <input id="is-for-self" name="is_for_self"
+                           type="checkbox" class="form-check-input" checked>
+                    <label for="is-for-self" class="form-check-label">
+                        La reserva es para mí
+                    </label>
+                </div>
+
+                <div class="form-check mb-4">
+                    <input id="is-business-trip" name="is_business_trip"
+                           type="checkbox" class="form-check-input">
+                    <label for="is-business-trip" class="form-check-label">
+                        Es un viaje de negocios
+                    </label>
+                </div>
+
+                <div id="booking-form-error" class="alert alert-danger"
+                     role="alert" hidden></div>
+
+                <button id="submit-booking-details"
+                        type="submit"
+                        class="btn btn-dark w-100 rounded-pill py-2">
+                    Confirmar reserva
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block script %}
+{% load static %}
+<script src="{% static 'bookings/booking_details.js' %}"></script>
+{% endblock %}

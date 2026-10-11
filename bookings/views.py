@@ -1,4 +1,4 @@
-from django.shortcuts import render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.http import HttpResponse, HttpResponseRedirect
 from django.contrib.auth import authenticate, login, logout
@@ -20,7 +20,6 @@ from django.contrib.auth.decorators import login_required
 import json
 from django.core.exceptions import ValidationError
 from django.core.exceptions import PermissionDenied
-from django.shortcuts import get_object_or_404
 from django.db import transaction
 from .services import generate_proposal_access_token, hash_proposal_access_token
 import logging
@@ -1624,6 +1623,32 @@ def reject_booking_change_proposal(request, proposal_id):
             },
             status=200,
         )
+
+
+def booking_details(request, property_id):
+    property_obj = get_object_or_404(Property, pk=property_id)
+
+    initial_date = request.GET.get("initial_date", "").strip()
+    final_date = request.GET.get("final_date", "").strip()
+
+    if not initial_date or not final_date:
+        return redirect("property", property_id=property_id)
+
+    try:
+        date.fromisoformat(initial_date)
+        date.fromisoformat(final_date)
+    except ValueError:
+        return redirect("property", property_id=property_id)
+
+    return render(
+        request,
+        "bookings/booking_details.html",
+        {
+            "property": property_obj,
+            "initial_date": initial_date,
+            "final_date": final_date,
+        },
+    )
 
 PENDING_BOOKING_MINUTES = 15
 

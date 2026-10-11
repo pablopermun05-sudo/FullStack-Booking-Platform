@@ -26,4 +26,5 @@ urlpatterns = [
     path("booking-change-proposal/<int:proposal_id>/accept", views.accept_booking_change_proposal, name="accept_booking_change_proposal"),
     path("booking/<int:booking_id>/admin-force-change", views.admin_force_booking_change, name="admin_force_booking_change"),
     path("booking-change-proposal/access/<str:token>", views.view_booking_change_proposal_by_token, name="view_booking_change_proposal_by_token"),
+    path("booking/<int:property_id>/details", views.booking_details, name="booking_details"),
 ]
