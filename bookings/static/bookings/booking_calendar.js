@@ -40,6 +40,39 @@ let blockedDates = [];
 let minStayUnavailableDates = [];
 let maxCheckoutDate = null;
 
+function showDateAlert(message) {
+    const alertBox = document.getElementById('alert-booking-date');
+
+    if (!alertBox) {
+        console.warn('No se encuentra #alert-booking-date');
+        return;
+    }
+
+    alertBox.textContent = message;
+    alertBox.classList.remove('no-display', 'd-none');
+}
+
+function hideDateAlert() {
+    const alertBox = document.getElementById('alert-booking-date');
+
+    if (alertBox) {
+        alertBox.classList.add('no-display');
+    }
+}
+
+function clearCurrentBookingSelection() {
+    const changeForm = document.getElementById('booking-change-form');
+
+    if (changeForm) {
+        document.getElementById('start-date').value = '';
+        document.getElementById('end-date').value = '';
+        document.getElementById('proposed-initial-date').value = '';
+        document.getElementById('proposed-final-date').value = '';
+    } else if (typeof window.clearBookingSelection === 'function') {
+        window.clearBookingSelection();
+    }
+}
+
 function getPreviousDate(dateStr) {
     const date = new Date(`${dateStr}T00:00:00`);
     date.setDate(date.getDate() - 1);
@@ -232,7 +265,7 @@ function initializePicker() {
                     alertBox.classList.remove('no-display');
 
                     picker.clearSelection();
-                    window.clearBookingSelection();
+                    clearCurrentBookingSelection();
                     return;
                 }
 
@@ -245,24 +278,34 @@ function initializePicker() {
                     alertBox.classList.remove('no-display');
 
                     picker.clearSelection();
-                    window.clearBookingSelection();
+                    clearCurrentBookingSelection();
                     return;
                 }
 
                 if (checkoutOnlyDates.includes(startStr)) {
                     picker.clearSelection();
-                    window.clearBookingSelection();
+                    clearCurrentBookingSelection();
                     return;
                 }
 
                 if (minStayUnavailableDates.includes(startStr)) {
-                    const minNights = availabilityData[startStr]?.minNights || defaultMinNights;
+                    const minNights =
+                        availabilityData[startStr]?.minNights || defaultMinNights;
 
                     picker.clearSelection();
-                    window.clearBookingSelection();
 
-                    alertBox.textContent = `Estancia mínima de ${minNights} noches.`;
-                    alertBox.classList.remove('no-display');
+                    clearCurrentBookingSelection();
+
+                    if (typeof showDateAlert === 'function') {
+                        showDateAlert(`Estancia mínima de ${minNights} noches.`);
+                    } else {
+                        const alertBox = document.getElementById('alert-booking-date');
+
+                        if (alertBox) {
+                            alertBox.textContent = `Estancia mínima de ${minNights} noches.`;
+                            alertBox.classList.remove('no-display', 'd-none');
+                        }
+                    }
 
                     return;
                 }
@@ -337,7 +380,7 @@ function initializePicker() {
                             document.getElementById('proposed-initial-date').value = '';
                             document.getElementById('proposed-final-date').value = '';
                         } else if (typeof window.clearBookingSelection === 'function') {
-                            window.clearBookingSelection();
+                            clearCurrentBookingSelection();
                         }
 
                         // Mantener el calendario en el mes actual
@@ -385,26 +428,27 @@ function initializePicker() {
                 dayDate.setHours(0, 0, 0, 0);
 
                 if (dayDate < today) {
-                    dayElement.addEventListener('click', () => {
-                        const alertBox = document.getElementById('alert-booking-date');
+                    dayElement.addEventListener('click', (event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
 
                         picker.clearSelection();
-                        window.clearBookingSelection();
-
-                        alertBox.textContent = 'Fecha pasada.';
-                        alertBox.classList.remove('no-display');
+                        clearCurrentBookingSelection();
+                        showDateAlert('Fecha pasada.');
                     });
                 } else if (dayDate < minBookingDate) {
-                    dayElement.addEventListener('click', () => {
-                        const alertBox = document.getElementById('alert-booking-date');
+                    dayElement.addEventListener('click', (event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+
                         const dayText = noticePeriodDays === 1 ? 'día' : 'días';
 
                         picker.clearSelection();
-                        window.clearBookingSelection();
+                        clearCurrentBookingSelection();
 
-                        alertBox.textContent =
-                            `Debes reservar con al menos ${noticePeriodDays} ${dayText} de antelación.`;
-                        alertBox.classList.remove('no-display');
+                        showDateAlert(
+                            `Debes reservar con al menos ${noticePeriodDays} ${dayText} de antelación.`
+                        );
                     });
                 }
             });
@@ -429,7 +473,7 @@ function initializePicker() {
                             'El rango seleccionado contiene una noche no disponible.';
                         alertBox.classList.remove('no-display');
                         picker.clearSelection();
-                        window.clearBookingSelection();
+                        clearCurrentBookingSelection();
                         return;
                     }
 
@@ -444,7 +488,7 @@ function initializePicker() {
                         'La combinación de fechas no es válida: revisa el día marcado en rojo en diagonal.';
                     alertBox.classList.remove('no-display');
                     picker.clearSelection();
-                    window.clearBookingSelection();
+                    clearCurrentBookingSelection();
                     return;
                 }
 
