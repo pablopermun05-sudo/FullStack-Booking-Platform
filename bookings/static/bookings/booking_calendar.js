@@ -462,7 +462,17 @@ function initializePicker() {
                 startInput.value = startStr;
                 endInput.value = endStr;
 
-                window.validateBooking();
+                const changeForm = document.getElementById('booking-change-form');
+
+                if (changeForm) {
+                    document.getElementById('proposed-initial-date').value = startStr;
+                    document.getElementById('proposed-final-date').value = endStr;
+
+                    // Notificar al formulario para actualizar la cotización
+                    changeForm.dispatchEvent(new Event('bookingDatesChanged'));
+                } else if (typeof window.validateBooking === 'function') {
+                    window.validateBooking();
+                }
             });
         }
     });

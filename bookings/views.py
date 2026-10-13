@@ -1406,19 +1406,7 @@ def propose_booking_change(request, booking_id):
             status=400,
         )
 
-    try:
-        data = json.loads(request.body)
-    except (json.JSONDecodeError, UnicodeDecodeError):
-        return JsonResponse(
-            {"error": "JSON inválido."},
-            status=400,
-        )
-
-    if not isinstance(data, dict):
-        return JsonResponse(
-            {"error": "El cuerpo debe ser un objeto JSON."},
-            status=400,
-        )
+    data = request.POST
 
     initial_date_raw = data.get("proposed_initial_date")
     final_date_raw = data.get("proposed_final_date")
@@ -1473,6 +1461,22 @@ def propose_booking_change(request, booking_id):
     if isinstance(guest_count_raw, str) and str(proposed_guest_count) != guest_count_raw.strip():
         return JsonResponse(
             {"error": "El número de huéspedes debe ser un entero."},
+            status=400,
+        )
+    
+    if (
+        proposed_initial_date == booking.initial_date
+        and proposed_final_date == booking.final_date
+        and proposed_guest_count == booking.guest_count
+    ):
+        return JsonResponse(
+            {
+                "success": False,
+                "error": (
+                    "No has cambiado ninguna condición de la reserva. "
+                    "Modifica las fechas o el número de huéspedes."
+                ),
+            },
             status=400,
         )
 
@@ -1564,6 +1568,11 @@ def propose_booking_change(request, booking_id):
             "La propuesta se creó correctamente, pero no se pudo "
             "enviar el correo de notificación."
         )
+
+    response_data["success"] = True
+    response_data["message"] = (
+        "La propuesta de cambio se ha enviado correctamente."
+    )
 
     return JsonResponse(response_data, status=201)
 
