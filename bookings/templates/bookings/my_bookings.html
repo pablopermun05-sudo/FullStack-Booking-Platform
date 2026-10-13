@@ -1,123 +1,213 @@
 {% extends "bookings/layout.html" %}
 
 {% block body %}
-<div class="mt-3 mb-5">
-   <h2 class="h2Views">Tus Reservas:</h2>
-</div>
-<div class="container mt-4 d-flex flex-column">
-    <div class="flex-grow-1">
-        {% if page_obj %}
-        <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
-            {% for booking in page_obj %}
-            <div class="col">
-                <div class="card h-100">
-                    
-                    <div class="card-header bg-warning text-white p-3">
-                        <h5 class="fw-bold mb-0">{{ booking.property.title|truncatechars:25 }}</h5>
-                        <small><i class="bi bi-geo-alt-fill text-danger me-1"></i> {{ booking.property.location }}</small>
-                    </div>
 
-                    <div class="card-body text-center">
-                        <div class="row g-2 mb-3">
-                            <div class="col-6">
-                                <div class="bg-light p-2 rounded">
-                                    <small class="text-muted fw-bold d-block">LLEGADA</small>
-                                    <span class="h5 fw-bold d-block mb-0">{{ booking.initial_date|date:"d M" }}</span>
-                                    <small class="text-muted">{{ booking.initial_date|date:"Y" }}</small>
-                                </div>
-                            </div>
-                            <div class="col-6">
-                                <div class="bg-light p-2 rounded">
-                                    <small class="text-muted fw-bold d-block">SALIDA</small>
-                                    <span class="h5 fw-bold d-block mb-0">{{ booking.final_date|date:"d M" }}</span>
-                                    <small class="text-muted">{{ booking.final_date|date:"Y" }}</small>
-                                </div>
-                            </div>
+<div class="my-bookings">
+
+    <header class="bookings-header">
+        <div>
+            <h1>Mis reservas</h1>
+        </div>
+
+        <div class="booking-count">
+            {{ page_obj.paginator.count }} reservas
+        </div>
+    </header>
+
+    {% if bookings %}
+
+        {% for booking in bookings %}
+
+            <article class="booking-card">
+
+                <!-- Imagen de la vivienda -->
+                <div>
+                    {% if booking.property.image %}
+                        <img
+                            class="booking-photo"
+                            src="{{ booking.property.image.url }}"
+                            alt="{{ booking.property.title }}"
+                            loading="lazy"
+                        >
+                    {% else %}
+                        <div class="booking-photo-placeholder">
+                            <span style="font-size: 38px;">⌂</span>
+                            <span>Foto no disponible</span>
+                        </div>
+                    {% endif %}
+                </div>
+
+                <!-- Detalles de la reserva -->
+                <div class="booking-content">
+
+                    <div class="booking-top">
+                        <div>
+                            <h2 class="booking-property-name">
+                                {{ booking.property.title }}
+                            </h2>
                         </div>
 
-                        <div class="mt-2">
-                            <strong>Estado:</strong>
-
+                        <div>
                             {% if booking.status == "PENDING" %}
-                                <span class="badge bg-warning text-dark">
+                                <span class="booking-status status-pending">
                                     Pendiente de pago
                                 </span>
-
                             {% elif booking.status == "CONFIRMED" %}
-                                <span class="badge bg-success">
+                                <span class="booking-status status-confirmed">
                                     Confirmada
                                 </span>
-
                             {% elif booking.status == "CANCELLED" %}
-                                <span class="badge bg-secondary">
+                                <span class="booking-status status-cancelled">
                                     Cancelada
                                 </span>
-
                             {% elif booking.status == "EXPIRED" %}
-                                <span class="badge bg-danger">
+                                <span class="booking-status status-expired">
                                     Caducada
                                 </span>
-
                             {% else %}
-                                <span class="badge bg-secondary">
+                                <span class="booking-status status-cancelled">
                                     {{ booking.get_status_display }}
                                 </span>
                             {% endif %}
                         </div>
+                    </div>
 
-                        <hr>
-
-                        <div class="d-flex justify-content-between align-items-center mb-3 px-2">
-                            <span class="text-muted">Total reserva</span>
-                            <span class="fw-bold">{{ booking.property.price_per_night }}€ / noche</span>
+                    <div class="booking-dates">
+                        <div class="booking-date">
+                            <div class="booking-date-label">
+                                Entrada
+                            </div>
+                            <div class="booking-date-value">
+                                {{ booking.initial_date|date:"d M Y" }}
+                            </div>
                         </div>
-                        <form action="{% url 'delete_booking' booking.id %}" method="post">
-                            {% csrf_token %}
-                            <button class="btn btn-outline-danger w-100 fw-bold rounded-pill">
-                                Cancelar Reserva
-                            </button>
-                        </form>
-                        
+
+                        <div class="booking-date">
+                            <div class="booking-date-label">
+                                Salida
+                            </div>
+                            <div class="booking-date-value">
+                                {{ booking.final_date|date:"d M Y" }}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="booking-bottom">
+
+                        <div>
+                            <div class="booking-price-label">
+                                Precio total
+                            </div>
+                            <div class="booking-price">
+                                {{ booking.calculated_total|floatformat:2 }} €
+                            </div>
+                            <div class="booking-price-label">
+                                {{ booking.nights.count }}
+                                {% if booking.nights.count == 1 %}
+                                    noche
+                                {% else %}
+                                    noches
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <div class="booking-actions">
+
+                            {% if booking.status == "PENDING" %}
+
+                                <a
+                                    href="{% url 'mock_payment' booking.id %}"
+                                    class="booking-btn booking-btn-primary"
+                                >
+                                    Ir al pago →
+                                </a>
+
+                                <form
+                                    action="{% url 'cancel_booking' booking.id %}"
+                                    method="post"
+                                    onsubmit="return confirm('¿Seguro que quieres cancelar esta reserva?');"
+                                >
+                                    {% csrf_token %}
+                                    <button
+                                        type="submit"
+                                        class="booking-btn booking-btn-cancel"
+                                    >
+                                        Cancelar
+                                    </button>
+                                </form>
+
+                            {% elif booking.status == "CONFIRMED" %}
+
+                                <form
+                                    action="{% url 'cancel_booking' booking.id %}"
+                                    method="post"
+                                    onsubmit="return confirm('¿Seguro que quieres cancelar esta reserva confirmada?');"
+                                >
+                                    {% csrf_token %}
+                                    <button
+                                        type="submit"
+                                        class="booking-btn booking-btn-cancel"
+                                    >
+                                        Cancelar reserva
+                                    </button>
+                                </form>
+
+                            {% endif %}
+
+                        </div>
+
                     </div>
 
                 </div>
-            </div>
-            {% endfor %}
-        </div>
-        {% else %}
-        <div class="text-center mt-2 p-5 bg-dark bg-opacity-25 rounded-4 text-white">
-            <p class="fw-bold fs-3 mb-2">¡Vaya! Parece que está todo vacío</p>
-            <p class="mb-4">No dejes que se escapen las vacaciones. Empieza a explorar ahora mismo.</p>
-            <a href="{% url 'index' %}" class="btn btn-primary rounded-pill px-4 fw-bold">Buscar mi alojamiento</a>
-        </div>
-    {% endif %}
-    </div>
-</div>
-{% if page_obj.paginator.num_pages > 1 %}
-    <nav aria-label="Page navigation example" class="mt-2 mb-3">
-        <ul class="pagination justify-content-center">
-            {% if page_obj.has_previous %}
-                <li class="page-item">
-                    <a href="?page={{ page_obj.previous_page_number }}" class="page-link">Previous</a>
-                </li>
-            {% endif %}
-            {% for num in page_obj.paginator.page_range %}
-                {% if page_obj.number == num %}
-                    <li class="page-item active">
-                        <a class="page-link">{{ num }}</a>
-                    </li>
-                {% elif num > page_obj.number|add:'-3' and  num < page_obj.number|add:'3' %}
-                    <li class="page-item">
-                        <a href="?page={{ num }}" class="page-link">{{ num }}</a>
-                    </li>
+
+            </article>
+
+        {% endfor %}
+
+        <!-- Paginación -->
+        {% if page_obj.has_other_pages %}
+            <nav class="booking-pagination" aria-label="Páginas de reservas">
+
+                {% if page_obj.has_previous %}
+                    <a href="?page={{ page_obj.previous_page_number }}">
+                        ← Anterior
+                    </a>
                 {% endif %}
-            {% endfor %}
-            {% if page_obj.has_next %}
-                <li class="page-item">
-                    <a href="?page={{ page_obj.next_page_number }}" class="page-link">Next</a>
-                </li>
-            {% endif %}
-        </ul>
-    </nav>
-{% endif %}
+
+                {% for num in page_obj.paginator.page_range %}
+                    {% if page_obj.number == num %}
+                        <span class="current" aria-current="page">
+                            {{ num }}
+                        </span>
+                    {% else %}
+                        <a href="?page={{ num }}">{{ num }}</a>
+                    {% endif %}
+                {% endfor %}
+
+                {% if page_obj.has_next %}
+                    <a href="?page={{ page_obj.next_page_number }}">
+                        Siguiente →
+                    </a>
+                {% endif %}
+
+            </nav>
+        {% endif %}
+
+    {% else %}
+
+        <section class="booking-empty">
+            <div class="booking-empty-icon">⌂</div>
+
+            <h2>Aún no tienes reservas</h2>
+
+            <p>
+                Cuando reserves una vivienda, podrás consultar aquí
+                las fechas, el precio y el estado de tu reserva.
+            </p>
+        </section>
+
+    {% endif %}
+
+</div>
+
 {% endblock %}

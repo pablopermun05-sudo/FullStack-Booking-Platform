@@ -297,18 +297,20 @@ class Booking(models.Model):
 
     def cancel(self):
         with transaction.atomic():
-            booking = type(self).objects.select_for_update().get(pk=self.pk)
+            booking = type(self).objects.select_for_update().get(
+                pk=self.pk
+            )
 
-            if booking.status != "CONFIRMED":
+            if booking.status not in ("PENDING", "CONFIRMED"):
                 self.status = booking.status
                 return False
 
             booking.status = "CANCELLED"
             booking.save(update_fields=["status"])
+
             self.status = booking.status
-
             return True
-
+    
     @classmethod
     def expire_pending_bookings(cls):
         now = timezone.now()

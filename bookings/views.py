@@ -4,10 +4,9 @@ from django.http import HttpResponse, HttpResponseRedirect
 from django.contrib.auth import authenticate, login, logout
 from django.views.decorators.csrf import csrf_exempt
 from django.db import IntegrityError
-from django.db.models import Exists, F, IntegerField, OuterRef, Subquery
+from django.db.models import Exists, F, Q, IntegerField, OuterRef, Subquery, Sum, Value, DecimalField
 from django.db.models.functions import Coalesce
 from .models import User, OwnerProfile, Property, Booking, BookingChangeProposal, BookingChangeAudit, BookingNight, PropertyAvailability, BookingHold, can_manage_properties
-from django.db.models import Q
 from django import forms
 from django.forms import ModelForm
 from django.contrib.auth.forms import UserCreationForm
@@ -174,25 +173,44 @@ def my_properties(request):
 
 @login_required
 def my_bookings(request):
-    # Buscar las reservas del usuario.
+    # Obtener las reservas del usuario autenticado.
     bookings = Booking.objects.filter(tenant=request.user)
 
-    # Actualizar las reservas pendientes cuyo plazo haya vencido.
+    # Actualizar las reservas pendientes que hayan caducado.
     for booking in bookings.filter(status="PENDING"):
         if booking.is_expired():
             booking.expire()
 
-    # Volver a consultar las reservas para mostrar los estados actualizados.
-    bookings = Booking.objects.filter(tenant=request.user).order_by("-id")
+    # Calcular el precio total sumando los precios guardados
+    # de todas las noches de cada reserva.
+    bookings = (
+        Booking.objects
+        .filter(tenant=request.user)
+        .annotate(
+            calculated_total=Coalesce(
+                Sum("nights__price_per_night"),
+                Value(Decimal("0.00")),
+                output_field=DecimalField(
+                    max_digits=10,
+                    decimal_places=2,
+                ),
+            )
+        )
+        .order_by("-id")
+    )
 
     paginator = Paginator(bookings, 6)
     page_number = request.GET.get("page")
     page_obj = paginator.get_page(page_number)
 
-    return render(request, "bookings/my_bookings.html", {
-        "bookings": page_obj.object_list,
-        "page_obj": page_obj,
-    })
+    return render(
+        request,
+        "bookings/my_bookings.html",
+        {
+            "bookings": page_obj.object_list,
+            "page_obj": page_obj,
+        },
+    )
 
 class PropertyForm(ModelForm):
     class Meta:
@@ -320,7 +338,6 @@ def property_availability_reset(request, property_id):
     return JsonResponse({
         "deleted_count": deleted_count,
     })
-
 
 def property_availability_data(request, property_id):
     
@@ -512,20 +529,33 @@ def property_availability_save(request, property_id):
     })
 
 @login_required
-def delete_booking(request, booking_id):
-    booking = get_object_or_404(Booking, pk=booking_id)
-
+def cancel_booking(request, booking_id):
     if request.method != "POST":
         return JsonResponse(
             {"error": "Method not allowed"},
             status=405,
         )
 
-    if booking.tenant != request.user:
-        raise PermissionDenied
+    with transaction.atomic():
+        booking = get_object_or_404(
+            Booking.objects.select_for_update(),
+            pk=booking_id,
+            tenant=request.user,
+        )
 
-    booking.cancel()
-    return HttpResponseRedirect(reverse("my_bookings"))
+        # Solo se pueden cancelar reservas pendientes o confirmadas.
+        if booking.status not in ("PENDING", "CONFIRMED"):
+            return redirect("my_bookings")
+
+        # Si la reserva pendiente ya caducó, no se cancela:
+        # se marca como caducada.
+        if booking.status == "PENDING" and booking.is_expired():
+            booking.expire()
+            return redirect("my_bookings")
+
+        booking.cancel()
+
+    return redirect("my_bookings")
 
 def properties(request):
     if request.method != "GET":
@@ -1967,8 +1997,8 @@ def booking_details(request, property_id):
         },
     )
 
-BOOKING_HOLD_MINUTES = 1
-PENDING_BOOKING_MINUTES = 1
+BOOKING_HOLD_MINUTES = 10
+PENDING_BOOKING_MINUTES = 10
 
 def create_booking(request, property_id):
     if request.method != "POST":
