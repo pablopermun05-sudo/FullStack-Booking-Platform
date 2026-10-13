@@ -166,7 +166,7 @@
 {% block script %}
 {% if request.user != property.owner %}
 <script src="https://cdn.jsdelivr.net/npm/litepicker/dist/litepicker.js"></script>
-<script src="{% static 'bookings/property.js' %}"></script>
+<script src="{% static 'bookings/booking_calendar.js' %}"></script>
 <script src="{% static 'bookings/booking.js' %}"></script>
 {% endif %}
 {% endblock %}
