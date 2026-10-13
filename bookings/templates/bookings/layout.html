@@ -102,6 +102,15 @@
     </nav>
 
     <main class="container">
+        {% if messages %}
+            <div class="django-messages" role="status" aria-live="polite">
+                {% for message in messages %}
+                    <div class="django-message django-message-{{ message.tags }}">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
         {% block body %}
         {% endblock %}
     </main>

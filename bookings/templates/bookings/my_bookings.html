@@ -162,6 +162,86 @@
 
             </div>
 
+            {% if booking.prefetched_change_proposals %}
+            <section class="booking-proposals" aria-label="Propuestas de cambio">
+                <h3>Propuestas de cambio</h3>
+
+                {% for proposal in booking.prefetched_change_proposals %}
+                <article class="booking-proposal">
+                    <p>
+                        <strong>Estado:</strong>
+                        {% if proposal.status == "PENDING" %}
+                            Pendiente
+                        {% elif proposal.status == "ACCEPTED" %}
+                            Aceptada
+                        {% elif proposal.status == "REJECTED" %}
+                            Rechazada
+                        {% elif proposal.status == "EXPIRED" %}
+                            Caducada
+                        {% else %}
+                            {{ proposal.get_status_display }}
+                        {% endif %}
+                    </p>
+
+                    <p>
+                        <strong>Entrada propuesta:</strong>
+                        {{ proposal.proposed_initial_date|date:"d M Y" }}
+                    </p>
+
+                    <p>
+                        <strong>Salida propuesta:</strong>
+                        {{ proposal.proposed_final_date|date:"d M Y" }}
+                    </p>
+
+                    <p>
+                        <strong>Huéspedes:</strong>
+                        {{ proposal.proposed_guest_count }}
+                    </p>
+
+                    <p>
+                        <strong>Precio total propuesto:</strong>
+                        {% if proposal.proposed_total_price is not None %}
+                            {{ proposal.proposed_total_price|floatformat:2 }} €
+                        {% else %}
+                            No disponible
+                        {% endif %}
+                    </p>
+
+                    <p>
+                        <strong>Caduca:</strong>
+                        {{ proposal.expires_at|date:"d M Y H:i" }}
+                    </p>
+
+                    {% if proposal.status == "PENDING" and proposal.expires_at > current_time %}
+                    <div class="booking-actions">
+                        <form
+                            action="{% url 'accept_booking_change_proposal' proposal.id %}"
+                            method="post"
+                        >
+                            {% csrf_token %}
+                            <button type="submit" class="booking-btn booking-btn-primary">
+                                Aceptar propuesta
+                            </button>
+                        </form>
+
+                        <form
+                            action="{% url 'reject_booking_change_proposal' proposal.id %}"
+                            method="post"
+                        >
+                            {% csrf_token %}
+                            <button type="submit" class="booking-btn booking-btn-cancel">
+                                Rechazar propuesta
+                            </button>
+                        </form>
+                    </div>
+                    {% elif proposal.status == "PENDING" %}
+                        <p>Esta propuesta ha caducado y ya no se puede aceptar ni rechazar.</p>
+                    {% endif %}
+                </article>
+                {% endfor %}
+            </section>
+            {% endif %}
+
         </div>
 
     </article>
