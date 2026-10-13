@@ -173,35 +173,51 @@ def my_properties(request):
 
 @login_required
 def my_bookings(request):
-    # Obtener las reservas del usuario autenticado.
-    bookings = Booking.objects.filter(tenant=request.user)
+    # Marcar como expiradas las reservas pendientes cuyo plazo ha vencido.
+    pending_bookings = Booking.objects.filter(
+        tenant=request.user,
+        status="PENDING",
+    )
 
-    # Actualizar las reservas pendientes que hayan caducado.
-    for booking in bookings.filter(status="PENDING"):
+    for booking in pending_bookings:
         if booking.is_expired():
             booking.expire()
 
-    # Calcular el precio total sumando los precios guardados
-    # de todas las noches de cada reserva.
-    bookings = (
-        Booking.objects
-        .filter(tenant=request.user)
-        .annotate(
-            calculated_total=Coalesce(
-                Sum("nights__price_per_night"),
-                Value(Decimal("0.00")),
-                output_field=DecimalField(
-                    max_digits=10,
-                    decimal_places=2,
-                ),
-            )
+    # Estados disponibles para el filtro.
+    valid_statuses = {
+        "PENDING",
+        "CONFIRMED",
+        "EXPIRED",
+        "CANCELLED",
+    }
+
+    selected_status = request.GET.get("status", "ALL").upper()
+
+    if selected_status not in valid_statuses | {"ALL"}:
+        selected_status = "ALL"
+
+    # Calcular el precio a partir de las noches guardadas.
+    bookings = Booking.objects.filter(
+        tenant=request.user,
+    ).annotate(
+        calculated_total=Coalesce(
+            Sum("nights__price_per_night"),
+            Value(Decimal("0.00")),
+            output_field=DecimalField(
+                max_digits=10,
+                decimal_places=2,
+            ),
         )
-        .order_by("-id")
     )
 
+    # Aplicar el filtro seleccionado.
+    if selected_status != "ALL":
+        bookings = bookings.filter(status=selected_status)
+
+    bookings = bookings.order_by("-id")
+
     paginator = Paginator(bookings, 6)
-    page_number = request.GET.get("page")
-    page_obj = paginator.get_page(page_number)
+    page_obj = paginator.get_page(request.GET.get("page"))
 
     return render(
         request,
@@ -209,6 +225,7 @@ def my_bookings(request):
         {
             "bookings": page_obj.object_list,
             "page_obj": page_obj,
+            "selected_status": selected_status,
         },
     )
 
