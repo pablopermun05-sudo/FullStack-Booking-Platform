@@ -1272,7 +1272,6 @@ Este correo es una notificación automática.
         )
         return False
 
-
 @login_required
 def booking_change_form(request, booking_id):
     if not can_manage_properties(request.user):
@@ -1294,10 +1293,88 @@ def booking_change_form(request, booking_id):
             "Esta reserva no admite propuestas de cambio."
         )
 
+    property = booking.property
+    today = date.today()
+
+    min_booking_date = today + timedelta(
+        days=property.notice_period_days
+    )
+    availability_end_date = min_booking_date + timedelta(days=365)
+    availability_start_date = min_booking_date - timedelta(days=1)
+
+    availability = PropertyAvailability.get_for_range(
+        property,
+        availability_start_date,
+        availability_end_date,
+    )
+
+    bookings = Booking.objects.filter(
+        property=property,
+        initial_date__lt=availability_end_date,
+        final_date__gt=availability_start_date,
+        status__in=Booking.ACTIVE_STATUSES,
+    ).exclude(
+        pk=booking.pk
+    )
+
+    booked_dates = set()
+
+    for existing_booking in bookings:
+        current_date = max(
+            existing_booking.initial_date,
+            availability_start_date,
+        )
+        booking_end = min(
+            existing_booking.final_date,
+            availability_end_date,
+        )
+
+        while current_date < booking_end:
+            booked_dates.add(current_date.isoformat())
+            current_date += timedelta(days=1)
+
+    now = timezone.now()
+
+    holds = BookingHold.objects.filter(
+        property=property,
+        initial_date__lt=availability_end_date,
+        final_date__gt=availability_start_date,
+        expires_at__gt=now,
+    )
+
+    for hold in holds:
+        current_date = max(
+            hold.initial_date,
+            availability_start_date,
+        )
+        hold_end = min(
+            hold.final_date,
+            availability_end_date,
+        )
+
+        while current_date < hold_end:
+            booked_dates.add(current_date.isoformat())
+            current_date += timedelta(days=1)
+
+    availability_data = [
+        {
+            "date": item["date"].isoformat(),
+            "price_per_night": str(item["price_per_night"]),
+            "status": item["status"],
+            "min_nights": item["min_nights"],
+        }
+        for item in availability
+    ]
+
     return render(
         request,
         "bookings/booking_change_form.html",
-        {"booking": booking},
+        {
+            "booking": booking,
+            "property": property,
+            "availability_data": availability_data,
+            "booked_dates": sorted(booked_dates),
+        },
     )
 
 @login_required

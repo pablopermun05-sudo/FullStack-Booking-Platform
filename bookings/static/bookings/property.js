@@ -320,20 +320,27 @@ function initializePicker() {
                         // Guardamos el día que estaba seleccionado
                         const selectedDate = date.toJSDate();
 
-                        // Cancelar la selección y limpiar el estado de reserva
-                        picker.clearSelection();
-                        window.clearBookingSelection();
-
+                        // Restablecer primero las restricciones del calendario
                         maxCheckoutDate = null;
+                        selectedMinNights = defaultMinNights;
 
                         picker.setOptions({
                             maxDate: null
                         });
 
-                        // Restaurar la estancia mínima por defecto
-                        selectedMinNights = defaultMinNights;
+                        picker.clearSelection();
 
-                        // Volver al mes donde estaba el usuario
+                        // Limpiar los campos según el formulario actual
+                        if (document.getElementById('booking-change-form')) {
+                            document.getElementById('start-date').value = '';
+                            document.getElementById('end-date').value = '';
+                            document.getElementById('proposed-initial-date').value = '';
+                            document.getElementById('proposed-final-date').value = '';
+                        } else if (typeof window.clearBookingSelection === 'function') {
+                            window.clearBookingSelection();
+                        }
+
+                        // Mantener el calendario en el mes actual
                         picker.gotoDate(selectedDate);
                     });
                 }

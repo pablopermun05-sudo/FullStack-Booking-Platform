@@ -1,0 +1,290 @@
+{% extends "bookings/layout.html" %}
+{% load static %}
+
+{% block body %}
+
+<input type="hidden" id="property-id" value="{{ booking.property.id }}">
+<input type="hidden" id="notice-period-days" value="{{ booking.property.notice_period_days }}">
+<input type="hidden" id="default-min-nights" value="{{ booking.property.default_min_nights }}">
+
+{{ availability_data|json_script:"availability-data" }}
+{{ booked_dates|json_script:"booked-dates" }}
+
+<div class="container pt-5 pb-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+
+            <div class="card shadow-sm">
+
+                <div class="card-header fondo text-white p-3">
+                    <h3 class="fw-bold mb-0">
+                        <i class="bi bi-calendar2-week me-2"></i>
+                        Modificar reserva
+                    </h3>
+                </div>
+
+                <div class="card-body p-3 p-lg-5">
+
+                    <!-- Información del alojamiento -->
+
+                    <div class="mb-4">
+                        <h4 class="fw-bold">
+                            {{ booking.property.title }}
+                        </h4>
+
+                        <p class="text-body-secondary mb-0">
+                            <i class="bi bi-geo-alt-fill text-danger me-1"></i>
+                            {{ booking.property.location }}
+                        </p>
+                    </div>
+
+                    <hr>
+
+                    <!-- Reserva actual -->
+
+                    <h5 class="fw-bold mb-3">Reserva actual</h5>
+
+                    <div class="row g-3 mb-4">
+
+                        <div class="col-md-6">
+                            <div class="border rounded p-3 h-100">
+                                <small class="text-body-secondary d-block">
+                                    Fecha de entrada
+                                </small>
+                                <strong>
+                                    {{ booking.initial_date|date:"d/m/Y" }}
+                                </strong>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="border rounded p-3 h-100">
+                                <small class="text-body-secondary d-block">
+                                    Fecha de salida
+                                </small>
+                                <strong>
+                                    {{ booking.final_date|date:"d/m/Y" }}
+                                </strong>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="border rounded p-3 h-100">
+                                <small class="text-body-secondary d-block">
+                                    Número de huéspedes
+                                </small>
+                                <strong>{{ booking.guest_count }}</strong>
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <hr>
+
+                    <!-- Formulario de modificación -->
+
+                    <form
+                        id="booking-change-form"
+                        data-initial-date="{{ booking.initial_date|date:'Y-m-d' }}"
+                        data-final-date="{{ booking.final_date|date:'Y-m-d' }}"
+                        data-proposal-url="{% url 'propose_booking_change' booking.id %}"
+                        data-booking-id="{{ booking.id }}"
+                        data-property-id="{{ property.id }}"
+                    >
+
+                        {% csrf_token %}
+
+                        <h5 class="fw-bold mb-3">
+                            Selecciona las nuevas condiciones
+                        </h5>
+
+                        <!-- Mensaje de validación de fechas -->
+
+                        <div
+                            class="alert alert-danger mb-3 no-display"
+                            id="alert-booking-date"
+                            role="alert">
+                        </div>
+
+                        <!-- Campo utilizado por Litepicker -->
+
+                        <input
+                            type="text"
+                            id="booking-range"
+                            class="d-none"
+                            readonly>
+
+                        <!-- Calendario: contenedor compatible con el CSS personalizado -->
+
+                        <div class="booking-calendar-wrapper">
+                            <div id="booking-calendar" class="booking-calendar"></div>
+                        </div>
+
+                        <!-- Fechas seleccionadas -->
+
+                        <input
+                            type="hidden"
+                            id="start-date"
+                            value="{{ booking.initial_date|date:'Y-m-d' }}">
+
+                        <input
+                            type="hidden"
+                            id="end-date"
+                            value="{{ booking.final_date|date:'Y-m-d' }}">
+
+                        <input
+                            type="hidden"
+                            id="proposed-initial-date"
+                            name="proposed_initial_date"
+                            value="{{ booking.initial_date|date:'Y-m-d' }}">
+
+                        <input
+                            type="hidden"
+                            id="proposed-final-date"
+                            name="proposed_final_date"
+                            value="{{ booking.final_date|date:'Y-m-d' }}">
+
+                        <div class="form-text mb-4">
+                            Selecciona en el calendario las nuevas fechas
+                            de entrada y salida. Los días disponibles y ocupados
+                            se mostrarán según el calendario del alojamiento.
+                        </div>
+
+                        <!-- Número de huéspedes -->
+
+                        <div class="mb-4">
+                            <label
+                                for="proposed-guest-count"
+                                class="form-label fw-bold">
+                                Número de huéspedes
+                            </label>
+
+                            <input
+                                type="number"
+                                id="proposed-guest-count"
+                                name="proposed_guest_count"
+                                class="form-control"
+                                min="1"
+                                max="{{ booking.property.adults|add:booking.property.children }}"
+                                value="{{ booking.guest_count }}"
+                                required>
+
+                            <div class="form-text">
+                                Capacidad máxima:
+                                {{ booking.property.adults|add:booking.property.children }}
+                                huéspedes.
+                            </div>
+                        </div>
+
+                        <!-- Alternativa de fechas -->
+
+                        <div
+                            id="alternative-dates"
+                            class="alert alert-warning d-none"
+                            role="alert">
+
+                            <h6 class="fw-bold">
+                                <i class="bi bi-calendar-check me-1"></i>
+                                Fechas alternativas
+                            </h6>
+
+                            <p
+                                id="alternative-message"
+                                class="mb-2">
+                            </p>
+
+                            <button
+                                type="button"
+                                id="use-alternative-dates"
+                                class="btn btn-outline-dark btn-sm">
+                                Usar fechas alternativas
+                            </button>
+
+                        </div>
+
+                        <!-- Cotización -->
+
+                        <div
+                            id="proposed-price"
+                            class="card bg-body-tertiary mb-4 d-none">
+
+                            <div class="card-body">
+                                <h5 class="fw-bold mb-3">
+                                    <i class="bi bi-currency-euro me-1"></i>
+                                    Cotización de la estancia
+                                </h5>
+
+                                <div id="price-breakdown" class="mb-3">
+                                </div>
+
+                                <div
+                                    class="d-flex justify-content-between align-items-center border-top pt-3">
+
+                                    <span class="fw-bold">
+                                        Precio total
+                                    </span>
+
+                                    <strong
+                                        id="proposed-total-price"
+                                        class="fs-4">
+                                    </strong>
+
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Resultado del envío -->
+
+                        <div
+                            id="booking-change-message"
+                            class="alert d-none"
+                            role="alert"
+                            aria-live="polite">
+                        </div>
+
+                        <!-- Botones -->
+
+                        <div class="d-grid gap-2">
+
+                            <button
+                                type="button"
+                                id="submit-change-proposal"
+                                class="btn btn-dark rounded-pill py-2">
+
+                                <i class="bi bi-send me-1"></i>
+                                Enviar propuesta de cambio
+
+                            </button>
+
+                            <a
+                                href="{% url 'property_bookings' booking.property.id %}"
+                                class="btn btn-outline-secondary rounded-pill py-2">
+
+                                Volver a las reservas
+
+                            </a>
+
+                        </div>
+
+                        <p class="text-body-secondary small mt-3 mb-0">
+                            Enviar la propuesta no modifica directamente la reserva.
+                            El cambio deberá aceptarse mediante el proceso
+                            correspondiente.
+                        </p>
+
+                    </form>
+
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block script %}
+<script src="https://cdn.jsdelivr.net/npm/litepicker@2.0.12/dist/litepicker.js"></script>
+<script src="{% static 'bookings/property.js' %}"></script>
+<script src="{% static 'bookings/booking_change.js' %}"></script>
+{% endblock %}
