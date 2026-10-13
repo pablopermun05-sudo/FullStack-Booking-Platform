@@ -1,0 +1,122 @@
+{% extends "bookings/layout.html" %}
+
+{% block body %}
+<div class="container py-5" style="max-width: 680px;">
+    <div class="card shadow-sm">
+        <div class="card-body p-4 p-md-5">
+            <h2 class="mb-2">Pago de la reserva</h2>
+
+            <p class="text-muted">
+                Esta es una pantalla de pago simulada para desarrollo.
+                No se realizará ningún cobro.
+            </p>
+
+            <hr>
+
+            <h5>Resumen de la reserva</h5>
+
+            <p>
+                <strong>Alojamiento:</strong>
+                {{ booking.property.title }}
+            </p>
+
+            <p>
+                <strong>Entrada:</strong>
+                {{ booking.initial_date }}
+                <br>
+                <strong>Salida:</strong>
+                {{ booking.final_date }}
+            </p>
+
+            <p>
+                <strong>Huésped:</strong>
+                {{ booking.guest_first_name }}
+                {{ booking.guest_last_name }}
+            </p>
+
+            <p>
+                <strong>Estado:</strong>
+                {{ booking.get_status_display }}
+            </p>
+
+            <p>
+                <strong>Total de la reserva:</strong>
+                {{ booking.total_price|floatformat:2 }}
+            </p>
+
+            {% if error_message %}
+                <div class="alert alert-danger" role="alert">
+                    {{ error_message }}
+                </div>
+            {% endif %}
+
+            {% if payment_complete %}
+                <div class="alert alert-success" role="status">
+                    <h5 class="alert-heading">Reserva confirmada</h5>
+                    La simulación ha terminado correctamente.
+                    No se ha realizado ningún pago real.
+                    <br>
+                    Número de reserva: {{ booking.pk }}
+                </div>
+
+                {% if request.user.is_authenticated %}
+                    <a href="{% url 'my_bookings' %}"
+                       class="btn btn-dark w-100 rounded-pill py-2">
+                        Ver mis reservas
+                    </a>
+                {% else %}
+                    <a href="{% url 'property' booking.property_id %}"
+                       class="btn btn-dark w-100 rounded-pill py-2">
+                        Volver al alojamiento
+                    </a>
+                {% endif %}
+
+            {% elif booking.status == "PENDING" and not booking.is_expired %}
+                <div class="alert alert-info" role="status">
+                    Pulsa el botón para simular la finalización del pago.
+                    No necesitas introducir datos bancarios.
+                </div>
+
+                <form method="post">
+                    {% csrf_token %}
+
+                    <button
+                        type="submit"
+                        class="btn btn-dark w-100 rounded-pill py-2"
+                    >
+                        Simular pago y confirmar reserva
+                    </button>
+                </form>
+
+            {% elif booking.status == "PENDING" or booking.status == "EXPIRED" %}
+                <div class="alert alert-warning" role="alert">
+                    La reserva ha caducado y ya no puede confirmarse.
+                    Vuelve al alojamiento para seleccionar otras fechas.
+                </div>
+
+                <a href="{% url 'property' booking.property_id %}"
+                   class="btn btn-outline-secondary w-100 rounded-pill py-2">
+                    Volver al alojamiento
+                </a>
+
+            {% else %}
+                <div class="alert alert-warning" role="alert">
+                    Esta reserva ya no puede confirmarse desde esta pantalla.
+                </div>
+
+                {% if request.user.is_authenticated %}
+                    <a href="{% url 'my_bookings' %}"
+                       class="btn btn-outline-secondary w-100 rounded-pill py-2">
+                        Volver a mis reservas
+                    </a>
+                {% else %}
+                    <a href="{% url 'property' booking.property_id %}"
+                       class="btn btn-outline-secondary w-100 rounded-pill py-2">
+                        Volver al alojamiento
+                    </a>
+                {% endif %}
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

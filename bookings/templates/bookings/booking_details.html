@@ -15,12 +15,12 @@
                 <strong>Salida:</strong> {{ final_date }}
             </p>
 
+            
             <form
                 id="booking-details-form"
                 data-create-url="{% url 'confirm_booking' property.id %}"
-                {% if request.user.is_authenticated %}
-                data-success-url="{% url 'my_bookings' %}"
-                {% endif %}
+                data-release-url="{% url 'release_booking_hold' property.id %}"
+                data-cancel-url="{% url 'property' property.id %}"
             >
                 {% csrf_token %}
 
@@ -133,6 +133,15 @@
                         class="btn btn-dark w-100 rounded-pill py-2">
                     Confirmar reserva
                 </button>
+                
+                <button
+                    id="cancel-booking-details"
+                    type="button"
+                    class="btn btn-outline-secondary w-100 rounded-pill py-2 mt-2"
+                >
+                    Cancelar y volver al alojamiento
+                </button>
+
             </form>
         </div>
     </div>

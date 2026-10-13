@@ -35,6 +35,36 @@
                             </div>
                         </div>
 
+                        <div class="mt-2">
+                            <strong>Estado:</strong>
+
+                            {% if booking.status == "PENDING" %}
+                                <span class="badge bg-warning text-dark">
+                                    Pendiente de pago
+                                </span>
+
+                            {% elif booking.status == "CONFIRMED" %}
+                                <span class="badge bg-success">
+                                    Confirmada
+                                </span>
+
+                            {% elif booking.status == "CANCELLED" %}
+                                <span class="badge bg-secondary">
+                                    Cancelada
+                                </span>
+
+                            {% elif booking.status == "EXPIRED" %}
+                                <span class="badge bg-danger">
+                                    Caducada
+                                </span>
+
+                            {% else %}
+                                <span class="badge bg-secondary">
+                                    {{ booking.get_status_display }}
+                                </span>
+                            {% endif %}
+                        </div>
+
                         <hr>
 
                         <div class="d-flex justify-content-between align-items-center mb-3 px-2">

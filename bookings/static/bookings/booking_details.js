@@ -4,6 +4,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const errorDiv = document.querySelector("#booking-form-error");
     const submitButton = document.querySelector("#submit-booking-details");
+    const cancelButton = document.querySelector("#cancel-booking-details");
+    const holdTokenInput = document.querySelector("#booking-hold-token");
+
+    let submissionInProgress = false;
+    let releaseRequested = false;
 
     function getCookie(name) {
         const cookies = document.cookie ? document.cookie.split(";") : [];
@@ -19,8 +24,51 @@ document.addEventListener("DOMContentLoaded", () => {
         return null;
     }
 
+    async function releaseHold(keepalive = false) {
+        if (releaseRequested) return;
+
+        releaseRequested = true;
+
+        const token = holdTokenInput.value;
+        if (!token) return;
+
+        try {
+            await fetch(form.dataset.releaseUrl, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-CSRFToken": getCookie("csrftoken"),
+                },
+                body: JSON.stringify({ hold_token: token }),
+                keepalive,
+            });
+        } catch (error) {
+            // Si el navegador no consigue enviar la petición,
+            // la retención seguirá caducando por sí sola.
+        }
+    }
+
+    cancelButton.addEventListener("click", async () => {
+        cancelButton.disabled = true;
+        cancelButton.textContent = "Cancelando…";
+
+        await releaseHold();
+
+        window.location.assign(form.dataset.cancelUrl);
+    });
+
+    window.addEventListener("pagehide", () => {
+        if (!submissionInProgress && !releaseRequested) {
+            // Es un intento de mejor esfuerzo: el navegador puede
+            // cerrar la página antes de completar la petición.
+            void releaseHold(true);
+        }
+    });
+
     form.addEventListener("submit", async (event) => {
         event.preventDefault();
+
+        if (submissionInProgress) return;
 
         errorDiv.hidden = true;
         errorDiv.textContent = "";
@@ -47,10 +95,12 @@ document.addEventListener("DOMContentLoaded", () => {
             is_business_trip: formData.has("is_business_trip"),
             tax_id: formData.get("tax_id").trim(),
             special_requests: formData.get("special_requests").trim(),
-            hold_token: document.getElementById("booking-hold-token").value,
+            hold_token: holdTokenInput.value,
         };
 
+        submissionInProgress = true;
         submitButton.disabled = true;
+        cancelButton.disabled = true;
         submitButton.textContent = "Procesando reserva…";
 
         try {
@@ -58,9 +108,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
-                    "X-CSRFToken": getCookie("csrftoken")
+                    "X-CSRFToken": getCookie("csrftoken"),
                 },
-                body: JSON.stringify(payload)
+                body: JSON.stringify(payload),
             });
 
             const data = await response.json();
@@ -70,23 +120,20 @@ document.addEventListener("DOMContentLoaded", () => {
                     ? data.error
                     : JSON.stringify(data.error || data);
 
-                throw new Error(message || "No se pudo crear la reserva.");
+                throw new Error(
+                    message || "No se pudo crear la reserva."
+                );
             }
 
-            const successUrl = form.dataset.successUrl;
+            // La retención ya se ha convertido en una reserva pendiente.
+            // No debemos intentar liberarla al salir de esta página.
+            releaseRequested = true;
 
-            if (successUrl) {
-                window.location.assign(successUrl);
-                return;
-            }
-
-            form.innerHTML = `
-                <div class="alert alert-success" role="status">
-                    Reserva creada correctamente. Número de reserva:
-                    ${Number(data.booking_id)}
-                </div>
-            `;
+            window.location.assign(data.payment_url);
         } catch (error) {
+            submissionInProgress = false;
+            cancelButton.disabled = false;
+
             errorDiv.textContent =
                 error.message || "Error al procesar la reserva.";
             errorDiv.hidden = false;

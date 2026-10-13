@@ -165,15 +165,24 @@ def my_properties(request):
 
 @login_required
 def my_bookings(request):
+    # Buscar las reservas del usuario.
     bookings = Booking.objects.filter(tenant=request.user)
 
+    # Actualizar las reservas pendientes cuyo plazo haya vencido.
+    for booking in bookings.filter(status="PENDING"):
+        if booking.is_expired():
+            booking.expire()
+
+    # Volver a consultar las reservas para mostrar los estados actualizados.
+    bookings = Booking.objects.filter(tenant=request.user).order_by("-id")
+
     paginator = Paginator(bookings, 6)
-    page_number = request.GET.get('page')
+    page_number = request.GET.get("page")
     page_obj = paginator.get_page(page_number)
 
     return render(request, "bookings/my_bookings.html", {
-        "bookings": bookings,
-        "page_obj": page_obj
+        "bookings": page_obj.object_list,
+        "page_obj": page_obj,
     })
 
 class PropertyForm(ModelForm):
@@ -1773,6 +1782,144 @@ def create_booking_hold(request, property_id):
             status=409,
         )
 
+def release_booking_hold(request, property_id):
+    if request.method != "POST":
+        return JsonResponse(
+            {"error": "Method not allowed"},
+            status=405,
+        )
+
+    try:
+        data = json.loads(request.body)
+    except (json.JSONDecodeError, TypeError):
+        return JsonResponse(
+            {"error": "JSON inválido."},
+            status=400,
+        )
+
+    if not isinstance(data, dict):
+        return JsonResponse(
+            {"error": "JSON inválido."},
+            status=400,
+        )
+
+    token = data.get("hold_token")
+
+    if not isinstance(token, str) or not token:
+        return JsonResponse(
+            {"error": "Falta el token de la retención."},
+            status=400,
+        )
+
+    try:
+        with transaction.atomic():
+            # Usamos el mismo orden de bloqueo que al crear la reserva:
+            # primero el alojamiento y después la retención.
+            property_obj = Property.objects.select_for_update().get(
+                pk=property_id
+            )
+
+            hold = BookingHold.objects.select_for_update().filter(
+                token=token,
+                property=property_obj,
+            ).first()
+
+            if hold is not None:
+                hold.delete()
+
+        return JsonResponse({"success": True})
+
+    except Property.DoesNotExist:
+        return JsonResponse(
+            {"error": "Alojamiento no encontrado."},
+            status=404,
+        )
+
+def mock_payment(request, booking_id):
+    if request.method not in ("GET", "POST"):
+        return JsonResponse(
+            {"error": "Method not allowed"},
+            status=405,
+        )
+
+    booking = get_object_or_404(Booking, pk=booking_id)
+
+    # Si el huésped ha iniciado sesión, solo puede acceder
+    # a sus propias reservas.
+    if request.user.is_authenticated:
+        if booking.tenant_id != request.user.pk:
+            return HttpResponse(
+                "No tienes permiso para acceder a esta reserva.",
+                status=403,
+            )
+    else:
+        # Para huéspedes anónimos, el acceso se limita a las reservas
+        # registradas en la sesión que creó la reserva.
+        anonymous_booking_ids = request.session.get(
+            "anonymous_booking_ids",
+            [],
+        )
+
+        if booking.tenant_id is not None or booking.pk not in anonymous_booking_ids:
+            return HttpResponse(
+                "No tienes permiso para acceder a esta reserva.",
+                status=403,
+            )
+
+    error_message = ""
+
+    if request.method == "POST":
+        if booking.status == "CONFIRMED":
+            # Evita confirmar de nuevo una reserva ya confirmada.
+            pass
+        elif booking.status != "PENDING":
+            error_message = (
+                "Esta reserva ya no está pendiente y no se puede confirmar."
+            )
+        elif booking.is_expired():
+            booking.expire()
+            error_message = (
+                "La reserva ha caducado. Selecciona las fechas de nuevo."
+            )
+        else:
+            # Simulación de pago: no se procesa ningún cobro.
+            if booking.confirm():
+                if request.user.is_authenticated:
+                    return redirect("my_bookings")
+
+                return render(
+                    request,
+                    "bookings/mock_payment.html",
+                    {
+                        "booking": booking,
+                        "payment_complete": True,
+                        "error_message": "",
+                    },
+                )
+
+            booking.refresh_from_db()
+
+            if booking.status == "EXPIRED":
+                error_message = (
+                    "La reserva ha caducado. Selecciona las fechas de nuevo."
+                )
+            elif booking.status == "CONFIRMED":
+                pass
+            else:
+                error_message = (
+                    "No se ha podido confirmar la reserva."
+                )
+
+    return render(
+        request,
+        "bookings/mock_payment.html",
+        {
+            "booking": booking,
+            "payment_complete": booking.status == "CONFIRMED",
+            "error_message": error_message,
+        },
+    )
+
 def booking_details(request, property_id):
     property_obj = get_object_or_404(Property, pk=property_id)
 
@@ -1811,8 +1958,8 @@ def booking_details(request, property_id):
         },
     )
 
-PENDING_BOOKING_MINUTES = 15
-BOOKING_HOLD_MINUTES = 15
+BOOKING_HOLD_MINUTES = 1
+PENDING_BOOKING_MINUTES = 1
 
 def create_booking(request, property_id):
     if request.method != "POST":
@@ -2056,11 +2203,27 @@ def create_booking(request, property_id):
             status=400,
         )
     
+    
+    # Si el huésped no ha iniciado sesión, guardamos en su sesión el identificador de la reserva que acaba de crear.
+    if not request.user.is_authenticated:
+        anonymous_booking_ids = request.session.get(
+            "anonymous_booking_ids",
+            [],
+        )
+
+        anonymous_booking_ids.append(booking.pk)
+
+        request.session["anonymous_booking_ids"] = anonymous_booking_ids
+
     return JsonResponse(
         {
             "success": True,
             "message": "Reserva pendiente.",
             "booking_id": booking.pk,
+            "payment_url": reverse(
+                "mock_payment",
+                args=[booking.pk],
+            ),
         }
     )
 
