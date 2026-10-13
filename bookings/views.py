@@ -66,6 +66,15 @@ def property(request, property_id):
 
     today = date.today()
 
+    # Caducar las reservas pendientes cuyo plazo haya vencido.
+    expired_bookings = property.bookings.filter(
+        status="PENDING",
+        expires_at__lte=timezone.now(),
+    )
+
+    for booking in expired_bookings:
+        booking.expire()
+
     active_bookings = property.bookings.filter(
         final_date__gte=today,
         status__in=Booking.ACTIVE_STATUSES,
