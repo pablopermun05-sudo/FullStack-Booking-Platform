@@ -1025,6 +1025,627 @@ body {
     border-color: #1f2937;
 }
 
+.owner-bookings-page {
+    max-width: 1100px;
+    color: #292b31;
+}
+
+.owner-bookings-page .owner-property-card {
+    width: 100%;
+    overflow: hidden;
+    border: 1px solid #d5d7dc;
+    border-radius: 10px;
+    background: #fff;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.06);
+}
+
+/* Imagen limitada a 100 px de alto */
+
+.owner-bookings-page .owner-property-image-column {
+    height: 100px;
+    min-height: 100px;
+    overflow: hidden;
+}
+
+.owner-bookings-page .owner-property-image {
+    display: block;
+    width: 100%;
+    height: 100px;
+    min-height: 100px;
+    max-height: 100px;
+    object-fit: cover;
+    object-position: center;
+}
+
+/* Imagen alternativa */
+
+.owner-bookings-page .owner-property-no-image {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+
+    width: 100%;
+    height: 100px;
+    min-height: 100px;
+    overflow: hidden;
+
+    background: #dedfe3;
+    color: #444750;
+}
+
+.owner-bookings-page .owner-property-no-image i {
+    font-size: 25px;
+}
+
+.owner-bookings-page .owner-property-no-image span {
+    font-size: 11px;
+}
+
+/* Contenido de la tarjeta */
+
+.owner-bookings-page .owner-property-card-body {
+    padding: 10px 16px;
+}
+
+.owner-bookings-page .owner-property-card .card-title {
+    margin: 0 0 4px;
+    color: #292b31;
+    font-size: 18px;
+    line-height: 1.3;
+}
+
+.owner-bookings-page .owner-property-location {
+    margin-bottom: 4px;
+    color: #626570;
+    font-size: 12px;
+}
+
+.owner-bookings-page .owner-property-location i {
+    color: #454852;
+}
+
+.owner-bookings-page .owner-property-location small {
+    color: #626570;
+}
+
+.owner-bookings-page .owner-property-description {
+    margin-bottom: 5px;
+    color: #454852;
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+.owner-bookings-page .owner-property-card hr {
+    margin: 7px 0;
+    border-color: #c9cbd2;
+    opacity: 1;
+}
+
+.owner-bookings-page .owner-booking-filter-area {
+    padding: 9px 10px;
+    border: 1px solid #d5d7dc;
+    border-radius: 8px;
+    background: #eceef1;
+}
+
+.owner-bookings-page .owner-booking-filter-area h5 {
+    color: #292b31;
+    font-size: 14px;
+}
+
+.owner-bookings-page .owner-booking-total {
+    color: #565963;
+    font-size: 12px;
+}
+
+/* Distribución de los filtros */
+
+.owner-bookings-page .owner-booking-filters {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 7px;
+}
+
+/* Filtros sin seleccionar */
+
+.owner-bookings-page .owner-filter-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+
+    padding: 6px 10px;
+    border: 1px solid #bfc1c9;
+    border-radius: 999px;
+
+    background: #fff;
+    color: #343740;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.3;
+    text-decoration: none;
+
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.owner-bookings-page .owner-filter-chip:hover {
+    border-color: #343740;
+    background: #e1e3e8;
+    color: #24262c;
+}
+
+/* Filtro seleccionado: gris oscuro, nunca azul */
+
+.owner-bookings-page .owner-filter-chip.is-active {
+    border-color: #343740;
+    background: #343740;
+    color: #fff;
+}
+
+.owner-bookings-page .owner-filter-chip.is-active:hover {
+    border-color: #202228;
+    background: #202228;
+    color: #fff;
+}
+
+/* Contador dentro de cada filtro */
+
+.owner-bookings-page .owner-filter-chip span {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    min-width: 19px;
+    height: 19px;
+    padding: 0 5px;
+    box-sizing: border-box;
+
+    border-radius: 999px;
+    background: #e1e3e8;
+    color: #343740;
+    font-size: 10px;
+    font-weight: 700;
+}
+
+.owner-bookings-page .owner-filter-chip.is-active span {
+    background: #fff;
+    color: #343740;
+}
+
+/* Pie de la tarjeta de vivienda */
+
+.owner-bookings-page .owner-property-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+
+    margin-top: 12px;
+    color: #626570;
+    font-size: 11px;
+}
+
+/* Botón volver a disponibilidad: gris oscuro */
+
+.owner-bookings-page .owner-availability-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+
+    padding: 7px 11px;
+    border: 1px solid #343740;
+    border-radius: 999px;
+
+    background: #343740;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 650;
+    line-height: 1.3;
+    text-align: center;
+    text-decoration: none;
+
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.owner-bookings-page .owner-availability-button:hover,
+.owner-bookings-page .owner-availability-button:focus {
+    border-color: #202228;
+    background: #202228;
+    color: #fff;
+}
+
+/* Evita el contorno azul de enfoque de Bootstrap */
+
+.owner-bookings-page .owner-filter-chip:focus,
+.owner-bookings-page .owner-availability-button:focus,
+.owner-bookings-page .owner-booking-edit-button:focus {
+    outline: 2px solid #777b85;
+    outline-offset: 2px;
+    box-shadow: none;
+}
+
+.owner-bookings-page .owner-bookings-heading {
+    margin: 0 0 16px;
+    color: white;
+    font-size: 22px;
+    font-weight: 750;
+}
+
+.owner-bookings-page .owner-booking-card {
+    margin-bottom: 12px;
+    padding: 0;
+    overflow: hidden;
+
+    border: 1px solid #d5d7dc;
+    border-radius: 10px;
+    background: #fff;
+    box-shadow: 0 2px 7px rgba(0, 0, 0, 0.04);
+}
+
+.owner-bookings-page .owner-booking-card > div {
+    min-width: 0;
+}
+
+.owner-bookings-page .owner-booking-card {
+    padding: 16px;
+}
+
+.owner-bookings-page .owner-booking-main {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 13px;
+}
+
+.owner-bookings-page .owner-booking-main h4 {
+    margin: 0 0 4px;
+    color: #292b31;
+    font-size: 16px;
+    font-weight: 750;
+}
+
+.owner-bookings-page .owner-booking-tenant {
+    margin: 0;
+    color: #656873;
+    font-size: 12px;
+    overflow-wrap: anywhere;
+}
+
+/* Estados de las reservas */
+
+.owner-bookings-page .owner-booking-status {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    padding: 6px 10px;
+    border: 1px solid transparent;
+    border-radius: 999px;
+
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.3;
+}
+
+.owner-bookings-page .status-pending {
+    border-color: #ead39a;
+    background: #fff2d6;
+    color: #805400;
+}
+
+.owner-bookings-page .status-confirmed {
+    border-color: #b7dfc2;
+    background: #e0f3e5;
+    color: #216637;
+}
+
+.owner-bookings-page .status-cancelled {
+    border-color: #edc0c0;
+    background: #fbe5e5;
+    color: #a12d2d;
+}
+
+.owner-bookings-page .status-expired {
+    border-color: #d2d4db;
+    background: #e9eaee;
+    color: #555963;
+}
+
+/* Datos de cada reserva */
+
+.owner-bookings-page .owner-booking-info {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.owner-bookings-page .owner-booking-detail {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 4px;
+
+    min-width: 0;
+    padding: 10px;
+    border: 1px solid #e0e1e6;
+    border-radius: 7px;
+
+    background: #eceef1;
+}
+
+.owner-bookings-page .owner-booking-detail > span,
+.owner-bookings-page .owner-booking-detail > small {
+    color: #626570;
+    font-size: 11px;
+    line-height: 1.3;
+}
+
+.owner-bookings-page .owner-booking-detail > strong {
+    color: #292b31;
+    font-size: 13px;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+}
+
+.owner-bookings-page .owner-booking-price > strong {
+    font-size: 16px;
+    white-space: nowrap;
+}
+
+/* Botón proponer cambio */
+
+.owner-bookings-page .owner-booking-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 12px;
+}
+
+.owner-bookings-page .owner-booking-edit-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+
+    padding: 8px 13px;
+    border: 1px solid #343740;
+    border-radius: 999px;
+
+    background: #343740;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 650;
+    text-decoration: none;
+}
+
+.owner-bookings-page .owner-booking-edit-button:hover {
+    border-color: #202228;
+    background: #202228;
+    color: #fff;
+}
+
+.owner-bookings-page .owner-booking-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+
+    padding: 35px 20px;
+    border: 1px dashed #c8cad1;
+    border-radius: 10px;
+    background: #eceef1;
+    text-align: center;
+}
+
+.owner-bookings-page .owner-booking-empty > i {
+    margin-bottom: 12px;
+    color: #555963;
+    font-size: 35px;
+}
+
+.owner-bookings-page .owner-booking-empty h4 {
+    margin: 0 0 7px;
+    color: #292b31;
+    font-size: 17px;
+    font-weight: 750;
+}
+
+.owner-bookings-page .owner-booking-empty p {
+    margin: 0 0 15px;
+    color: #626570;
+    font-size: 13px;
+}
+
+/* ==================================================
+   PAGINACIÓN
+   ================================================== */
+
+.owner-bookings-page .owner-booking-pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 25px;
+}
+
+.owner-bookings-page .owner-booking-pagination > a,
+.owner-bookings-page .owner-booking-pagination > span,
+.owner-bookings-page .owner-pagination-numbers > a,
+.owner-bookings-page .owner-pagination-numbers > span {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    min-width: 34px;
+    min-height: 34px;
+    padding: 7px 10px;
+    box-sizing: border-box;
+
+    border: 1px solid #d0d2d8;
+    border-radius: 7px;
+    background: #fff;
+    color: #343740;
+
+    font-size: 12px;
+    text-decoration: none;
+}
+
+.owner-bookings-page .owner-booking-pagination a:hover {
+    border-color: #343740;
+    background: #e5e7eb;
+}
+
+.owner-bookings-page .owner-booking-pagination .is-current {
+    border-color: #343740;
+    background: #343740;
+    color: #fff;
+}
+
+.owner-bookings-page .owner-booking-pagination .is-disabled {
+    background: #e9eaee;
+    color: #9a9ca5;
+}
+
+.owner-bookings-page .owner-pagination-numbers {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 5px;
+}
+
+.owner-bookings-page .owner-pagination-caption {
+    margin-top: 10px;
+    color: #626570;
+    font-size: 11px;
+    text-align: center;
+}
+
+/* ==================================================
+   TABLET Y MÓVIL
+   ================================================== */
+
+@media (max-width: 767.98px) {
+    .owner-bookings-page .owner-property-image-column {
+        height: 100px;
+        min-height: 100px;
+    }
+
+    .owner-bookings-page .owner-property-image {
+        width: 100%;
+        height: 100px;
+        min-height: 100px;
+        max-height: 100px;
+    }
+
+    .owner-bookings-page .owner-property-card-body {
+        padding: 12px;
+    }
+
+    .owner-bookings-page .owner-property-card .card-title {
+        font-size: 17px;
+    }
+
+    .owner-bookings-page .owner-booking-filter-area {
+        padding: 9px;
+    }
+
+    .owner-bookings-page .owner-booking-info {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .owner-bookings-page .owner-property-footer {
+        align-items: flex-start;
+    }
+}
+
+@media (max-width: 420px) {
+    .owner-bookings-page .owner-booking-filters {
+        gap: 5px;
+    }
+
+    .owner-bookings-page .owner-filter-chip {
+        padding: 6px 8px;
+        font-size: 11px;
+    }
+
+    .owner-bookings-page .owner-property-footer {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .owner-bookings-page .owner-availability-button {
+        align-self: flex-start;
+    }
+
+    .owner-bookings-page .owner-booking-card {
+        padding: 12px;
+    }
+}
+
+
+/* La columna de la imagen ocupa toda la altura de la tarjeta */
+
+.owner-bookings-page .owner-property-card > .row {
+    align-items: stretch;
+}
+
+.owner-bookings-page .owner-property-image-column {
+    display: flex;
+    align-self: stretch;
+    height: auto;
+    min-height: 100%;
+    overflow: hidden;
+}
+
+.owner-bookings-page .owner-property-image-column .owner-property-image {
+    display: block;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    max-height: none;
+    flex: 1 1 auto;
+    object-fit: cover;
+    object-position: center;
+}
+
+/* También para el marcador cuando no hay imagen */
+
+.owner-bookings-page .owner-property-image-column .owner-property-no-image {
+    display: flex;
+    flex: 1 1 auto;
+    width: 100%;
+    height: auto;
+    min-height: 100%;
+    max-height: none;
+}
+
+/* En móvil, la imagen conserva una altura fija */
+
+@media (max-width: 767.98px) {
+    .owner-bookings-page .owner-property-image-column {
+        height: 160px;
+        min-height: 160px;
+    }
+
+    .owner-bookings-page .owner-property-image-column .owner-property-image {
+        height: 160px;
+        min-height: 160px;
+        max-height: 160px;
+    }
+
+    .owner-bookings-page .owner-property-image-column .owner-property-no-image {
+        height: 160px;
+        min-height: 160px;
+    }
+}
+
 @media (max-width: 760px) {
     .my-bookings {
         padding: 28px 14px 45px;

@@ -30,4 +30,6 @@ urlpatterns = [
     path("booking/<int:property_id>/hold", views.create_booking_hold, name="create_booking_hold"),
     path("booking/<int:property_id>/hold/release", views.release_booking_hold, name="release_booking_hold"),
     path("booking/<int:booking_id>/payment", views.mock_payment, name="mock_payment"),
+    path("property/<int:property_id>/bookings", views.property_bookings, name="property_bookings"),
+    path("booking/<int:booking_id>/change", views.booking_change_form, name="booking_change_form"),
 ]

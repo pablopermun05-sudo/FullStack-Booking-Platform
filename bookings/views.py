@@ -559,6 +559,88 @@ def property_availability_save(request, property_id):
     })
 
 @login_required
+def property_bookings(request, property_id):
+    if not can_manage_properties(request.user):
+        raise PermissionDenied
+
+    property = get_object_or_404(Property, pk=property_id)
+
+    if property.owner != request.user and not request.user.is_staff:
+        raise PermissionDenied
+
+    # Mantener actualizado el estado de las reservas pendientes vencidas.
+    pending_bookings = Booking.objects.filter(
+        property=property,
+        status="PENDING",
+    )
+
+    for booking in pending_bookings:
+        if booking.is_expired():
+            booking.expire()
+
+    # Calcular el total igual que en my_bookings.
+    all_bookings = Booking.objects.filter(
+        property=property,
+    ).annotate(
+        calculated_total=Coalesce(
+            Sum("nights__price_per_night"),
+            Value(Decimal("0.00")),
+            output_field=DecimalField(
+                max_digits=10,
+                decimal_places=2,
+            ),
+        )
+    ).select_related("tenant").order_by("-id")
+
+    # Filtro predeterminado: reservas activas.
+    valid_filters = {"ALL", "ACTIVE", "CANCELLED", "EXPIRED"}
+    selected_status = request.GET.get("status", "ACTIVE").upper()
+
+    if selected_status not in valid_filters:
+        selected_status = "ACTIVE"
+
+    # Contadores de todos los filtros.
+    filter_counts = {
+        "ALL": all_bookings.count(),
+        "ACTIVE": all_bookings.filter(
+            status__in=["PENDING", "CONFIRMED"]
+        ).count(),
+        "CANCELLED": all_bookings.filter(
+            status="CANCELLED"
+        ).count(),
+        "EXPIRED": all_bookings.filter(
+            status="EXPIRED"
+        ).count(),
+    }
+
+    # Filtrar antes de paginar.
+    if selected_status == "ACTIVE":
+        bookings = all_bookings.filter(
+            status__in=["PENDING", "CONFIRMED"]
+        )
+    elif selected_status == "CANCELLED":
+        bookings = all_bookings.filter(status="CANCELLED")
+    elif selected_status == "EXPIRED":
+        bookings = all_bookings.filter(status="EXPIRED")
+    else:
+        bookings = all_bookings
+
+    paginator = Paginator(bookings, 6)
+    page_obj = paginator.get_page(request.GET.get("page"))
+
+    return render(
+        request,
+        "bookings/property_bookings.html",
+        {
+            "property": property,
+            "bookings": page_obj.object_list,
+            "page_obj": page_obj,
+            "selected_status": selected_status,
+            "filter_counts": filter_counts,
+        },
+    )
+
+@login_required
 def cancel_booking(request, booking_id):
     if request.method != "POST":
         return JsonResponse(
@@ -1189,6 +1271,34 @@ Este correo es una notificación automática.
             booking.pk,
         )
         return False
+
+
+@login_required
+def booking_change_form(request, booking_id):
+    if not can_manage_properties(request.user):
+        raise PermissionDenied
+
+    booking = get_object_or_404(
+        Booking.objects.select_related("property", "property__owner"),
+        pk=booking_id,
+    )
+
+    if (
+        booking.property.owner != request.user
+        and not request.user.is_staff
+    ):
+        raise PermissionDenied
+
+    if booking.status not in ("PENDING", "CONFIRMED"):
+        raise PermissionDenied(
+            "Esta reserva no admite propuestas de cambio."
+        )
+
+    return render(
+        request,
+        "bookings/booking_change_form.html",
+        {"booking": booking},
+    )
 
 @login_required
 def propose_booking_change(request, booking_id):
