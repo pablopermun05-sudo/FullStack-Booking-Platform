@@ -28,6 +28,7 @@ from django.core.mail import send_mail
 from django.contrib import messages
 from django.core.mail import EmailMultiAlternatives
 from django.utils.html import escape
+import secrets
 
 logger = logging.getLogger(__name__)
 
@@ -1172,43 +1173,63 @@ def view_booking_change_proposal_by_token(request, token):
 
     token_hash = hash_proposal_access_token(token)
 
-    proposal = BookingChangeProposal.objects.select_related(
-        "booking",
-        "booking__property",
-    ).filter(
-        access_token_hash=token_hash,
-    ).first()
+    proposal = (
+        BookingChangeProposal.objects
+        .select_related("booking", "booking__property")
+        .filter(access_token_hash=token_hash)
+        .first()
+    )
 
     if proposal is None:
-        return JsonResponse(
-            {"error": "El enlace no es válido."},
+        return render(
+            request,
+            "bookings/booking_change_proposal_detail.html",
+            {
+                "invalid_link": True,
+            },
             status=404,
         )
 
-    if proposal.status != BookingChangeProposal.Status.PENDING:
-        return JsonResponse(
-            {"error": "Esta propuesta ya no está disponible."},
-            status=410,
-        )
-
-    if proposal.is_expired():
+    if (
+        proposal.status == BookingChangeProposal.Status.PENDING
+        and proposal.is_expired()
+    ):
         proposal.status = BookingChangeProposal.Status.EXPIRED
         proposal.save(update_fields=["status"])
 
-        return JsonResponse(
-            {"error": "Esta propuesta ha caducado."},
-            status=410,
-        )
+    booking = proposal.booking
 
-    return JsonResponse({
-        "booking_id": proposal.booking_id,
-        "property_title": proposal.booking.property.title,
-        "proposed_initial_date": proposal.proposed_initial_date.isoformat(),
-        "proposed_final_date": proposal.proposed_final_date.isoformat(),
-        "proposed_guest_count": proposal.proposed_guest_count,
-        "expires_at": proposal.expires_at.isoformat(),
-        "status": proposal.status,
-    })
+    can_respond = (
+        proposal.status == BookingChangeProposal.Status.PENDING
+        and not proposal.is_expired()
+    )
+
+    if proposal.status == BookingChangeProposal.Status.EXPIRED:
+        status_message = "Esta propuesta ha caducado."
+    elif proposal.status == BookingChangeProposal.Status.ACCEPTED:
+        status_message = "Esta propuesta ya ha sido aceptada."
+    elif proposal.status == BookingChangeProposal.Status.REJECTED:
+        status_message = "Esta propuesta ha sido rechazada."
+    elif not can_respond:
+        status_message = "Esta propuesta ya no está disponible."
+    else:
+        status_message = ""
+
+    context = {
+        "proposal": proposal,
+        "booking": booking,
+        "property": booking.property,
+        "can_respond": can_respond,
+        "status_message": status_message,
+        "expires_at_local": timezone.localtime(proposal.expires_at),
+        "access_token": token,
+    }
+
+    return render(
+        request,
+        "bookings/booking_change_proposal_detail.html",
+        context,
+    )
 
 def send_booking_change_proposal_email(request, booking, proposal, raw_token):
     """
@@ -1823,7 +1844,42 @@ def propose_booking_change(request, booking_id):
 
     return JsonResponse(response_data, status=201)
 
-@login_required
+def authorize_booking_change_proposal(request, booking, proposal, raw_token=""):
+    """
+    Autoriza al huésped mediante su sesión o mediante el token
+    secreto enviado en el correo electrónico.
+    """
+    # El huésped autenticado con la cuenta correcta puede responder.
+    if (
+        request.user.is_authenticated
+        and booking.tenant_id == request.user.pk
+    ):
+        return
+
+    # Para cualquier otro caso, se exige un token válido.
+    if not raw_token:
+        raise PermissionDenied
+
+    stored_hash = proposal.access_token_hash or ""
+
+    # No aceptar propuestas sin un hash de token almacenado.
+    if not stored_hash:
+        raise PermissionDenied
+
+    provided_hash = hash_proposal_access_token(raw_token)
+
+    if not secrets.compare_digest(stored_hash, provided_hash):
+        raise PermissionDenied
+
+def redirect_after_booking_change(request, raw_token):
+    if raw_token:
+        return redirect(
+            "view_booking_change_proposal_by_token",
+            token=raw_token,
+        )
+
+    return redirect("my_bookings")
+
 def accept_booking_change_proposal(request, proposal_id):
     if request.method != "POST":
         return JsonResponse(
@@ -1835,6 +1891,8 @@ def accept_booking_change_proposal(request, proposal_id):
         request.content_type != "application/json"
         and "application/json" not in request.headers.get("Accept", "")
     )
+    
+    raw_token = request.POST.get("token", "")
 
     # Comprobación inicial de autorización.
     proposal = get_object_or_404(
@@ -1845,8 +1903,12 @@ def accept_booking_change_proposal(request, proposal_id):
         pk=proposal_id,
     )
 
-    if proposal.booking.tenant != request.user:
-        raise PermissionDenied
+    authorize_booking_change_proposal(
+        request,
+        proposal.booking,
+        proposal,
+        raw_token,
+    )
 
     try:
         with transaction.atomic():
@@ -1865,14 +1927,18 @@ def accept_booking_change_proposal(request, proposal_id):
                 booking=booking,
             )
 
-            # Repetir autorización dentro de la transacción.
-            if booking.tenant != request.user:
-                raise PermissionDenied
+            # Repetir la autorización con la reserva y la propuesta bloqueadas.
+            authorize_booking_change_proposal(
+                request,
+                booking,
+                proposal,
+                raw_token,
+            )
 
             if proposal.status != BookingChangeProposal.Status.PENDING:
                 if is_html_form:
                     messages.error(request, "La propuesta ya no está pendiente.")
-                    return redirect("my_bookings")
+                    return redirect_after_booking_change(request, raw_token)
 
                 return JsonResponse(
                     {"error": "La propuesta ya no está pendiente."},
@@ -1885,7 +1951,7 @@ def accept_booking_change_proposal(request, proposal_id):
 
                 if is_html_form:
                     messages.error(request, "La propuesta ha caducado.")
-                    return redirect("my_bookings")
+                    return redirect_after_booking_change(request, raw_token)
 
                 return JsonResponse(
                     {"error": "La propuesta ha caducado."},
@@ -1895,7 +1961,7 @@ def accept_booking_change_proposal(request, proposal_id):
             if booking.status not in Booking.ACTIVE_STATUSES:
                 if is_html_form:
                     messages.error(request, "La reserva ya no admite cambios.")
-                    return redirect("my_bookings")
+                    return redirect_after_booking_change(request, raw_token)
 
                 return JsonResponse(
                     {"error": "La reserva ya no admite cambios."},
@@ -1909,7 +1975,7 @@ def accept_booking_change_proposal(request, proposal_id):
             ):
                 if is_html_form:
                     messages.error(request, "La reserva pendiente ha caducado.")
-                    return redirect("my_bookings")
+                    return redirect_after_booking_change(request, raw_token)
 
                 return JsonResponse(
                     {"error": "La reserva pendiente ha caducado."},
@@ -1927,7 +1993,7 @@ def accept_booking_change_proposal(request, proposal_id):
             if initial_date >= final_date:
                 if is_html_form:
                     messages.error(request, "El intervalo de fechas no es válido.")
-                    return redirect("my_bookings")
+                    return redirect_after_booking_change(request, raw_token)
 
                 return JsonResponse(
                     {"error": "El intervalo de fechas no es válido."},
@@ -1937,7 +2003,7 @@ def accept_booking_change_proposal(request, proposal_id):
             if guest_count < 1:
                 if is_html_form:
                     messages.error(request, "El número de huéspedes no es válido.")
-                    return redirect("my_bookings")
+                    return redirect_after_booking_change(request, raw_token)
 
                 return JsonResponse(
                     {"error": "El número de huéspedes no es válido."},
@@ -1947,7 +2013,7 @@ def accept_booking_change_proposal(request, proposal_id):
             if guest_count > property.adults + property.children:
                 if is_html_form:
                     messages.error(request, "La capacidad de la vivienda es insuficiente.")
-                    return redirect("my_bookings")
+                    return redirect_after_booking_change(request, raw_token)
 
                 return JsonResponse(
                     {"error": "La capacidad de la vivienda es insuficiente."},
@@ -1967,7 +2033,7 @@ def accept_booking_change_proposal(request, proposal_id):
                         request,
                         "El intervalo de fechas no es válido.",
                     )
-                    return redirect("my_bookings")
+                    return redirect_after_booking_change(request, raw_token)
 
                 return JsonResponse(
                     {"error": "El intervalo de fechas no es válido."},
@@ -1980,7 +2046,7 @@ def accept_booking_change_proposal(request, proposal_id):
             ):
                 if is_html_form:
                     messages.error(request, "Hay noches que ya no están disponibles.")
-                    return redirect("my_bookings")
+                    return redirect_after_booking_change(request, raw_token)
 
                 return JsonResponse(
                     {"error": "Hay noches que ya no están disponibles."},
@@ -1993,7 +2059,7 @@ def accept_booking_change_proposal(request, proposal_id):
             if number_of_nights < minimum_nights:
                 if is_html_form:
                     messages.error(request, "La estancia es inferior al mínimo requerido.")
-                    return redirect("my_bookings")
+                    return redirect_after_booking_change(request, raw_token)
 
                 return JsonResponse(
                     {"error": "La estancia es inferior al mínimo requerido."},
@@ -2011,7 +2077,7 @@ def accept_booking_change_proposal(request, proposal_id):
                         "La propuesta no tiene un precio guardado válido. "
                         "Debe crearse una nueva propuesta.",
                     )
-                    return redirect("my_bookings")
+                    return redirect_after_booking_change(request, raw_token)
 
                 return JsonResponse(
                     {
@@ -2060,7 +2126,7 @@ def accept_booking_change_proposal(request, proposal_id):
                         "El precio de la propuesta ha cambiado. "
                         "Debe crearse una nueva propuesta.",
                     )
-                    return redirect("my_bookings")
+                    return redirect_after_booking_change(request, raw_token)
 
                 return JsonResponse(
                     {
@@ -2114,7 +2180,7 @@ def accept_booking_change_proposal(request, proposal_id):
                 request,
                 "La reserva no supera las validaciones.",
             )
-            return redirect("my_bookings")
+            return redirect_after_booking_change(request, raw_token)
 
         return JsonResponse(
             {
@@ -2135,7 +2201,7 @@ def accept_booking_change_proposal(request, proposal_id):
                 "No se puede aceptar la propuesta porque existe "
                 "un conflicto con la disponibilidad.",
             )
-            return redirect("my_bookings")
+            return redirect_after_booking_change(request, raw_token)
 
         return JsonResponse(
             {
@@ -2152,7 +2218,7 @@ def accept_booking_change_proposal(request, proposal_id):
             request,
             "Has aceptado la propuesta de cambio de reserva.",
         )
-        return redirect("my_bookings")
+        return redirect_after_booking_change(request, raw_token)
 
     return JsonResponse(
         {
@@ -2162,7 +2228,6 @@ def accept_booking_change_proposal(request, proposal_id):
         status=200,
     )
 
-@login_required
 def reject_booking_change_proposal(request, proposal_id):
     if request.method != "POST":
         return JsonResponse(
@@ -2174,14 +2239,20 @@ def reject_booking_change_proposal(request, proposal_id):
         request.content_type != "application/json"
         and request.headers.get("Accept", "").find("application/json") == -1
     )
+    
+    raw_token = request.POST.get("token", "")
 
     proposal = get_object_or_404(
         BookingChangeProposal.objects.select_related("booking"),
         pk=proposal_id,
     )
-
-    if proposal.booking.tenant != request.user:
-        raise PermissionDenied
+    
+    authorize_booking_change_proposal(
+        request,
+        proposal.booking,
+        proposal,
+        raw_token,
+    )
 
     with transaction.atomic():
         # Bloquear primero la reserva, igual que en la aceptación.
@@ -2196,13 +2267,18 @@ def reject_booking_change_proposal(request, proposal_id):
             booking=booking,
         )
 
-        if booking.tenant != request.user:
-            raise PermissionDenied
+        # Repetir la autorización con la reserva y la propuesta bloqueadas.
+        authorize_booking_change_proposal(
+            request,
+            booking,
+            proposal,
+            raw_token,
+        )
 
         if proposal.status != BookingChangeProposal.Status.PENDING:
             if is_html_form:
                 messages.error(request, "La propuesta ya no está pendiente.")
-                return redirect("my_bookings")
+                return redirect_after_booking_change(request, raw_token)
 
             return JsonResponse(
                 {"error": "La propuesta ya no está pendiente."},
@@ -2215,7 +2291,7 @@ def reject_booking_change_proposal(request, proposal_id):
 
             if is_html_form:
                 messages.error(request, "La propuesta ha caducado.")
-                return redirect("my_bookings")
+                return redirect_after_booking_change(request, raw_token)
 
             return JsonResponse(
                 {"error": "La propuesta ha caducado."},
@@ -2227,7 +2303,7 @@ def reject_booking_change_proposal(request, proposal_id):
 
         if is_html_form:
             messages.success(request, "Has rechazado la propuesta de cambio.")
-            return redirect("my_bookings")
+            return redirect_after_booking_change(request, raw_token)
 
         return JsonResponse(
             {
