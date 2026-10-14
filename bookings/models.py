@@ -610,7 +610,11 @@ class BookingChangeProposal(models.Model):
         ACCEPTED = "ACCEPTED", "Accepted"
         REJECTED = "REJECTED", "Rejected"
         EXPIRED = "EXPIRED", "Expired"
-
+        
+    original_booking_snapshot = models.JSONField(
+        null=True,
+        blank=True,
+    )
     booking = models.ForeignKey(
         Booking,
         on_delete=models.CASCADE,
@@ -619,7 +623,6 @@ class BookingChangeProposal(models.Model):
     proposed_initial_date = models.DateField()
     proposed_final_date = models.DateField()
     proposed_guest_count = models.PositiveIntegerField()
-
     proposed_total_price = models.DecimalField(
         max_digits=10,
         decimal_places=2,

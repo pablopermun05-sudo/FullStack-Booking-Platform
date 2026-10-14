@@ -241,22 +241,22 @@
                 <div class="details">
                     <div class="detail">
                         <span>Entrada actual</span>
-                        <strong>{{ booking.initial_date|date:"d/m/Y" }}</strong>
+                        <strong>{{ original_booking.initial_date|date:"d/m/Y" }}</strong>
                     </div>
 
                     <div class="detail">
                         <span>Salida actual</span>
-                        <strong>{{ booking.final_date|date:"d/m/Y" }}</strong>
+                        <strong>{{ original_booking.final_date|date:"d/m/Y" }}</strong>
                     </div>
 
                     <div class="detail">
                         <span>Número de huéspedes</span>
-                        <strong>{{ booking.guest_count }}</strong>
+                        <strong>{{ original_booking.guest_count }}</strong>
                     </div>
 
                     <div class="detail">
                         <span>Precio total actual</span>
-                        <strong>{{ booking.total_price|floatformat:2 }} €</strong>
+                        <strong>{{ original_booking.total_price|floatformat:2 }} €</strong>
                     </div>
                 </div>
             </section>

@@ -1197,6 +1197,24 @@ def view_booking_change_proposal_by_token(request, token):
 
     booking = proposal.booking
 
+    original_booking = proposal.original_booking_snapshot
+
+    if original_booking is None:
+        original_booking = {
+            "initial_date": booking.initial_date,
+            "final_date": booking.final_date,
+            "guest_count": booking.guest_count,
+            "total_price": booking.total_price,
+        }
+    else:
+        original_booking = original_booking.copy()
+
+        for field in ("initial_date", "final_date"):
+            value = original_booking.get(field)
+
+            if isinstance(value, str) and value:
+                original_booking[field] = date.fromisoformat(value)
+
     can_respond = (
         proposal.status == BookingChangeProposal.Status.PENDING
         and not proposal.is_expired()
@@ -1215,6 +1233,7 @@ def view_booking_change_proposal_by_token(request, token):
 
     context = {
         "proposal": proposal,
+        "original_booking": original_booking,
         "booking": booking,
         "property": booking.property,
         "can_respond": can_respond,
@@ -1478,6 +1497,12 @@ def propose_booking_change(request, booking_id):
             if proposal is None:
                 proposal = BookingChangeProposal(
                     booking=booking,
+                    original_booking_snapshot={
+                        "initial_date": booking.initial_date.isoformat(),
+                        "final_date": booking.final_date.isoformat(),
+                        "guest_count": booking.guest_count,
+                        "total_price": str(booking.total_price),
+                    },
                 )
 
             proposal.proposed_initial_date = proposed_initial_date
