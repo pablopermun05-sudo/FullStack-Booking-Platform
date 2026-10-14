@@ -1494,40 +1494,50 @@ def propose_booking_change(request, booking_id):
                     {"error": "No se pueden proponer cambios para esta reserva."},
                     status=409,
                 )
+            
+            # Obtener la hora una sola vez para mantener coherentes los estados y la expiración.
+            now = timezone.now()
 
-            # Caducar propuestas anteriores vencidas antes de crear otra.
+            # Caducar propuestas pendientes que ya han vencido.
             BookingChangeProposal.objects.filter(
                 booking=booking,
                 status=BookingChangeProposal.Status.PENDING,
                 expires_at__isnull=False,
-                expires_at__lte=timezone.now(),
+                expires_at__lte=now,
             ).update(status=BookingChangeProposal.Status.EXPIRED)
 
-            # Una propuesta pendiente y vigente impide crear otra.
-            if BookingChangeProposal.objects.filter(
-                booking=booking,
-                status=BookingChangeProposal.Status.PENDING,
-                expires_at__gt=timezone.now(),
-            ).exists():
-                return JsonResponse(
-                    {"error": "Ya existe una propuesta pendiente para esta reserva."},
-                    status=409,
+            # Reutilizar la propuesta pendiente, si existe.
+            proposal = (
+                BookingChangeProposal.objects.select_for_update()
+                .filter(
+                    booking=booking,
+                    status=BookingChangeProposal.Status.PENDING,
                 )
+                .first()
+            )
 
             raw_token, token_hash = generate_proposal_access_token()
 
-            proposal = BookingChangeProposal(
-                booking=booking,
-                proposed_initial_date=proposed_initial_date,
-                proposed_final_date=proposed_final_date,
-                proposed_guest_count=proposed_guest_count,
-                access_token_hash=token_hash,
-            )
+            if proposal is None:
+                proposal = BookingChangeProposal(
+                    booking=booking,
+                )
+
+            proposal.proposed_initial_date = proposed_initial_date
+            proposal.proposed_final_date = proposed_final_date
+            proposal.proposed_guest_count = proposed_guest_count
+
+            # Renovar la propuesta y su plazo de expiración de 48 horas.
+            proposal.created_at = now
+            proposal.expires_at = now + timedelta(hours=48)
+
+            # Sustituir el token anterior por uno nuevo.
+            proposal.access_token_hash = token_hash
 
             nightly_prices, total_price = proposal.calculate_price_snapshot()
-
             proposal.proposed_nightly_prices = nightly_prices
             proposal.proposed_total_price = total_price
+
             proposal.save()
 
     except ValidationError as exc:
