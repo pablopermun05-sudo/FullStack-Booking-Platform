@@ -746,7 +746,6 @@ body {
 
 .booking-card:hover {
     box-shadow: 0 8px 25px rgba(0, 0, 0, .06);
-    transform: translateY(-2px);
 }
 
 .booking-photo {
@@ -1588,6 +1587,613 @@ body {
 
 .fondo {
     background: #34495e !important;
+}
+
+
+/* =========================================
+   LISTADO DE RESERVAS
+   ========================================= */
+
+.my-bookings {
+    width: 100%;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 24px;
+    box-sizing: border-box;
+}
+
+.bookings-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.booking-filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+.booking-filter {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 13px;
+    border-radius: 8px;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.booking-count {
+    white-space: nowrap;
+}
+
+
+/* =========================================
+   TARJETA DE RESERVA
+   Dos columnas superiores y una fila completa
+   para el panel de propuestas.
+   ========================================= */
+
+.booking-card {
+    display: grid;
+    grid-template-columns: 220px minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    column-gap: 22px;
+    row-gap: 0;
+
+    width: 100%;
+    margin-bottom: 24px;
+    padding: 20px;
+
+    box-sizing: border-box;
+    position: relative;
+    overflow: visible;
+
+    border: 1px solid #e5e7eb;
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: 0 3px 12px rgb(0 0 0 / 5%);
+}
+
+#card-estancia {
+    padding: 0px;
+}
+
+/* Imagen: primera columna, primera fila */
+.booking-card > div:first-child {
+    grid-column: 1;
+    grid-row: 1;
+    min-width: 0;
+}
+
+.booking-photo,
+.booking-photo-placeholder {
+    display: flex;
+    width: 100%;
+    height: 320px !important;
+    box-sizing: border-box;
+    border-radius: 10px;
+    object-fit: cover;
+}
+
+.booking-photo-placeholder {
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: #f3f4f6;
+    color: #777;
+}
+
+/* Contenido: segunda columna, primera fila */
+.booking-card > .booking-content {
+    grid-column: 2;
+    grid-row: 1;
+
+    min-width: 0;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.booking-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.booking-property-name {
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
+.booking-dates {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 30px;
+    margin-top: 18px;
+}
+
+.booking-date-label,
+.booking-price-label {
+    color: #6b7280;
+    font-size: 13px;
+}
+
+.booking-date-value {
+    margin-top: 4px;
+    font-weight: 600;
+}
+
+.booking-bottom {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 18px;
+    margin-top: 20px;
+}
+
+.booking-price {
+    margin: 4px 0;
+    font-size: 22px;
+    font-weight: 700;
+    overflow-wrap: anywhere;
+}
+
+
+/* =========================================
+   COLUMNA DE ACCIONES Y CAMPANA
+   ========================================= */
+
+.booking-actions-column {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    align-self: stretch;
+    gap: 10px;
+
+    min-width: 0;
+    margin-left: auto;
+    box-sizing: border-box;
+}
+
+.booking-actions-column > .booking-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 9px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.booking-actions form {
+    display: inline-flex;
+    margin: 0;
+}
+
+
+/* =========================================
+   CAMPANA
+   ========================================= */
+
+.booking-notification-trigger {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+
+    width: 42px;
+    height: 42px;
+    padding: 0;
+
+    border: none;
+    border-radius: 50%;
+    background: #fff0bd;
+    color: #d99a00;
+
+    font-size: 21px;
+    line-height: 1;
+    cursor: pointer;
+
+    transition:
+        background-color 0.15s ease,
+        color 0.15s ease,
+        transform 0.15s ease;
+}
+
+.booking-notification-trigger:hover {
+    background: #ffe49a;
+    color: #b98100;
+    transform: scale(1.05);
+}
+
+.booking-notification-trigger:focus-visible {
+    outline: 2px solid #d99a00;
+    outline-offset: 3px;
+}
+
+.booking-notification-trigger i {
+    pointer-events: none;
+}
+
+.booking-notification-badge {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    min-width: 19px;
+    height: 19px;
+    padding: 0 5px;
+    box-sizing: border-box;
+
+    border: 2px solid #fff;
+    border-radius: 999px;
+
+    background: #dc3545;
+    color: #fff;
+
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.booking-notification-disabled,
+.booking-notification-disabled:disabled {
+    background: #f0f0f0;
+    color: #999;
+    cursor: default;
+    pointer-events: none;
+    transform: none;
+    opacity: 1;
+}
+
+
+/* =========================================
+   PANEL DE PROPUESTAS
+   Fila completa debajo de la imagen y contenido.
+   Al abrirse, empuja las siguientes reservas.
+   ========================================= */
+
+.booking-card > .booking-proposals-panel {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    align-self: start;
+
+    display: block;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    max-height: 0;
+
+    margin: 0;
+    padding: 0 16px;
+    box-sizing: border-box;
+
+    overflow: hidden;
+    border: 1px solid transparent;
+    border-radius: 12px;
+
+    background: #fff;
+    box-shadow: none;
+
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-6px);
+    transform-origin: top center;
+    pointer-events: none;
+
+    transition:
+        max-height 0.22s ease,
+        opacity 0.18s ease,
+        transform 0.18s ease,
+        padding 0.22s ease,
+        margin 0.22s ease,
+        border-color 0.22s ease,
+        visibility 0s linear 0.22s;
+}
+
+/* Estado abierto */
+.booking-card > .booking-proposals-panel.is-open {
+    width: 100%;
+    max-width: 100%;
+    max-height: 600px;
+
+    overflow-x: hidden;
+    overflow-y: auto;
+
+    overscroll-behavior-y: auto;
+    -webkit-overflow-scrolling: touch;
+
+    margin-top: 18px;
+    padding: 16px;
+
+
+    border-color: #e2e2e2;
+    background: #fff;
+    box-shadow: 0 6px 18px rgb(0 0 0 / 10%);
+
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+    pointer-events: auto;
+
+    transition:
+        max-height 0.22s ease,
+        opacity 0.18s ease,
+        transform 0.18s ease,
+        padding 0.22s ease,
+        margin 0.22s ease,
+        border-color 0.22s ease,
+        visibility 0s;
+}
+
+.booking-card > .booking-proposals-panel[hidden] {
+    display: none !important;
+}
+
+
+/* =========================================
+   CONTENIDO DE CADA PROPUESTA
+   ========================================= */
+
+.booking-proposals-panel .booking-proposal {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+
+    padding: 16px;
+    border: 1px solid #e8e8e8;
+    border-radius: 9px;
+    background: #fafafa;
+}
+
+.booking-proposals-panel .booking-proposal + .booking-proposal {
+    margin-top: 12px;
+}
+
+.booking-proposals-panel .booking-proposal h3 {
+    margin: 0 0 12px;
+    font-size: 16px;
+    line-height: 1.4;
+}
+
+.booking-proposals-panel .booking-proposal p {
+    margin: 7px 0;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+
+.booking-proposals-panel .booking-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 14px;
+}
+
+.booking-proposals-panel .booking-actions form {
+    display: inline-flex;
+    margin: 0;
+}
+
+
+/* =========================================
+   BOTONES DE RESERVA
+   ========================================= */
+
+.booking-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    padding: 10px 14px;
+    border: none;
+    border-radius: 8px;
+
+    font: inherit;
+    text-decoration: none;
+    text-align: center;
+    cursor: pointer;
+
+    transition:
+        background-color 0.15s ease,
+        transform 0.15s ease;
+}
+
+.booking-btn:hover {
+    transform: translateY(-1px);
+}
+
+.booking-btn-primary {
+    background: #2563eb;
+    color: #fff;
+}
+
+.booking-btn-primary:hover {
+    background: #1d4ed8;
+}
+
+.booking-btn-cancel {
+    background: #fee2e2;
+    color: #b91c1c;
+}
+
+.booking-btn-cancel:hover {
+    background: #fecaca;
+}
+
+
+/* =========================================
+   PAGINACIÓN
+   ========================================= */
+
+.booking-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 28px 0;
+}
+
+.booking-pagination a,
+.booking-pagination .current {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 36px;
+    min-height: 36px;
+    padding: 6px 10px;
+    box-sizing: border-box;
+    border-radius: 7px;
+    text-decoration: none;
+}
+
+.booking-pagination .current {
+    font-weight: 700;
+}
+
+
+/* =========================================
+   ESTADO VACÍO
+   ========================================= */
+
+.booking-empty {
+    padding: 48px 20px;
+    text-align: center;
+}
+
+.booking-empty-icon {
+    margin-bottom: 12px;
+    font-size: 42px;
+}
+
+.booking-proposals-panel.is-open {
+    overscroll-behavior: auto;
+}
+
+
+
+/* =========================================
+   MÓVILES Y TABLETS
+   ========================================= */
+
+@media (max-width: 800px) {
+    .my-bookings {
+        padding: 16px;
+    }
+
+    .booking-card {
+        grid-template-columns: 150px minmax(0, 1fr);
+        column-gap: 16px;
+        padding: 16px;
+    }
+
+    .booking-photo,
+    .booking-photo-placeholder {
+        height: 150px;
+    }
+
+    .booking-dates {
+        gap: 18px;
+    }
+}
+
+@media (max-width: 576px) {
+    .bookings-header {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .booking-filters {
+        gap: 6px;
+    }
+
+    .booking-card {
+        grid-template-columns: minmax(0, 1fr);
+        row-gap: 16px;
+        padding: 14px;
+    }
+
+    .booking-card > div:first-child {
+        grid-column: 1;
+        grid-row: 1;
+    }
+
+    .booking-photo,
+    .booking-photo-placeholder {
+        height: 200px;
+    }
+
+    .booking-card > .booking-content {
+        grid-column: 1;
+        grid-row: 2;
+    }
+
+    .booking-top {
+        gap: 10px;
+    }
+
+    .booking-bottom {
+        align-items: flex-start;
+    }
+
+    .booking-actions-column {
+        align-items: flex-end;
+    }
+
+    .booking-card > .booking-proposals-panel {
+        grid-column: 1;
+        grid-row: 3;
+    }
+
+    .booking-card > .booking-proposals-panel.is-open {
+        max-height: 65vh;
+        padding: 10px;
+        margin-top: 0;
+    }
+
+    .booking-proposals-panel .booking-proposal {
+        padding: 12px;
+    }
+
+    .booking-proposals-panel .booking-actions {
+        align-items: stretch;
+    }
+
+    .booking-proposals-panel .booking-actions form,
+    .booking-proposals-panel .booking-actions button {
+        max-width: 100%;
+    }
+}
+
+
+/* =========================================
+   ACCESIBILIDAD
+   ========================================= */
+
+@media (prefers-reduced-motion: reduce) {
+    .booking-notification-trigger,
+    .booking-btn,
+    .booking-proposals-panel,
+    .booking-proposals-panel.is-open {
+        transition: none;
+    }
 }
 
 /* Móvil */

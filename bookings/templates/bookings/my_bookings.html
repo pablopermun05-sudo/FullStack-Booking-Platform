@@ -1,8 +1,21 @@
 {% extends "bookings/layout.html" %}
+{% load static %}
 
 {% block body %}
 
 <div class="my-bookings">
+
+    {% if messages %}
+    <div class="booking-messages" role="status" aria-live="polite">
+        {% for message in messages %}
+        <div class="alert alert-{% if message.tags == 'error' %}danger{% elif message.tags == 'success' %}success{% elif message.tags == 'warning' %}warning{% else %}info{% endif %} alert-dismissible fade show"
+            role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
 
     <header class="bookings-header">
         <div>
@@ -130,119 +143,111 @@
                     </div>
                 </div>
 
-                <div class="booking-actions">
 
-                    {% if booking.status == "PENDING" %}
+                <div class="booking-actions-column">
 
-                    <a href="{% url 'mock_payment' booking.id %}" class="booking-btn booking-btn-primary">
-                        Ir al pago →
-                    </a>
-
-                    <form action="{% url 'cancel_booking' booking.id %}" method="post"
-                        onsubmit="return confirm('¿Seguro que quieres cancelar esta reserva?');">
-                        {% csrf_token %}
-                        <button type="submit" class="booking-btn booking-btn-cancel">
-                            Cancelar
-                        </button>
-                    </form>
-
-                    {% elif booking.status == "CONFIRMED" %}
-
-                    <form action="{% url 'cancel_booking' booking.id %}" method="post"
-                        onsubmit="return confirm('¿Seguro que quieres cancelar esta reserva confirmada?');">
-                        {% csrf_token %}
-                        <button type="submit" class="booking-btn booking-btn-cancel">
-                            Cancelar reserva
-                        </button>
-                    </form>
-
+                    {% if booking.active_change_proposals %}
+                    <button type="button" class="booking-notification-trigger"
+                        aria-label="Ver propuestas de cambio pendientes" aria-expanded="false"
+                        aria-controls="booking-proposals-{{ booking.id }}" data-proposals-toggle>
+                        <i class="bi bi-bell-fill" aria-hidden="true"></i>
+                        <span class="booking-notification-badge">
+                            {{ booking.active_change_proposals|length }}
+                        </span>
+                    </button>
+                    {% else %}
+                    <button type="button" class="booking-notification-trigger booking-notification-disabled"
+                        aria-label="No hay propuestas pendientes" title="No hay propuestas pendientes" disabled>
+                        <i class="bi bi-bell-slash" aria-hidden="true"></i>
+                    </button>
                     {% endif %}
 
-                </div>
-
-            </div>
-
-            {% if booking.prefetched_change_proposals %}
-            <section class="booking-proposals" aria-label="Propuestas de cambio">
-                <h3>Propuestas de cambio</h3>
-
-                {% for proposal in booking.prefetched_change_proposals %}
-                <article class="booking-proposal">
-                    <p>
-                        <strong>Estado:</strong>
-                        {% if proposal.status == "PENDING" %}
-                            Pendiente
-                        {% elif proposal.status == "ACCEPTED" %}
-                            Aceptada
-                        {% elif proposal.status == "REJECTED" %}
-                            Rechazada
-                        {% elif proposal.status == "EXPIRED" %}
-                            Caducada
-                        {% else %}
-                            {{ proposal.get_status_display }}
-                        {% endif %}
-                    </p>
-
-                    <p>
-                        <strong>Entrada propuesta:</strong>
-                        {{ proposal.proposed_initial_date|date:"d M Y" }}
-                    </p>
-
-                    <p>
-                        <strong>Salida propuesta:</strong>
-                        {{ proposal.proposed_final_date|date:"d M Y" }}
-                    </p>
-
-                    <p>
-                        <strong>Huéspedes:</strong>
-                        {{ proposal.proposed_guest_count }}
-                    </p>
-
-                    <p>
-                        <strong>Precio total propuesto:</strong>
-                        {% if proposal.proposed_total_price is not None %}
-                            {{ proposal.proposed_total_price|floatformat:2 }} €
-                        {% else %}
-                            No disponible
-                        {% endif %}
-                    </p>
-
-                    <p>
-                        <strong>Caduca:</strong>
-                        {{ proposal.expires_at|date:"d M Y H:i" }}
-                    </p>
-
-                    {% if proposal.status == "PENDING" and proposal.expires_at > current_time %}
                     <div class="booking-actions">
-                        <form
-                            action="{% url 'accept_booking_change_proposal' proposal.id %}"
-                            method="post"
-                        >
-                            {% csrf_token %}
-                            <button type="submit" class="booking-btn booking-btn-primary">
-                                Aceptar propuesta
-                            </button>
-                        </form>
+                        {% if booking.status == "PENDING" %}
+                        <a href="{% url 'mock_payment' booking.id %}" class="booking-btn booking-btn-primary">
+                            Ir al pago →
+                        </a>
 
-                        <form
-                            action="{% url 'reject_booking_change_proposal' proposal.id %}"
-                            method="post"
-                        >
+                        <form action="{% url 'cancel_booking' booking.id %}" method="post"
+                            onsubmit="return confirm('¿Seguro que quieres cancelar esta reserva?');">
                             {% csrf_token %}
                             <button type="submit" class="booking-btn booking-btn-cancel">
-                                Rechazar propuesta
+                                Cancelar
                             </button>
                         </form>
+
+                        {% elif booking.status == "CONFIRMED" %}
+                        <form action="{% url 'cancel_booking' booking.id %}" method="post"
+                            onsubmit="return confirm('¿Seguro que quieres cancelar esta reserva confirmada?');">
+                            {% csrf_token %}
+                            <button type="submit" class="booking-btn booking-btn-cancel">
+                                Cancelar reserva
+                            </button>
+                        </form>
+                        {% endif %}
                     </div>
-                    {% elif proposal.status == "PENDING" %}
-                        <p>Esta propuesta ha caducado y ya no se puede aceptar ni rechazar.</p>
-                    {% endif %}
-                </article>
-                {% endfor %}
-            </section>
-            {% endif %}
+
+                </div>
+            </div>
 
         </div>
+
+        {% if booking.active_change_proposals %}
+        <div class="booking-proposals-panel" id="booking-proposals-{{ booking.id }}" hidden>
+
+            {% for proposal in booking.active_change_proposals %}
+            <article class="booking-proposal">
+                <h3>Propuesta de cambio de reserva</h3>
+
+                <p>
+                    <strong>Entrada propuesta:</strong>
+                    {{ proposal.proposed_initial_date|date:"d M Y" }}
+                </p>
+
+                <p>
+                    <strong>Salida propuesta:</strong>
+                    {{ proposal.proposed_final_date|date:"d M Y" }}
+                </p>
+
+                <p>
+                    <strong>Huéspedes:</strong>
+                    {{ proposal.proposed_guest_count }}
+                </p>
+
+                <p>
+                    <strong>Precio total propuesto:</strong>
+                    {% if proposal.proposed_total_price is not None %}
+                    {{ proposal.proposed_total_price|floatformat:2 }} €
+                    {% else %}
+                    No disponible
+                    {% endif %}
+                </p>
+
+                <p>
+                    <strong>Caduca:</strong>
+                    {{ proposal.expires_at|date:"d M Y H:i" }}
+                </p>
+
+                <div class="booking-actions">
+                    <form action="{% url 'accept_booking_change_proposal' proposal.id %}" method="post">
+                        {% csrf_token %}
+                        <button type="submit" class="booking-btn booking-btn-primary">
+                            Aceptar propuesta
+                        </button>
+                    </form>
+
+                    <form action="{% url 'reject_booking_change_proposal' proposal.id %}" method="post">
+                        {% csrf_token %}
+                        <button type="submit" class="booking-btn booking-btn-cancel">
+                            Rechazar propuesta
+                        </button>
+                    </form>
+                </div>
+            </article>
+            {% endfor %}
+        </div>
+        {% endif %}
+
 
     </article>
 
@@ -257,17 +262,17 @@
             Anterior
         </a>
         {% endif %}
-        
+
         {% for num in page_obj.paginator.page_range %}
-            {% if page_obj.number == num %}
-                <span class="current" aria-current="page">
-                    {{ num }}
-                </span>
-            {% else %}
-                <a href="?page={{ num }}&status={{ selected_status }}">
-                    {{ num }}
-                </a>
-            {% endif %}
+        {% if page_obj.number == num %}
+        <span class="current" aria-current="page">
+            {{ num }}
+        </span>
+        {% else %}
+        <a href="?page={{ num }}&status={{ selected_status }}">
+            {{ num }}
+        </a>
+        {% endif %}
         {% endfor %}
 
         {% if page_obj.has_next %}
@@ -296,4 +301,7 @@
 
 </div>
 
+{% endblock %}
+{% block script %}
+<script src="{% static 'bookings/my_bookings.js' %}"></script>
 {% endblock %}

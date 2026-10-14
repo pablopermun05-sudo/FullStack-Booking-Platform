@@ -180,6 +180,8 @@ def my_bookings(request):
         status="PENDING",
     )
 
+    current_time = timezone.now()
+
     for booking in pending_bookings:
         if booking.is_expired():
             booking.expire()
@@ -232,6 +234,17 @@ def my_bookings(request):
     paginator = Paginator(bookings, 6)
     page_obj = paginator.get_page(request.GET.get("page"))
 
+    for booking in page_obj.object_list:
+        booking.active_change_proposals = [
+            proposal
+            for proposal in booking.prefetched_change_proposals
+            if (
+                proposal.status == BookingChangeProposal.Status.PENDING
+                and proposal.expires_at is not None
+                and proposal.expires_at > current_time
+            )
+        ]
+
     return render(
         request,
         "bookings/my_bookings.html",
@@ -239,6 +252,7 @@ def my_bookings(request):
             "bookings": page_obj.object_list,
             "page_obj": page_obj,
             "selected_status": selected_status,
+            "current_time": current_time,
         },
     )
 
