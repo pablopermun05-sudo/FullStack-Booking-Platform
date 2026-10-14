@@ -26,8 +26,11 @@ import logging
 from django.conf import settings
 from django.core.mail import send_mail
 from django.contrib import messages
+from django.core.mail import EmailMultiAlternatives
+from django.utils.html import escape
 
 logger = logging.getLogger(__name__)
+
 
 # Create your views here.
 class SearchForm(forms.Form):
@@ -1209,10 +1212,8 @@ def view_booking_change_proposal_by_token(request, token):
 
 def send_booking_change_proposal_email(request, booking, proposal, raw_token):
     """
-    Envía al huésped los detalles de una propuesta de cambio.
-
-    Devuelve True si Django confirma el envío y False si se produce
-    un error. Nunca guarda el token original en la base de datos.
+    Envía al huésped una propuesta de cambio con formato HTML y texto.
+    Devuelve True si Django confirma el envío y False si falla.
     """
     proposal_url = request.build_absolute_uri(
         reverse(
@@ -1221,40 +1222,248 @@ def send_booking_change_proposal_email(request, booking, proposal, raw_token):
         )
     )
 
-    original_total = booking.total_price
-    proposed_total = proposal.proposed_total_price
+    property_title = booking.property.title
 
-    subject = (
-        f"Nueva propuesta de cambio para tu reserva "
-        f"en {booking.property.title}"
+    # Teléfono del usuario propietario de la vivienda.
+    owner_phone = booking.property.owner.phone_number
+    safe_owner_phone = (
+        escape(str(owner_phone))
+        if owner_phone
+        else None
     )
 
-    message = f"""Hola {booking.guest_first_name},
+    guest_name = booking.guest_first_name or "huésped"
+    original_total = booking.total_price
+    proposed_total = proposal.proposed_total_price
+    expiry = timezone.localtime(proposal.expires_at)
 
-El alojamiento "{booking.property.title}" te ha enviado una propuesta
-para modificar tu reserva.
+    subject = f"Propuesta de cambio de reserva | {property_title}"
 
-RESERVA ORIGINAL
+    # Versión de texto plano.
+    text_message = f"""Hola {guest_name},
+
+El alojamiento {property_title} te ha enviado una propuesta para modificar tu reserva.
+
+RESERVA ACTUAL
 Entrada: {booking.initial_date:%d/%m/%Y}
 Salida: {booking.final_date:%d/%m/%Y}
-Número de huéspedes: {booking.guest_count}
-Importe total original: {original_total:.2f} €
+Huéspedes: {booking.guest_count}
+Precio total: {original_total:.2f} €
 
-CAMBIO PROPUESTO
+NUEVA PROPUESTA
 Entrada: {proposal.proposed_initial_date:%d/%m/%Y}
 Salida: {proposal.proposed_final_date:%d/%m/%Y}
-Número de huéspedes: {proposal.proposed_guest_count}
-Importe total propuesto: {proposed_total:.2f} €
+Huéspedes: {proposal.proposed_guest_count}
+Precio total propuesto: {proposed_total:.2f} €
 
-PLAZO DE RESPUESTA
-La propuesta caduca el {timezone.localtime(proposal.expires_at):%d/%m/%Y a las %H:%M}.
+La propuesta caduca el {expiry:%d/%m/%Y a las %H:%M}.
 
-Consulta la propuesta y sigue las instrucciones para responder:
+Revisa la propuesta y responde aquí:
 {proposal_url}
 
-Si tienes dudas, contacta con el alojamiento.
+Si tienes dudas, contacta con el alojamiento{f' en el teléfono {owner_phone}' if owner_phone else ''}.
 
-Este correo es una notificación automática.
+Notificación automática de {property_title}.
+"""
+
+    # Escapar los datos dinámicos para el HTML.
+    safe_guest = escape(guest_name)
+    safe_property = escape(property_title)
+    safe_url = escape(proposal_url)
+
+    html_message = f"""
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Propuesta de cambio de reserva</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f3f5f7;
+             font-family:Arial,Helvetica,sans-serif;color:#263238;">
+  <div style="display:none;max-height:0;overflow:hidden;">
+    Tienes una propuesta de cambio pendiente para tu reserva en {safe_property}.
+  </div>
+
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0"
+         style="background-color:#f3f5f7;padding:32px 12px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="600" cellspacing="0" cellpadding="0"
+               style="width:100%;max-width:600px;background:#ffffff;
+                      border-radius:12px;overflow:hidden;">
+          <tr>
+            <td style="background:#173f35;padding:28px 32px;color:#ffffff;">
+              <p style="margin:0;font-size:12px;letter-spacing:2px;
+                        text-transform:uppercase;color:#d5e8df;">
+                Notificación de reserva
+              </p>
+              <h1 style="margin:10px 0 0;font-size:25px;line-height:1.3;">
+                Propuesta de cambio
+              </h1>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:30px 32px 12px;">
+              <p style="margin:0 0 12px;font-size:16px;">
+                Hola {safe_guest},
+              </p>
+              <p style="margin:0;color:#52615d;font-size:15px;line-height:1.7;">
+                <strong>{safe_property}</strong> te ha enviado una propuesta
+                para modificar las condiciones de tu reserva.
+                Revisa los detalles antes de responder.
+              </p>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:18px 32px 8px;">
+              <table role="presentation" width="100%" cellspacing="0"
+                     cellpadding="0"
+                     style="border:1px solid #e3e9e6;border-radius:8px;">
+                <tr>
+                  <td colspan="2"
+                      style="padding:16px 18px;background:#f7f9f8;
+                             font-size:14px;font-weight:bold;">
+                    Reserva actual
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:12px 18px;color:#66736f;font-size:14px;">
+                    Entrada
+                  </td>
+                  <td align="right" style="padding:12px 18px;font-size:14px;">
+                    {booking.initial_date:%d/%m/%Y}
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:12px 18px;color:#66736f;font-size:14px;">
+                    Salida
+                  </td>
+                  <td align="right" style="padding:12px 18px;font-size:14px;">
+                    {booking.final_date:%d/%m/%Y}
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:12px 18px;color:#66736f;font-size:14px;">
+                    Huéspedes
+                  </td>
+                  <td align="right" style="padding:12px 18px;font-size:14px;">
+                    {booking.guest_count}
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:14px 18px;border-top:1px solid #e3e9e6;
+                             font-weight:bold;font-size:14px;">
+                    Precio total actual
+                  </td>
+                  <td align="right"
+                      style="padding:14px 18px;border-top:1px solid #e3e9e6;
+                             font-weight:bold;font-size:15px;">
+                    {original_total:.2f} €
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:12px 32px 18px;">
+              <table role="presentation" width="100%" cellspacing="0"
+                     cellpadding="0"
+                     style="border:1px solid #cfe3d8;border-radius:8px;">
+                <tr>
+                  <td colspan="2"
+                      style="padding:16px 18px;background:#edf6f1;
+                             color:#173f35;font-size:14px;font-weight:bold;">
+                    Nueva propuesta
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:12px 18px;color:#52615d;font-size:14px;">
+                    Entrada
+                  </td>
+                  <td align="right" style="padding:12px 18px;font-size:14px;">
+                    {proposal.proposed_initial_date:%d/%m/%Y}
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:12px 18px;color:#52615d;font-size:14px;">
+                    Salida
+                  </td>
+                  <td align="right" style="padding:12px 18px;font-size:14px;">
+                    {proposal.proposed_final_date:%d/%m/%Y}
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:12px 18px;color:#52615d;font-size:14px;">
+                    Huéspedes
+                  </td>
+                  <td align="right" style="padding:12px 18px;font-size:14px;">
+                    {proposal.proposed_guest_count}
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:14px 18px;border-top:1px solid #cfe3d8;
+                             font-weight:bold;font-size:14px;">
+                    Precio total propuesto
+                  </td>
+                  <td align="right"
+                      style="padding:14px 18px;border-top:1px solid #cfe3d8;
+                             color:#173f35;font-weight:bold;font-size:20px;">
+                    {proposed_total:.2f} €
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:0 32px 24px;">
+              <table role="presentation" width="100%" cellspacing="0"
+                     cellpadding="0"
+                     style="background:#fff8e8;border-radius:8px;">
+                <tr>
+                  <td style="padding:15px 17px;color:#775b20;font-size:13px;
+                             line-height:1.6;">
+                    <strong>Plazo para responder</strong><br>
+                    Esta propuesta caduca el
+                    <strong>{expiry:%d/%m/%Y a las %H:%M}</strong>.
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <tr>
+            <td align="center" style="padding:0 32px 30px;">
+              <a href="{safe_url}"
+                 style="display:inline-block;background:#173f35;color:#ffffff;
+                        text-decoration:none;padding:15px 28px;
+                        border-radius:6px;font-size:15px;font-weight:bold;">
+                Revisar propuesta
+              </a>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:22px 32px;background:#f7f9f8;
+                       border-top:1px solid #e8eeeb;">
+              <p style="margin:0;color:#65716c;font-size:12px;line-height:1.7;">
+                Este mensaje es una notificación automática relacionada con
+                tu reserva en {safe_property}. Si tienes dudas, contacta con
+                el alojamiento
+                {f'en el teléfono {safe_owner_phone}' if safe_owner_phone else ''}.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
 """
 
     try:
@@ -1271,18 +1480,19 @@ Este correo es una notificación automática.
             )
             return False
 
-        sent_count = send_mail(
+        email = EmailMultiAlternatives(
             subject=subject,
-            message=message,
+            body=text_message,
             from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[recipient_email],
-            fail_silently=False,
+            to=[recipient_email],
         )
+        email.attach_alternative(html_message, "text/html")
+
+        sent_count = email.send(fail_silently=False)
 
         if sent_count != 1:
             logger.error(
-                "El backend de correo no confirmó el envío de la "
-                "propuesta %s a %s.",
+                "No se confirmó el envío de la propuesta %s a %s.",
                 proposal.pk,
                 recipient_email,
             )
@@ -1293,7 +1503,7 @@ Este correo es una notificación automática.
     except Exception:
         logger.exception(
             "Error al enviar el correo de la propuesta %s "
-            "al huésped de la reserva %s.",
+            "para la reserva %s.",
             proposal.pk,
             booking.pk,
         )
