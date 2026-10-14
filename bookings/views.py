@@ -1258,11 +1258,24 @@ Este correo es una notificación automática.
 """
 
     try:
+        recipient_email = (
+            booking.tenant.email.strip()
+            if booking.tenant_id and booking.tenant.email
+            else (booking.guest_email or "").strip()
+        )
+
+        if not recipient_email:
+            logger.error(
+                "La reserva %s no tiene un email de destinatario.",
+                booking.pk,
+            )
+            return False
+
         sent_count = send_mail(
             subject=subject,
             message=message,
             from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[booking.guest_email],
+            recipient_list=[recipient_email],
             fail_silently=False,
         )
 
@@ -1271,7 +1284,7 @@ Este correo es una notificación automática.
                 "El backend de correo no confirmó el envío de la "
                 "propuesta %s a %s.",
                 proposal.pk,
-                booking.guest_email,
+                recipient_email,
             )
             return False
 
