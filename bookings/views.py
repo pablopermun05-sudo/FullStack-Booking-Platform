@@ -27,6 +27,7 @@ from django.contrib import messages
 import secrets
 from .emails import (
     send_booking_change_proposal_email,
+    send_booking_change_proposal_status_email,
 )
 
 
@@ -1171,29 +1172,53 @@ def view_booking_change_proposal_by_token(request, token):
 
     token_hash = hash_proposal_access_token(token)
 
-    proposal = (
+    proposal_reference = (
         BookingChangeProposal.objects
-        .select_related("booking", "booking__property")
         .filter(access_token_hash=token_hash)
+        .values("pk", "booking_id")
         .first()
     )
 
-    if proposal is None:
+    if proposal_reference is None:
         return render(
             request,
             "bookings/booking_change_proposal_detail.html",
-            {
-                "invalid_link": True,
-            },
+            {"invalid_link": True},
             status=404,
         )
 
-    if (
-        proposal.status == BookingChangeProposal.Status.PENDING
-        and proposal.is_expired()
-    ):
-        proposal.status = BookingChangeProposal.Status.EXPIRED
-        proposal.save(update_fields=["status"])
+    
+    with transaction.atomic():
+        # Bloquear primero la reserva y después la propuesta.
+        booking = get_object_or_404(
+            Booking.objects.select_for_update().select_related(
+                "property",
+                "property__owner",
+            ),
+            pk=proposal_reference["booking_id"],
+        )
+
+        proposal = get_object_or_404(
+            BookingChangeProposal.objects.select_for_update(),
+            pk=proposal_reference["pk"],
+            booking=booking,
+            access_token_hash=token_hash,
+        )
+
+        # Solo caducar y notificar si sigue pendiente y ha vencido.
+        if (
+            proposal.status == BookingChangeProposal.Status.PENDING
+            and proposal.is_expired()
+        ):
+            proposal.status = BookingChangeProposal.Status.EXPIRED
+            proposal.save(update_fields=["status"])
+
+            transaction.on_commit(
+                lambda booking=booking, proposal=proposal:
+                    send_booking_change_proposal_status_email(
+                        booking, proposal, "expired"
+                    )
+            )
 
     booking = proposal.booking
 
@@ -1473,14 +1498,30 @@ def propose_booking_change(request, booking_id):
             
             # Obtener la hora una sola vez para mantener coherentes los estados y la expiración.
             now = timezone.now()
+            
+            # Caducar propuestas vencidas individualmente para poder
+            # notificar solo las que realmente cambian de estado.
+            expired_proposals = list(
+                BookingChangeProposal.objects
+                .select_for_update()
+                .filter(
+                    booking=booking,
+                    status=BookingChangeProposal.Status.PENDING,
+                    expires_at__isnull=False,
+                    expires_at__lte=now,
+                )
+            )
 
-            # Caducar propuestas pendientes que ya han vencido.
-            BookingChangeProposal.objects.filter(
-                booking=booking,
-                status=BookingChangeProposal.Status.PENDING,
-                expires_at__isnull=False,
-                expires_at__lte=now,
-            ).update(status=BookingChangeProposal.Status.EXPIRED)
+            for expired_proposal in expired_proposals:
+                expired_proposal.status = BookingChangeProposal.Status.EXPIRED
+                expired_proposal.save(update_fields=["status"])
+
+                transaction.on_commit(
+                    lambda booking=booking, proposal=expired_proposal:
+                        send_booking_change_proposal_status_email(
+                            booking, proposal, "expired"
+                        )
+                )
 
             # Reutilizar la propuesta pendiente, si existe.
             proposal = (
@@ -1672,6 +1713,13 @@ def accept_booking_change_proposal(request, proposal_id):
             if proposal.is_expired():
                 proposal.status = BookingChangeProposal.Status.EXPIRED
                 proposal.save(update_fields=["status"])
+                
+                transaction.on_commit(
+                    lambda booking=booking, proposal=proposal:
+                        send_booking_change_proposal_status_email(
+                            booking, proposal, "expired"
+                        )
+                )
 
                 if is_html_form:
                     messages.error(request, "La propuesta ha caducado.")
@@ -1897,6 +1945,13 @@ def accept_booking_change_proposal(request, proposal_id):
             # Marcar la propuesta como aceptada.
             proposal.status = BookingChangeProposal.Status.ACCEPTED
             proposal.save(update_fields=["status"])
+            
+            transaction.on_commit(
+                lambda booking=booking, proposal=proposal:
+                    send_booking_change_proposal_status_email(
+                        booking, proposal, "accepted"
+                    )
+            )
 
     except ValidationError as exc:
         if is_html_form:
@@ -2012,6 +2067,13 @@ def reject_booking_change_proposal(request, proposal_id):
         if proposal.is_expired():
             proposal.status = BookingChangeProposal.Status.EXPIRED
             proposal.save(update_fields=["status"])
+            
+            transaction.on_commit(
+                lambda booking=booking, proposal=proposal:
+                    send_booking_change_proposal_status_email(
+                        booking, proposal, "expired"
+                    )
+            )
 
             if is_html_form:
                 messages.error(request, "La propuesta ha caducado.")
@@ -2024,6 +2086,13 @@ def reject_booking_change_proposal(request, proposal_id):
 
         proposal.status = BookingChangeProposal.Status.REJECTED
         proposal.save(update_fields=["status"])
+        
+        transaction.on_commit(
+            lambda booking=booking, proposal=proposal:
+                send_booking_change_proposal_status_email(
+                    booking, proposal, "rejected"
+                )
+        )
 
         if is_html_form:
             messages.success(request, "Has rechazado la propuesta de cambio.")
