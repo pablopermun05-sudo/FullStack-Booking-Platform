@@ -620,6 +620,11 @@ class BookingChangeProposal(models.Model):
         on_delete=models.CASCADE,
         related_name="change_proposals",
     )
+    reason = models.TextField(
+        max_length=1000,
+        blank=True,
+        default="",
+    )
     proposed_initial_date = models.DateField()
     proposed_final_date = models.DateField()
     proposed_guest_count = models.PositiveIntegerField()
@@ -829,6 +834,8 @@ class BookingChangeAudit(models.Model):
         User,
         on_delete=models.PROTECT,
         related_name="booking_change_audits",
+        null=True,
+        blank=True,
     )
     changed_at = models.DateTimeField(auto_now_add=True)
     before_values = models.JSONField()

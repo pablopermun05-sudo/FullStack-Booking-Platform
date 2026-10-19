@@ -77,22 +77,79 @@
                             </div>
                         </div>
 
+                        <div class="col-md-6">
+                            <div class="border rounded p-3 h-100">
+                                <small class="text-body-secondary d-block">
+                                    Precio total de la reserva
+                                </small>
+                                <strong>{{ booking.total_price|floatformat:2 }} €</strong>
+                            </div>
+                        </div>
+
                     </div>
 
                     <hr>
 
                     <!-- Formulario de modificación -->
 
-                    <form
-                        id="booking-change-form"
-                        data-initial-date="{{ booking.initial_date|date:'Y-m-d' }}"
+                    <form id="booking-change-form" data-initial-date="{{ booking.initial_date|date:'Y-m-d' }}"
                         data-final-date="{{ booking.final_date|date:'Y-m-d' }}"
                         data-proposal-url="{% url 'propose_booking_change' booking.id %}"
-                        data-booking-id="{{ booking.id }}"
-                        data-property-id="{{ property.id }}"
-                    >
+                        data-booking-id="{{ booking.id }}" data-property-id="{{ property.id }}"
+                        data-force-url="{% url 'force_booking_change' booking.id %}">
 
                         {% csrf_token %}
+
+                        <div class="mb-4">
+                            {% if request.user.is_staff %}
+                            <h5 class="fw-bold mb-3">Modalidad del cambio</h5>
+
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="radio" name="change_mode" id="mode-proposal"
+                                    value="proposal" checked>
+                                <label class="form-check-label" for="mode-proposal">
+                                    Solicitar confirmación al cliente
+                                </label>
+                            </div>
+
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="change_mode" id="mode-forced"
+                                    value="forced">
+                                <label class="form-check-label" for="mode-forced">
+                                    Forzar el cambio directamente
+                                </label>
+                            </div>
+                            {% else %}
+                            <h5 class="fw-bold mb-3">Propuesta de cambio</h5>
+                            <p class="text-body-secondary mb-0">
+                                El cambio se enviará al cliente para que pueda aceptarlo o rechazarlo.
+                            </p>
+                            {% endif %}
+                        </div>
+
+                        {% if request.user.is_staff %}
+                        <div id="forced-change-fields" class="border rounded p-3 mb-4 d-none">
+                            <h5 class="fw-bold">Cambio administrativo directo</h5>
+
+                            <div class="mb-3">
+                                <label for="force-reason" class="form-label fw-bold">
+                                    Motivo del cambio forzado
+                                </label>
+                                <textarea id="force-reason" name="force_reason" class="form-control" rows="3"
+                                    maxlength="1000"
+                                    placeholder="Explica por qué es necesario realizar el cambio directamente."></textarea>
+                            </div>
+
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="force-confirmation"
+                                    name="force_confirmation">
+                                <label class="form-check-label" for="force-confirmation">
+                                    Confirmo que deseo modificar la reserva sin esperar la aceptación
+                                    del cliente y que he revisado las nuevas condiciones y su precio.
+                                </label>
+                            </div>
+                        </div>
+                        {% endif %}
 
                         <h5 class="fw-bold mb-3">
                             Selecciona las nuevas condiciones
@@ -100,19 +157,12 @@
 
                         <!-- Mensaje de validación de fechas -->
 
-                        <div
-                            class="alert alert-danger mb-3 no-display"
-                            id="alert-booking-date"
-                            role="alert">
+                        <div class="alert alert-danger mb-3 no-display" id="alert-booking-date" role="alert">
                         </div>
 
                         <!-- Campo utilizado por Litepicker -->
 
-                        <input
-                            type="text"
-                            id="booking-range"
-                            class="d-none"
-                            readonly>
+                        <input type="text" id="booking-range" class="d-none" readonly>
 
                         <!-- Calendario: contenedor compatible con el CSS personalizado -->
 
@@ -122,26 +172,14 @@
 
                         <!-- Fechas seleccionadas -->
 
-                        <input
-                            type="hidden"
-                            id="start-date"
+                        <input type="hidden" id="start-date" value="{{ booking.initial_date|date:'Y-m-d' }}">
+
+                        <input type="hidden" id="end-date" value="{{ booking.final_date|date:'Y-m-d' }}">
+
+                        <input type="hidden" id="proposed-initial-date" name="proposed_initial_date"
                             value="{{ booking.initial_date|date:'Y-m-d' }}">
 
-                        <input
-                            type="hidden"
-                            id="end-date"
-                            value="{{ booking.final_date|date:'Y-m-d' }}">
-
-                        <input
-                            type="hidden"
-                            id="proposed-initial-date"
-                            name="proposed_initial_date"
-                            value="{{ booking.initial_date|date:'Y-m-d' }}">
-
-                        <input
-                            type="hidden"
-                            id="proposed-final-date"
-                            name="proposed_final_date"
+                        <input type="hidden" id="proposed-final-date" name="proposed_final_date"
                             value="{{ booking.final_date|date:'Y-m-d' }}">
 
                         <div class="form-text mb-4">
@@ -153,21 +191,14 @@
                         <!-- Número de huéspedes -->
 
                         <div class="mb-4">
-                            <label
-                                for="proposed-guest-count"
-                                class="form-label fw-bold">
+                            <label for="proposed-guest-count" class="form-label fw-bold">
                                 Número de huéspedes
                             </label>
 
-                            <input
-                                type="number"
-                                id="proposed-guest-count"
-                                name="proposed_guest_count"
-                                class="form-control"
-                                min="1"
+                            <input type="number" id="proposed-guest-count" name="proposed_guest_count"
+                                class="form-control" min="1"
                                 max="{{ booking.property.adults|add:booking.property.children }}"
-                                value="{{ booking.guest_count }}"
-                                required>
+                                value="{{ booking.guest_count }}" required>
 
                             <div class="form-text">
                                 Capacidad máxima:
@@ -176,27 +207,33 @@
                             </div>
                         </div>
 
+                        <div id="proposal-reason-fields" class="mb-4">
+                            <label for="proposal-reason" class="form-label fw-bold">
+                                Motivo de la propuesta
+                            </label>
+
+                            <textarea id="proposal-reason" name="reason" class="form-control" rows="3" maxlength="1000"
+                                required placeholder="Explica por qué propones modificar la reserva."></textarea>
+
+                            <div class="form-text">
+                                El cliente podrá consultar este motivo antes de aceptar o rechazar
+                                el cambio.
+                            </div>
+                        </div>
+
                         <!-- Alternativa de fechas -->
 
-                        <div
-                            id="alternative-dates"
-                            class="alert alert-warning d-none"
-                            role="alert">
+                        <div id="alternative-dates" class="alert alert-warning d-none" role="alert">
 
                             <h6 class="fw-bold">
                                 <i class="bi bi-calendar-check me-1"></i>
                                 Fechas alternativas
                             </h6>
 
-                            <p
-                                id="alternative-message"
-                                class="mb-2">
+                            <p id="alternative-message" class="mb-2">
                             </p>
 
-                            <button
-                                type="button"
-                                id="use-alternative-dates"
-                                class="btn btn-outline-dark btn-sm">
+                            <button type="button" id="use-alternative-dates" class="btn btn-outline-dark btn-sm">
                                 Usar fechas alternativas
                             </button>
 
@@ -204,60 +241,57 @@
 
                         <!-- Cotización -->
 
-                        <div
-                            id="proposed-price"
-                            class="card bg-body-tertiary mb-4 d-none">
+                        <div class="d-flex justify-content-between mb-2">
+                            <span>Precio total de la reserva propuesta</span>
+                            <strong id="proposed-total-price-label">-</strong>
+                        </div>
 
-                            <div class="card-body">
-                                <h5 class="fw-bold mb-3">
-                                    <i class="bi bi-currency-euro me-1"></i>
-                                    Cotización de la estancia
-                                </h5>
+                        <div id="proposed-price-container" class="d-none mb-4">
+                            <div class="card bg-body-tertiary border-0">
+                                <div class="card-body">
 
-                                <div id="price-breakdown" class="mb-3">
-                                </div>
+                                    <button id="proposed-price-toggle" class="btn btn-light border w-100 text-start"
+                                        type="button" data-bs-toggle="collapse" data-bs-target="#proposed-price"
+                                        aria-expanded="false" aria-controls="proposed-price">
+                                        <span class="d-flex justify-content-between align-items-center">
+                                            <span class="fw-semibold">Importe por noche</span>
+                                            <i class="bi bi-chevron-down"></i>
+                                        </span>
+                                    </button>
 
-                                <div
-                                    class="d-flex justify-content-between align-items-center border-top pt-3">
+                                    <div id="proposed-price" class="collapse mt-3">
+                                        <div id="price-breakdown" class="mb-3"></div>
 
-                                    <span class="fw-bold">
-                                        Precio total
-                                    </span>
-
-                                    <strong
-                                        id="proposed-total-price"
-                                        class="fs-4">
-                                    </strong>
+                                        <div class="d-flex justify-content-between align-items-center border-top pt-3">
+                                            <span class="fw-bold">Precio total</span>
+                                            <strong id="proposed-total-price" class="fs-4"></strong>
+                                        </div>
+                                    </div>
 
                                 </div>
                             </div>
                         </div>
 
+                        <div class="border-top pt-3 mt-3">
+                        </div>
+
                         <!-- Resultado del envío -->
 
-                        <div
-                            id="booking-change-message"
-                            class="alert d-none"
-                            role="alert"
-                            aria-live="polite">
+                        <div id="booking-change-message" class="alert d-none" role="alert" aria-live="polite">
                         </div>
 
                         <!-- Botones -->
 
                         <div class="d-grid gap-2">
 
-                            <button
-                                type="button"
-                                id="submit-change-proposal"
-                                class="btn btn-dark rounded-pill py-2">
+                            <button type="button" id="submit-change-proposal" class="btn btn-dark rounded-pill py-2">
 
                                 <i class="bi bi-send me-1"></i>
                                 Enviar propuesta de cambio
 
                             </button>
 
-                            <a
-                                href="{% url 'property_bookings' booking.property.id %}"
+                            <a href="{% url 'property_bookings' booking.property.id %}"
                                 class="btn btn-outline-secondary rounded-pill py-2">
 
                                 Volver a las reservas

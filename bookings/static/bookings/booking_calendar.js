@@ -68,8 +68,45 @@ function clearCurrentBookingSelection() {
         document.getElementById('end-date').value = '';
         document.getElementById('proposed-initial-date').value = '';
         document.getElementById('proposed-final-date').value = '';
+
+        resetProposedBookingPrice();
     } else if (typeof window.clearBookingSelection === 'function') {
         window.clearBookingSelection();
+    }
+}
+
+function resetProposedBookingPrice() {
+    const changeForm = document.getElementById('booking-change-form');
+
+    // No modificar el flujo de las reservas nuevas.
+    if (!changeForm) {
+        return;
+    }
+
+    const totalLabel = document.getElementById('proposed-total-price-label');
+    const totalElement = document.getElementById('proposed-total-price');
+    const priceBreakdown = document.getElementById('price-breakdown');
+    const priceContainer = document.getElementById('proposed-price-container');
+    const priceCard = document.getElementById('proposed-price');
+
+    if (totalLabel) {
+        totalLabel.textContent = '-';
+    }
+
+    if (totalElement) {
+        totalElement.textContent = '';
+    }
+
+    if (priceBreakdown) {
+        priceBreakdown.replaceChildren();
+    }
+
+    if (priceContainer) {
+        priceContainer.classList.add('d-none');
+    }
+
+    if (priceCard) {
+        priceCard.classList.remove('show');
     }
 }
 
@@ -89,6 +126,141 @@ function isClosed(dateStr) {
 
 function isAvailableNight(dateStr) {
     return !isBooked(dateStr) && !isClosed(dateStr);
+}
+
+function updateProposedBookingPrice(startStr, endStr) {
+    // Limitar los cambios a la modificación de reservas.
+    const changeForm = document.getElementById('booking-change-form');
+
+    if (!changeForm) {
+        return;
+    }
+
+    const totalLabel = document.getElementById('proposed-total-price-label');
+    const totalElement = document.getElementById('proposed-total-price');
+    const priceBreakdown = document.getElementById('price-breakdown');
+    const priceContainer = document.getElementById('proposed-price-container');
+    const priceCard = document.getElementById('proposed-price');
+
+    if (!totalElement || !priceBreakdown || !priceContainer) {
+        return;
+    }
+
+    // Restablecer la cotización antes de calcular un nuevo rango.
+    priceContainer.classList.add('d-none');
+
+    if (totalLabel) {
+        totalLabel.textContent = '-';
+    }
+
+    totalElement.textContent = '';
+    priceBreakdown.replaceChildren();
+
+    if (priceCard) {
+        priceCard.classList.remove('show');
+    }
+
+    // Si no hay un rango completo, no mostrar la cotización.
+    if (!startStr || !endStr) {
+        return;
+    }
+
+    const currentDate = new Date(`${startStr}T00:00:00`);
+    const checkoutDate = new Date(`${endStr}T00:00:00`);
+
+    if (
+        Number.isNaN(currentDate.getTime()) ||
+        Number.isNaN(checkoutDate.getTime()) ||
+        currentDate >= checkoutDate
+    ) {
+        return;
+    }
+
+    // Generar fechas YYYY-MM-DD independientemente del idioma del navegador.
+    function formatDateKey(date) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+
+        return `${year}-${month}-${day}`;
+    }
+
+    const nights = [];
+    let total = 0;
+
+    // La entrada se incluye y la salida se excluye.
+    while (currentDate < checkoutDate) {
+        const dateStr = formatDateKey(currentDate);
+        const nightData = availabilityData[dateStr];
+
+        if (
+            !nightData ||
+            nightData.pricePerNight == null ||
+            !Number.isFinite(Number(nightData.pricePerNight))
+        ) {
+            console.error('No se ha encontrado el precio de una noche:', {
+                fecha: dateStr,
+                datosEncontrados: nightData
+            });
+
+            return;
+        }
+
+        const nightlyPrice = Number(nightData.pricePerNight);
+
+        nights.push({
+            date: dateStr,
+            price: nightlyPrice
+        });
+
+        total += nightlyPrice;
+        currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    // Crear el desglose por noche.
+    const fragment = document.createDocumentFragment();
+
+    nights.forEach(night => {
+        const [year, month, day] = night.date.split('-');
+        const row = document.createElement('div');
+
+        row.className = 'd-flex justify-content-between align-items-center mb-2';
+
+        const dateLabel = document.createElement('span');
+        dateLabel.textContent = `Noche del ${day}/${month}/${year}`;
+
+        const priceLabel = document.createElement('span');
+        priceLabel.textContent = `${night.price.toLocaleString('es-ES', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        })} €`;
+
+        row.append(dateLabel, priceLabel);
+        fragment.appendChild(row);
+    });
+
+    priceBreakdown.appendChild(fragment);
+
+    const formattedTotal = `${total.toLocaleString('es-ES', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    })} €`;
+
+    totalElement.textContent = formattedTotal;
+
+    if (totalLabel) {
+        totalLabel.textContent = formattedTotal;
+    }
+
+    // Mostrar la cotización únicamente tras un cálculo correcto.
+    priceContainer.classList.remove('d-none');
+
+    console.log('Cotización calculada:', {
+        entrada: startStr,
+        salida: endStr,
+        noches: nights.length,
+        total
+    });
 }
 
 const minBookingDate = new Date();
@@ -373,6 +545,11 @@ function initializePicker() {
 
                         picker.clearSelection();
 
+                        // Restablecer la cotización al deseleccionar las fechas.
+                        resetProposedBookingPrice();
+
+                        picker.gotoDate(selectedDate);
+
                         // Limpiar los campos según el formulario actual
                         if (document.getElementById('booking-change-form')) {
                             document.getElementById('start-date').value = '';
@@ -512,7 +689,8 @@ function initializePicker() {
                     document.getElementById('proposed-initial-date').value = startStr;
                     document.getElementById('proposed-final-date').value = endStr;
 
-                    // Notificar al formulario para actualizar la cotización
+                    updateProposedBookingPrice(startStr, endStr);
+
                     changeForm.dispatchEvent(new Event('bookingDatesChanged'));
                 } else if (typeof window.validateBooking === 'function') {
                     window.validateBooking();

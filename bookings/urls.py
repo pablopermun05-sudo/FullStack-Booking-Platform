@@ -24,7 +24,6 @@ urlpatterns = [
     path("booking/<int:booking_id>/propose-change", views.propose_booking_change, name="propose_booking_change"),
     path("booking-change-proposal/<int:proposal_id>/reject", views.reject_booking_change_proposal, name="reject_booking_change_proposal"),
     path("booking-change-proposal/<int:proposal_id>/accept", views.accept_booking_change_proposal, name="accept_booking_change_proposal"),
-    path("booking/<int:booking_id>/admin-force-change", views.admin_force_booking_change, name="admin_force_booking_change"),
     path("booking-change-proposal/access/<str:token>", views.view_booking_change_proposal_by_token, name="view_booking_change_proposal_by_token"),
     path("booking/<int:property_id>/details", views.booking_details, name="booking_details"),
     path("booking/<int:property_id>/hold", views.create_booking_hold, name="create_booking_hold"),
@@ -32,4 +31,5 @@ urlpatterns = [
     path("booking/<int:booking_id>/payment", views.mock_payment, name="mock_payment"),
     path("property/<int:property_id>/bookings", views.property_bookings, name="property_bookings"),
     path("booking/<int:booking_id>/change", views.booking_change_form, name="booking_change_form"),
+    path("booking/<int:booking_id>/force-change", views.force_booking_change, name="force_booking_change"),
 ]

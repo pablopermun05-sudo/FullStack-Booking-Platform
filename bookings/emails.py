@@ -48,13 +48,13 @@ RESERVA ACTUAL
 Entrada: {booking.initial_date:%d/%m/%Y}
 Salida: {booking.final_date:%d/%m/%Y}
 Huéspedes: {booking.guest_count}
-Precio total: {original_total:.2f} €
+Importe total original: {original_total:.2f} €
 
 NUEVA PROPUESTA
 Entrada: {proposal.proposed_initial_date:%d/%m/%Y}
 Salida: {proposal.proposed_final_date:%d/%m/%Y}
 Huéspedes: {proposal.proposed_guest_count}
-Precio total propuesto: {proposed_total:.2f} €
+Importe total propuesto: {proposed_total:.2f} €
 
 La propuesta caduca el {expiry:%d/%m/%Y a las %H:%M}.
 
@@ -267,11 +267,15 @@ Notificación automática de {property_title}.
 """
 
     try:
-        recipient_email = (
-            booking.tenant.email.strip()
-            if booking.tenant_id and booking.tenant.email
-            else (booking.guest_email or "").strip()
-        )
+        
+        recipient_email = (booking.guest_email or "").strip()
+
+        if not recipient_email:
+            logger.error(
+                "La reserva %s no tiene un email de huésped.",
+                booking.pk,
+            )
+            return False
 
         if not recipient_email:
             logger.error(

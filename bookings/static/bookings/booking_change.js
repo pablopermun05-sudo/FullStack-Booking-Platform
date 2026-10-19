@@ -8,15 +8,110 @@ document.addEventListener('DOMContentLoaded', () => {
     const submitButton = document.getElementById('submit-change-proposal');
     const messageBox = document.getElementById('booking-change-message');
 
+    const proposalMode = document.getElementById('mode-proposal');
+    const forcedMode = document.getElementById('mode-forced');
+
+    const forcedFields = document.getElementById('forced-change-fields');
+    const forceReason = document.getElementById('force-reason');
+    const forceConfirmation = document.getElementById('force-confirmation');
+
+    const proposalReasonFields = document.getElementById('proposal-reason-fields');
+    const proposalReason = document.getElementById('proposal-reason');
+
     const initialDateInput = document.getElementById('proposed-initial-date');
     const finalDateInput = document.getElementById('proposed-final-date');
     const guestCountInput = document.getElementById('proposed-guest-count');
+    
+    // Mantener sincronizada la cotización al cambiar las fechas,
+    // tanto para propuestas como para cambios forzados.
+    form.addEventListener('bookingDatesChanged', () => {
+        const startDate = initialDateInput.value;
+        const endDate = finalDateInput.value;
+
+        if (
+            startDate &&
+            endDate &&
+            typeof updateProposedBookingPrice === 'function'
+        ) {
+            updateProposedBookingPrice(startDate, endDate);
+        }
+    });
 
     const originalInitialDate = form.dataset.initialDate;
     const originalFinalDate = form.dataset.finalDate;
 
     // La cantidad original de huéspedes se obtiene del valor inicial del campo.
     const originalGuestCount = Number(guestCountInput.defaultValue);
+
+    function updateChangeMode() {
+        // Si no existe el selector de cambio forzado,
+        // el usuario solo puede proponer cambios.
+        const isForced = forcedMode ? forcedMode.checked : false;
+
+        if (forcedFields) {
+            forcedFields.classList.toggle('d-none', !isForced);
+        }
+
+        if (proposalReasonFields) {
+            proposalReasonFields.classList.toggle('d-none', isForced);
+        }
+
+        if (proposalReason) {
+            proposalReason.required = !isForced;
+        }
+
+        if (forceReason) {
+            forceReason.required = isForced;
+        }
+
+        if (forceConfirmation) {
+            forceConfirmation.required = isForced;
+        }
+
+        submitButton.innerHTML = isForced
+            ? 'Confirmar cambio forzado'
+            : 'Enviar propuesta de cambio';
+    }
+
+    
+    function updatePriceDifference() {
+        const totalElement = document.getElementById('proposed-total-price');
+        const proposedTotalLabel = document.getElementById('proposed-total-price-label');
+
+        if (!proposedTotalLabel || !totalElement) {
+            return;
+        }
+
+        const proposedText = totalElement.textContent.trim();
+
+        // Si todavía no hay cotización, mostrar un guion.
+        proposedTotalLabel.textContent = proposedText || '-';
+    }
+
+    const proposedTotalElement = document.getElementById('proposed-total-price');
+
+    if (proposedTotalElement) {
+        new MutationObserver(() => {
+            updatePriceDifference();
+        }).observe(proposedTotalElement, {
+            childList: true,
+            characterData: true,
+            subtree: true
+        });
+    }
+
+    // Mostrar el guion al cargar el formulario.
+    updatePriceDifference();
+
+    if (proposalMode) {
+        proposalMode.addEventListener('change', updateChangeMode);
+    }
+
+    if (forcedMode) {
+        forcedMode.addEventListener('change', updateChangeMode);
+    }
+
+    updateChangeMode();
 
     function showMessage(message, type = 'danger') {
         messageBox.textContent = message;
@@ -57,10 +152,15 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+
         submitButton.disabled = true;
 
         const originalButtonText = submitButton.innerHTML;
-        submitButton.textContent = 'Enviando propuesta...';
+        const isForced = forcedMode ? forcedMode.checked : false;
+
+        submitButton.textContent = isForced
+            ? 'Aplicando cambio...'
+            : 'Enviando propuesta...';
 
         try {
             const formData = new FormData();
@@ -69,11 +169,26 @@ document.addEventListener('DOMContentLoaded', () => {
             formData.append('proposed_final_date', proposedFinalDate);
             formData.append('proposed_guest_count', String(proposedGuestCount));
 
-            const response = await fetch(form.dataset.proposalUrl, {
+            let endpoint = form.dataset.proposalUrl;
+
+            if (isForced) {
+                endpoint = form.dataset.forceUrl;
+
+                formData.append('force_reason', forceReason.value.trim());
+
+                if (forceConfirmation.checked) {
+                    formData.append('force_confirmation', 'on');
+                }
+            } else {
+                formData.append('reason', proposalReason.value.trim());
+            }
+
+            const response = await fetch(endpoint, {
                 method: 'POST',
                 headers: {
                     'X-CSRFToken': getCsrfToken(),
-                    'X-Requested-With': 'XMLHttpRequest'
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json'
                 },
                 body: formData,
                 credentials: 'same-origin'
@@ -82,45 +197,40 @@ document.addEventListener('DOMContentLoaded', () => {
             const contentType = response.headers.get('content-type') || '';
 
             if (!contentType.includes('application/json')) {
-                const responseText = await response.text();
-
-                console.error('Respuesta inesperada del servidor:', {
-                    status: response.status,
-                    url: response.url,
-                    contentType,
-                    body: responseText.slice(0, 1000)
-                });
-
                 throw new Error(
-                    `El servidor ha devuelto una respuesta HTML en lugar de JSON (HTTP ${response.status}). Revisa la consola.`
+                    `El servidor devolvió una respuesta inesperada (HTTP ${response.status}).`
                 );
             }
 
             const data = await response.json();
 
             if (!response.ok || data.success !== true) {
-                const errorMessage = data.message || data.error;
-                const message = Array.isArray(errorMessage)
-                    ? errorMessage.join(' ')
-                    : errorMessage;
-
+                const errorMessage = data.message || data.error || 'No se pudo realizar el cambio.';
                 throw new Error(
-                    message || 'No se ha podido enviar la propuesta.'
+                    Array.isArray(errorMessage)
+                        ? errorMessage.join(' ')
+                        : errorMessage
                 );
             }
 
+            let successMessage = data.message;
+
+            if (isForced) {
+                successMessage = 'La reserva se ha modificado correctamente.';
+            }
+
             showMessage(
-                data.message || 'La propuesta de cambio se ha enviado correctamente.',
+                successMessage || 'La operación se ha completado correctamente.',
                 'success'
             );
 
         } catch (error) {
             showMessage(
-                error.message || 'Ha ocurrido un error al enviar la propuesta.'
+                error.message || 'Ha ocurrido un error al procesar el cambio.'
             );
         } finally {
             submitButton.disabled = false;
-            submitButton.innerHTML = originalButtonText;
+            updateChangeMode();
         }
     });
 });

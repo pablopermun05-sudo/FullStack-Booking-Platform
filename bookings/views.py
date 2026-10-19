@@ -666,12 +666,18 @@ def cancel_booking(request, booking_id):
         )
 
     with transaction.atomic():
+        
         booking = get_object_or_404(
             Booking.objects.select_for_update(),
             pk=booking_id,
-            tenant=request.user,
         )
 
+        if booking.tenant_id != request.user.pk:
+            return JsonResponse(
+                {"error": "No tienes permiso para cancelar esta reserva."},
+                status=403,
+            )
+            
         # Solo se pueden cancelar reservas pendientes o confirmadas.
         if booking.status not in ("PENDING", "CONFIRMED"):
             return redirect("my_bookings")
@@ -928,241 +934,6 @@ def booking(request, property_id):
     except ValueError:
         return JsonResponse({"error": "Formato de fecha inválido."}, status=400)
 
-@login_required
-def admin_force_booking_change(request, booking_id):
-    if request.method != "POST":
-        return JsonResponse(
-            {"error": "Method not allowed."},
-            status=405,
-        )
-
-    if not request.user.is_staff:
-        return JsonResponse(
-            {"error": "Only administrators can force booking changes."},
-            status=403,
-        )
-
-    from django.utils.dateparse import parse_date
-
-    initial_date = parse_date(request.POST.get("initial_date", ""))
-    final_date = parse_date(request.POST.get("final_date", ""))
-
-    try:
-        guest_count = int(request.POST.get("guest_count", ""))
-    except (TypeError, ValueError):
-        return JsonResponse(
-            {"error": "Invalid guest count."},
-            status=400,
-        )
-
-    if initial_date is None or final_date is None:
-        return JsonResponse(
-            {"error": "Invalid booking dates."},
-            status=400,
-        )
-
-    try:
-        with transaction.atomic():
-            booking = (
-                Booking.objects.select_for_update()
-                .get(pk=booking_id)
-            )
-
-            property_obj = (
-                Property.objects.select_for_update()
-                .get(pk=booking.property_id)
-            )
-
-            booking.refresh_from_db()
-
-            if booking.status not in Booking.ACTIVE_STATUSES:
-                return JsonResponse(
-                    {"error": "This booking cannot be changed."},
-                    status=409,
-                )
-
-            if booking.is_expired():
-                return JsonResponse(
-                    {"error": "This booking has expired."},
-                    status=409,
-                )
-
-            if initial_date >= final_date:
-                return JsonResponse(
-                    {
-                        "error": (
-                            "The final date must be after "
-                            "the initial date."
-                        )
-                    },
-                    status=400,
-                )
-
-            if guest_count < 1:
-                return JsonResponse(
-                    {"error": "Guest count must be at least 1."},
-                    status=400,
-                )
-
-            capacity = property_obj.adults + property_obj.children
-
-            if guest_count > capacity:
-                return JsonResponse(
-                    {"error": "Guest count exceeds property capacity."},
-                    status=400,
-                )
-
-            availability = list(
-                PropertyAvailability.get_for_range(
-                    property_obj,
-                    initial_date,
-                    final_date,
-                )
-            )
-
-            expected_nights = (final_date - initial_date).days
-
-            if len(availability) != expected_nights:
-                return JsonResponse(
-                    {
-                        "error": (
-                            "Availability is incomplete for "
-                            "the selected dates."
-                        )
-                    },
-                    status=409,
-                )
-
-            if any(
-                item["status"] != "OPEN"
-                for item in availability
-            ):
-                return JsonResponse(
-                    {
-                        "error": (
-                            "The property is unavailable for "
-                            "the selected dates."
-                        )
-                    },
-                    status=409,
-                )
-
-            if expected_nights < availability[0]["min_nights"]:
-                return JsonResponse(
-                    {
-                        "error": (
-                            "The stay does not meet the minimum "
-                            "number of nights."
-                        )
-                    },
-                    status=400,
-                )
-
-            before_values = {
-                "initial_date": booking.initial_date.isoformat(),
-                "final_date": booking.final_date.isoformat(),
-                "guest_count": booking.guest_count,
-                "status": booking.status,
-                "nights": [
-                    {
-                        "date": night.date.isoformat(),
-                        "price_per_night": str(night.price_per_night),
-                    }
-                    for night in booking.nights.order_by("date")
-                ],
-            }
-
-            booking.initial_date = initial_date
-            booking.final_date = final_date
-            booking.guest_count = guest_count
-            booking.save(
-                update_fields=[
-                    "initial_date",
-                    "final_date",
-                    "guest_count",
-                ]
-            )
-
-            booking.nights.all().delete()
-
-            BookingNight.objects.bulk_create(
-                [
-                    BookingNight(
-                        booking=booking,
-                        date=item["date"],
-                        price_per_night=item["price_per_night"],
-                    )
-                    for item in availability
-                ]
-            )
-
-            after_values = {
-                "initial_date": booking.initial_date.isoformat(),
-                "final_date": booking.final_date.isoformat(),
-                "guest_count": booking.guest_count,
-                "status": booking.status,
-                "nights": [
-                    {
-                        "date": item["date"].isoformat(),
-                        "price_per_night": str(item["price_per_night"]),
-                    }
-                    for item in availability
-                ],
-            }
-
-            BookingChangeAudit.objects.create(
-                booking=booking,
-                actor=request.user,
-                before_values=before_values,
-                after_values=after_values,
-            )
-
-            pending_proposals = (
-                BookingChangeProposal.objects.select_for_update()
-                .filter(
-                    booking=booking,
-                    status="PENDING",
-                )
-            )
-            pending_proposals.update(status="EXPIRED")
-
-        return JsonResponse(
-            {
-                "success": True,
-                "booking_id": booking.pk,
-                "initial_date": booking.initial_date.isoformat(),
-                "final_date": booking.final_date.isoformat(),
-                "guest_count": booking.guest_count,
-            },
-            status=200,
-        )
-
-    except Booking.DoesNotExist:
-        return JsonResponse(
-            {"error": "Booking not found."},
-            status=404,
-        )
-    except Property.DoesNotExist:
-        return JsonResponse(
-            {"error": "Property not found."},
-            status=404,
-        )
-    except ValidationError as exc:
-        return JsonResponse(
-            {"error": exc.messages},
-            status=400,
-        )
-    except IntegrityError:
-        return JsonResponse(
-            {
-                "error": (
-                    "The requested change conflicts with "
-                    "existing bookings."
-                )
-            },
-            status=409,
-        )
-
 def view_booking_change_proposal_by_token(request, token):
     if request.method != "GET":
         return JsonResponse(
@@ -1180,13 +951,10 @@ def view_booking_change_proposal_by_token(request, token):
     )
 
     if proposal_reference is None:
-        return render(
-            request,
-            "bookings/booking_change_proposal_detail.html",
-            {"invalid_link": True},
+        return JsonResponse(
+            {"error": "El enlace de la propuesta no es válido."},
             status=404,
         )
-
     
     with transaction.atomic():
         # Bloquear primero la reserva y después la propuesta.
@@ -1219,58 +987,37 @@ def view_booking_change_proposal_by_token(request, token):
                         booking, proposal, "expired"
                     )
             )
-
+    
     booking = proposal.booking
 
-    original_booking = proposal.original_booking_snapshot
+    # Una propuesta vencida o ya resuelta no puede consultarse
+    # como una propuesta pendiente.
+    if proposal.status == BookingChangeProposal.Status.PENDING:
+        if proposal.is_expired():
+            proposal.status = BookingChangeProposal.Status.EXPIRED
+            proposal.save(update_fields=["status"])
 
-    if original_booking is None:
-        original_booking = {
-            "initial_date": booking.initial_date,
-            "final_date": booking.final_date,
-            "guest_count": booking.guest_count,
-            "total_price": booking.total_price,
-        }
-    else:
-        original_booking = original_booking.copy()
+    if proposal.status != BookingChangeProposal.Status.PENDING:
+        return JsonResponse(
+            {
+                "error": "La propuesta ha caducado o ya ha sido resuelta.",
+                "status": proposal.status,
+            },
+            status=410,
+        )
 
-        for field in ("initial_date", "final_date"):
-            value = original_booking.get(field)
-
-            if isinstance(value, str) and value:
-                original_booking[field] = date.fromisoformat(value)
-
-    can_respond = (
-        proposal.status == BookingChangeProposal.Status.PENDING
-        and not proposal.is_expired()
-    )
-
-    if proposal.status == BookingChangeProposal.Status.EXPIRED:
-        status_message = "Esta propuesta ha caducado."
-    elif proposal.status == BookingChangeProposal.Status.ACCEPTED:
-        status_message = "Esta propuesta ya ha sido aceptada."
-    elif proposal.status == BookingChangeProposal.Status.REJECTED:
-        status_message = "Esta propuesta ha sido rechazada."
-    elif not can_respond:
-        status_message = "Esta propuesta ya no está disponible."
-    else:
-        status_message = ""
-
-    context = {
-        "proposal": proposal,
-        "original_booking": original_booking,
-        "booking": booking,
-        "property": booking.property,
-        "can_respond": can_respond,
-        "status_message": status_message,
-        "expires_at_local": timezone.localtime(proposal.expires_at),
-        "access_token": token,
-    }
-
-    return render(
-        request,
-        "bookings/booking_change_proposal_detail.html",
-        context,
+    return JsonResponse(
+        {
+            "id": proposal.pk,
+            "status": proposal.status,
+            "proposed_initial_date": (
+                proposal.proposed_initial_date.isoformat()
+            ),
+            "proposed_final_date": (
+                proposal.proposed_final_date.isoformat()
+            ),
+        },
+        status=200,
     )
 
 @login_required
@@ -1406,13 +1153,42 @@ def propose_booking_change(request, booking_id):
             {"error": "No se pueden proponer cambios para esta reserva."},
             status=400,
         )
+        
+    if request.content_type == "application/json":
+        try:
+            data = json.loads(request.body)
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            return JsonResponse(
+                {"error": "El JSON enviado no es válido."},
+                status=400,
+            )
 
-    data = request.POST
+        if not isinstance(data, dict):
+            return JsonResponse(
+                {"error": "El cuerpo JSON debe ser un objeto."},
+                status=400,
+            )
+    else:
+        data = request.POST
+
+    reason = (data.get("reason") or "").strip()
+
+    if not reason:
+        return JsonResponse(
+            {"error": "El motivo de la propuesta es obligatorio."},
+            status=400,
+        )
+
+    if len(reason) > 1000:
+        return JsonResponse(
+            {"error": "El motivo no puede superar los 1000 caracteres."},
+            status=400,
+        )
 
     initial_date_raw = data.get("proposed_initial_date")
     final_date_raw = data.get("proposed_final_date")
     guest_count_raw = data.get("proposed_guest_count")
-
+    
     if (
         not initial_date_raw
         or not final_date_raw
@@ -1523,7 +1299,7 @@ def propose_booking_change(request, booking_id):
                         )
                 )
 
-            # Reutilizar la propuesta pendiente, si existe.
+            # Reutilizar la propuesta pendiente, si existe.    
             proposal = (
                 BookingChangeProposal.objects.select_for_update()
                 .filter(
@@ -1532,6 +1308,14 @@ def propose_booking_change(request, booking_id):
                 )
                 .first()
             )
+
+            if proposal is not None:
+                return JsonResponse(
+                    {
+                        "error": "Ya existe una propuesta pendiente para esta reserva."
+                    },
+                    status=409,
+                )
 
             raw_token, token_hash = generate_proposal_access_token()
 
@@ -1549,6 +1333,8 @@ def propose_booking_change(request, booking_id):
             proposal.proposed_initial_date = proposed_initial_date
             proposal.proposed_final_date = proposed_final_date
             proposal.proposed_guest_count = proposed_guest_count
+            
+            proposal.reason = reason
 
             # Renovar la propuesta y su plazo de expiración de 48 horas.
             proposal.created_at = now
@@ -1573,15 +1359,18 @@ def propose_booking_change(request, booking_id):
             {"error": "Ya existe una propuesta pendiente para esta reserva."},
             status=409,
         )
-
-    # El bloque transaction.atomic() ya ha terminado.
-    # La propuesta está guardada antes de intentar enviar el correo.
-    notification_sent = send_booking_change_proposal_email(
-        request=request,
-        booking=booking,
-        proposal=proposal,
-        raw_token=raw_token,
-    )
+    
+    try:
+        # El bloque transaction.atomic() ya ha terminado.
+        # La propuesta está guardada antes de intentar enviar el correo.
+        notification_sent = send_booking_change_proposal_email(
+            request=request,
+            booking=booking,
+            proposal=proposal,
+            raw_token=raw_token,
+        )
+    except Exception:
+        notification_sent = False
 
     response_data = {
         "id": proposal.pk,
@@ -1608,6 +1397,284 @@ def propose_booking_change(request, booking_id):
     )
 
     return JsonResponse(response_data, status=201)
+
+@login_required
+def force_booking_change(request, booking_id):
+    if request.method != "POST":
+        return JsonResponse(
+            {"success": False, "error": "Método no permitido."},
+            status=405,
+        )
+        
+    if not request.user.is_staff:
+        raise PermissionDenied
+
+    reason = (request.POST.get("force_reason") or "").strip()
+    confirmation = request.POST.get("force_confirmation") == "on"
+    
+    if len(reason) > 1000:
+        return JsonResponse(
+            {
+                "success": False,
+                "error": "El motivo no puede superar los 1000 caracteres.",
+            },
+            status=400,
+        )
+
+    if not reason:
+        return JsonResponse(
+            {"success": False, "error": "El motivo del cambio forzado es obligatorio."},
+            status=400,
+        )
+
+    if not confirmation:
+        return JsonResponse(
+            {"success": False, "error": "Debes confirmar expresamente el cambio."},
+            status=400,
+        )
+
+    try:
+        initial_date = date.fromisoformat(
+            request.POST.get("proposed_initial_date", "")
+        )
+        final_date = date.fromisoformat(
+            request.POST.get("proposed_final_date", "")
+        )
+        guest_count_raw = request.POST.get("proposed_guest_count", "")
+        guest_count = int(guest_count_raw)
+
+        if str(guest_count) != guest_count_raw.strip():
+            raise ValueError
+    except (TypeError, ValueError):
+        return JsonResponse(
+            {"success": False, "error": "Las fechas o el número de huéspedes no son válidos."},
+            status=400,
+        )
+
+    if initial_date >= final_date or guest_count < 1:
+        return JsonResponse(
+            {"success": False, "error": "El intervalo de fechas o los huéspedes no son válidos."},
+            status=400,
+        )
+
+    try:
+        with transaction.atomic():
+            booking = get_object_or_404(
+                Booking.objects.select_for_update().select_related(
+                    "property",
+                    "property__owner",
+                ),
+                pk=booking_id,
+            )
+
+            if booking.status not in Booking.ACTIVE_STATUSES:
+                return JsonResponse(
+                    {"success": False, "error": "La reserva ya no admite cambios."},
+                    status=409,
+                )
+
+            if (
+                booking.status == "PENDING"
+                and booking.expires_at is not None
+                and booking.expires_at <= timezone.now()
+            ):
+                return JsonResponse(
+                    {"success": False, "error": "La reserva pendiente ha caducado."},
+                    status=409,
+                )
+
+            property = Property.objects.select_for_update().get(
+                pk=booking.property_id
+            )
+
+            if guest_count > property.adults + property.children:
+                return JsonResponse(
+                    {"success": False, "error": "La capacidad de la vivienda es insuficiente."},
+                    status=400,
+                )
+
+            availability = PropertyAvailability.get_for_range(
+                property,
+                initial_date,
+                final_date,
+            )
+            
+            expected_dates = [
+                initial_date + timedelta(days=offset)
+                for offset in range((final_date - initial_date).days)
+            ]
+            actual_dates = [item["date"] for item in availability]
+
+            if actual_dates != expected_dates:
+                return JsonResponse(
+                    {
+                        "success": False,
+                        "error": (
+                            "No se ha podido verificar la disponibilidad "
+                            "de todas las noches."
+                        ),
+                    },
+                    status=409,
+                )
+
+            if not availability or any(
+                item["status"] != "OPEN"
+                for item in availability
+            ):
+                return JsonResponse(
+                    {
+                        "success": False,
+                        "error": "Las fechas seleccionadas no están disponibles.",
+                    },
+                    status=409,
+                )
+
+            number_of_nights = (final_date - initial_date).days
+            minimum_nights = availability[0]["min_nights"]
+
+            if number_of_nights < minimum_nights:
+                return JsonResponse(
+                    {
+                        "success": False,
+                        "error": "La estancia es inferior al mínimo requerido.",
+                    },
+                    status=400,
+                )
+
+            if (
+                initial_date == booking.initial_date
+                and final_date == booking.final_date
+                and guest_count == booking.guest_count
+            ):
+                return JsonResponse(
+                    {"success": False, "error": "No has cambiado ninguna condición de la reserva."},
+                    status=400,
+                )
+
+            new_nightly_prices = [
+                {
+                    "date": item["date"].isoformat(),
+                    "price_per_night": (
+                        f'{Decimal(str(item["price_per_night"])):.2f}'
+                    ),
+                }
+                for item in availability
+            ]
+
+            new_total = sum(
+                (
+                    Decimal(item["price_per_night"])
+                    for item in new_nightly_prices
+                ),
+                Decimal("0.00"),
+            )
+
+            old_total = sum(
+                (
+                    night.price_per_night
+                    for night in booking.nights.all()
+                ),
+                Decimal("0.00"),
+            )
+
+            before_values = {
+                "initial_date": booking.initial_date.isoformat(),
+                "final_date": booking.final_date.isoformat(),
+                "guest_count": booking.guest_count,
+                "total_price": str(old_total),
+            }
+
+            booking.initial_date = initial_date
+            booking.final_date = final_date
+            booking.guest_count = guest_count
+
+            booking.save(
+                update_fields=[
+                    "initial_date",
+                    "final_date",
+                    "guest_count",
+                ]
+            )
+
+            booking.nights.all().delete()
+
+            BookingNight.objects.bulk_create([
+                BookingNight(
+                    booking=booking,
+                    date=date.fromisoformat(item["date"]),
+                    price_per_night=Decimal(item["price_per_night"]),
+                )
+                for item in new_nightly_prices
+            ])
+
+            after_values = {
+                "initial_date": initial_date.isoformat(),
+                "final_date": final_date.isoformat(),
+                "guest_count": guest_count,
+                "total_price": str(new_total),
+                "reason": reason,
+                "change_mode": "forced",
+                "nights": new_nightly_prices,
+            }
+
+            BookingChangeAudit.objects.create(
+                booking=booking,
+                actor=request.user,
+                before_values=before_values,
+                after_values=after_values,
+            )
+
+            pending_proposals = list(
+                BookingChangeProposal.objects.select_for_update().filter(
+                    booking=booking,
+                    status=BookingChangeProposal.Status.PENDING,
+                )
+            )
+
+            for proposal in pending_proposals:
+                proposal.status = BookingChangeProposal.Status.REJECTED
+                proposal.save(update_fields=["status"])
+
+                transaction.on_commit(
+                    lambda b=booking, p=proposal:
+                        send_booking_change_proposal_status_email(
+                            b, p, "rejected"
+                        )
+                )
+
+    except ValidationError as exc:
+        return JsonResponse(
+            {
+                "success": False,
+                "error": "La reserva no supera las validaciones.",
+                "details": (
+                    exc.message_dict
+                    if hasattr(exc, "message_dict")
+                    else exc.messages
+                ),
+            },
+            status=400,
+        )
+    except IntegrityError:
+        return JsonResponse(
+            {
+                "success": False,
+                "error": "El cambio entra en conflicto con la disponibilidad.",
+            },
+            status=409,
+        )
+
+    return JsonResponse(
+        {
+            "success": True,
+            "message": "La reserva se ha modificado correctamente.",
+            "booking_id": booking.pk,
+            "old_total_price": str(old_total),
+            "new_total_price": str(new_total),
+            "price_difference": str(new_total - old_total),
+        },
+        status=200,
+    )
 
 def authorize_booking_change_proposal(request, booking, proposal, raw_token=""):
     """
@@ -1652,9 +1719,12 @@ def accept_booking_change_proposal(request, proposal_id):
             status=405,
         )
     
+    accept_header = request.headers.get("Accept", "")
+
     is_html_form = (
-        request.content_type != "application/json"
-        and "application/json" not in request.headers.get("Accept", "")
+        "text/html" in accept_header
+        and "application/json" not in accept_header
+        and request.content_type != "application/json"
     )
     
     raw_token = request.POST.get("token", "")
@@ -1798,6 +1868,27 @@ def accept_booking_change_proposal(request, proposal_id):
                 initial_date,
                 final_date,
             )
+            
+            expected_dates = [
+                initial_date + timedelta(days=offset)
+                for offset in range((final_date - initial_date).days)
+            ]
+            actual_dates = [item["date"] for item in availability]
+
+            if actual_dates != expected_dates:
+                error = (
+                    "No se ha podido verificar la disponibilidad "
+                    "de todas las noches."
+                )
+
+                if is_html_form:
+                    messages.error(request, error)
+                    return redirect_after_booking_change(request, raw_token)
+
+                return JsonResponse(
+                    {"error": error},
+                    status=409,
+                )
 
             if not availability:
                 if is_html_form:
@@ -1911,6 +2002,21 @@ def accept_booking_change_proposal(request, proposal_id):
                     },
                     status=409,
                 )
+                
+            old_total = sum(
+                (
+                    night.price_per_night
+                    for night in booking.nights.all()
+                ),
+                Decimal("0.00"),
+            )
+
+            before_values = {
+                "initial_date": booking.initial_date.isoformat(),
+                "final_date": booking.final_date.isoformat(),
+                "guest_count": booking.guest_count,
+                "total_price": str(old_total),
+            }
 
             # Preparar las noches con los precios aceptados,
             # no recalcular sus importes al guardar la reserva.
@@ -1945,6 +2051,25 @@ def accept_booking_change_proposal(request, proposal_id):
             # Marcar la propuesta como aceptada.
             proposal.status = BookingChangeProposal.Status.ACCEPTED
             proposal.save(update_fields=["status"])
+            
+            after_values = {
+                "initial_date": booking.initial_date.isoformat(),
+                "final_date": booking.final_date.isoformat(),
+                "guest_count": booking.guest_count,
+                "total_price": str(proposed_total_price),
+                "reason": proposal.reason,
+                "change_mode": "proposal",
+                "actor_type": (
+                    "user" if request.user.is_authenticated else "guest"
+                ),
+            }
+
+            BookingChangeAudit.objects.create(
+                booking=booking,
+                actor=request.user if request.user.is_authenticated else None,
+                before_values=before_values,
+                after_values=after_values,
+            )
             
             transaction.on_commit(
                 lambda booking=booking, proposal=proposal:
@@ -2014,9 +2139,11 @@ def reject_booking_change_proposal(request, proposal_id):
             status=405,
         )
 
+    accept_header = request.headers.get("Accept", "")
     is_html_form = (
-        request.content_type != "application/json"
-        and request.headers.get("Accept", "").find("application/json") == -1
+        "text/html" in accept_header
+        and "application/json" not in accept_header
+        and request.content_type != "application/json"
     )
     
     raw_token = request.POST.get("token", "")
@@ -2425,14 +2552,6 @@ def create_booking(request, property_id):
             status=400,
         )
 
-    hold_token = data.get("hold_token")
-
-    if not isinstance(hold_token, str) or not hold_token:
-        return JsonResponse(
-            {"error": "Falta la retención temporal de las fechas."},
-            status=400,
-        )
-
     initial_date_raw = data.get("start")
     final_date_raw = data.get("end")
 
@@ -2455,6 +2574,14 @@ def create_booking(request, property_id):
         Property,
         pk=property_id,
     )
+    
+    hold_token = data.get("hold_token")
+    
+    if not isinstance(hold_token, str) or not hold_token:
+        return JsonResponse(
+            {"error": "Falta la retención temporal de las fechas."},
+            status=400,
+        )
 
     text_fields = (
         "guest_first_name",
