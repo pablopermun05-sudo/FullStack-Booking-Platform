@@ -912,9 +912,17 @@ class BookingAttachment(models.Model):
     def clean(self):
         super().clean()
 
-        if not self.change_proposal_id and not self.change_audit_id:
+        parent_count = sum(
+            (
+                self.change_proposal_id is not None,
+                self.change_audit_id is not None,
+                self.cancellation_request_id is not None,
+            )
+        )
+
+        if parent_count != 1:
             raise ValidationError(
-                "El archivo debe pertenecer a una acción de reserva."
+                "El archivo debe pertenecer exactamente a una acción de reserva."
             )
 
         if self.file and self.file.size > 10 * 1024 * 1024:
