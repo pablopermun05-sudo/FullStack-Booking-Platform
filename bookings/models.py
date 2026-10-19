@@ -953,6 +953,100 @@ class BookingChangeAudit(models.Model):
             f"for booking #{self.booking_id}"
         )
 
+class BookingCancellationRequest(models.Model):
+    class RequestType(models.TextChoices):
+        OWNER_REQUEST = "OWNER_REQUEST", "Owner cancellation request"
+        ADMIN_PROPOSAL = "ADMIN_PROPOSAL", "Admin cancellation proposal"
+        ADMIN_FORCED = "ADMIN_FORCED", "Admin forced cancellation"
+
+    class Status(models.TextChoices):
+        PENDING = "PENDING", "Pending"
+        ACCEPTED = "ACCEPTED", "Accepted"
+        REJECTED = "REJECTED", "Rejected"
+        CANCELLED = "CANCELLED", "Cancelled"
+        EXPIRED = "EXPIRED", "Expired"
+
+    booking = models.ForeignKey(
+        Booking,
+        on_delete=models.PROTECT,
+        related_name="cancellation_requests",
+    )
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="booking_cancellation_requests",
+    )
+    request_type = models.CharField(
+        max_length=20,
+        choices=RequestType.choices,
+    )
+    status = models.CharField(
+        max_length=10,
+        choices=Status.choices,
+        default=Status.PENDING,
+    )
+    reason = models.TextField(max_length=1000)
+    response_reason = models.TextField(
+        max_length=1000,
+        blank=True,
+        default="",
+    )
+    created_at = models.DateTimeField(
+        default=timezone.now,
+        editable=False,
+    )
+    responded_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+    expires_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["booking"],
+                condition=models.Q(status="PENDING"),
+                name="one_pending_cancellation_request_per_booking",
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(reason=""),
+                name="cancellation_request_reason_not_empty",
+            ),
+        ]
+
+    def clean(self):
+        super().clean()
+        errors = {}
+
+        if not self.reason or not self.reason.strip():
+            errors["reason"] = "A cancellation reason is required."
+
+        if (
+            self.created_at
+            and self.expires_at
+            and self.expires_at <= self.created_at
+        ):
+            errors["expires_at"] = (
+                "The expiration time must be after the creation time."
+            )
+
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return (
+            f"Cancellation request for booking #{self.booking_id} "
+            f"({self.status})"
+        )
+
 class BookingNight(models.Model):
     booking = models.ForeignKey(
         Booking,
