@@ -847,9 +847,13 @@ class BookingAttachment(models.Model):
         blank=True,
         related_name="attachments",
     )
-    # Se añadirá la relación cancellation_request cuando creemos
-    # el modelo específico de cancelaciones.
-
+    cancellation_request = models.ForeignKey(
+        "BookingCancellationRequest",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="attachments",
+    )
     uploaded_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
@@ -888,10 +892,17 @@ class BookingAttachment(models.Model):
                     (
                         Q(change_proposal__isnull=False)
                         & Q(change_audit__isnull=True)
+                        & Q(cancellation_request__isnull=True)
                     )
                     | (
                         Q(change_proposal__isnull=True)
                         & Q(change_audit__isnull=False)
+                        & Q(cancellation_request__isnull=True)
+                    )
+                    | (
+                        Q(change_proposal__isnull=True)
+                        & Q(change_audit__isnull=True)
+                        & Q(cancellation_request__isnull=False)
                     )
                 ),
                 name="booking_attachment_exactly_one_parent",
