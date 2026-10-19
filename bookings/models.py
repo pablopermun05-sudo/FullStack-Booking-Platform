@@ -13,6 +13,14 @@ from django.contrib.postgres.fields import DateRangeField, DateTimeRangeField, R
 import random
 import time
 import uuid
+from django.core.validators import FileExtensionValidator
+from .storage import private_attachment_storage
+from .validators import validate_booking_attachment
+import os
+
+def booking_attachment_upload_to(instance, filename):
+    extension = os.path.splitext(filename)[1].lower()
+    return f"booking_attachments/{uuid.uuid4().hex}{extension}"
 
 class User(AbstractUser):
     first_name = models.CharField("Nombre", max_length=150, blank=False)
@@ -823,6 +831,101 @@ class BookingChangeProposal(models.Model):
 
     def __str__(self):
         return f"Change proposal for booking {self.booking_id} ({self.status})"
+
+class BookingAttachment(models.Model):
+    change_proposal = models.ForeignKey(
+        "BookingChangeProposal",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="attachments",
+    )
+    change_audit = models.ForeignKey(
+        "BookingChangeAudit",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="attachments",
+    )
+    # Se añadirá la relación cancellation_request cuando creemos
+    # el modelo específico de cancelaciones.
+
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="booking_attachments",
+    )
+    file = models.FileField(
+        storage=private_attachment_storage,
+        upload_to=booking_attachment_upload_to,
+        validators=[
+            FileExtensionValidator(
+                allowed_extensions=[
+                    "pdf",
+                    "jpg",
+                    "jpeg",
+                    "png",
+                    "webp",
+                    "docx",
+                    "xlsx",
+                    "pptx",
+                    "txt",
+                    "csv",
+                ]
+            ),
+            validate_booking_attachment,
+        ],
+    )
+    original_filename = models.CharField(max_length=255)
+    size = models.PositiveBigIntegerField()
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["uploaded_at"]
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    (
+                        Q(change_proposal__isnull=False)
+                        & Q(change_audit__isnull=True)
+                    )
+                    | (
+                        Q(change_proposal__isnull=True)
+                        & Q(change_audit__isnull=False)
+                    )
+                ),
+                name="booking_attachment_exactly_one_parent",
+            ),
+        ]
+
+    def clean(self):
+        super().clean()
+
+        if not self.change_proposal_id and not self.change_audit_id:
+            raise ValidationError(
+                "El archivo debe pertenecer a una acción de reserva."
+            )
+
+        if self.file and self.file.size > 10 * 1024 * 1024:
+            raise ValidationError(
+                "Cada archivo puede ocupar como máximo 10 MB."
+            )
+
+        if self.file and not self.original_filename:
+            self.original_filename = os.path.basename(self.file.name)[:255]
+
+    def save(self, *args, **kwargs):
+        if self.file:
+            self.size = self.file.size
+
+        if self.file and not self.original_filename:
+            self.original_filename = os.path.basename(self.file.name)[:255]
+
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.original_filename
 
 class BookingChangeAudit(models.Model):
     booking = models.ForeignKey(
