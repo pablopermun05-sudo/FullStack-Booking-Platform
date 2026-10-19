@@ -20,9 +20,9 @@ ALLOWED_EXTENSIONS = {
 }
 
 OFFICE_CONTENT_TYPES = {
-    ".docx": "word/",
-    ".xlsx": "xl/",
-    ".pptx": "ppt/",
+    ".docx": ("word/", "wordprocessingml"),
+    ".xlsx": ("xl/", "spreadsheetml"),
+    ".pptx": ("ppt/", "presentationml"),
 }
 
 
@@ -66,26 +66,32 @@ def validate_booking_attachment(uploaded_file):
             raise ValidationError("El contenido no parece ser una imagen WebP válida.")
 
     if extension in OFFICE_CONTENT_TYPES:
+        required_prefix, required_content_type = OFFICE_CONTENT_TYPES[extension]
+
         try:
             with zipfile.ZipFile(uploaded_file) as archive:
                 names = set(archive.namelist())
+
+                if "[Content_Types].xml" not in names:
+                    raise ValidationError(
+                        "El documento de Office no tiene una estructura válida."
+                    )
+
                 content_types = archive.read(
                     "[Content_Types].xml"
                 ).decode("utf-8", errors="strict")
 
-                required_prefix = OFFICE_CONTENT_TYPES[extension]
-
                 if (
-                    "[Content_Types].xml" not in names
-                    or not any(
+                    not any(
                         name.startswith(required_prefix)
                         for name in names
                     )
-                    or required_prefix not in content_types
+                    or required_content_type not in content_types
                 ):
                     raise ValidationError(
                         "La estructura del documento de Office no es válida."
                     )
+
         except (zipfile.BadZipFile, KeyError, UnicodeDecodeError):
             raise ValidationError(
                 "El documento de Office está dañado o no es válido."
