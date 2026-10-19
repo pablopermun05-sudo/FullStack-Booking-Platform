@@ -125,6 +125,7 @@ STATIC_URL = '/static/'
 # Configuración para archivos subidos por usuarios (Fotos de casas)
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
+PRIVATE_MEDIA_ROOT = BASE_DIR / "private_media"
 
 AUTH_USER_MODEL = 'bookings.User'
 
