@@ -29,6 +29,7 @@ import os
 from .emails import (
     send_booking_change_proposal_email,
     send_booking_change_proposal_status_email,
+    send_forced_booking_change_email,
 )
 
 
@@ -1927,6 +1928,15 @@ def force_booking_change(request, booking_id):
                             b, p, "rejected"
                         )
                 )
+                
+            transaction.on_commit(
+                lambda b=booking,
+                       before=before_values.copy(),
+                       after=after_values.copy():
+                    send_forced_booking_change_email(
+                        b, before, after
+                    )
+            )
 
     except ValidationError as exc:
         cleanup_booking_attachment_files(attachments_to_save)
