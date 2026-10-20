@@ -11,7 +11,7 @@ from django import forms
 from django.forms import ModelForm
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.forms import AuthenticationForm
-from django.http import JsonResponse
+from django.http import JsonResponse, FileResponse, Http404
 from datetime import date, time, timedelta
 from django.utils import timezone
 from decimal import Decimal, InvalidOperation
@@ -25,6 +25,7 @@ from .services import generate_proposal_access_token, hash_proposal_access_token
 import logging
 from django.contrib import messages
 import secrets
+import os
 from .emails import (
     send_booking_change_proposal_email,
     send_booking_change_proposal_status_email,
@@ -1142,6 +1143,85 @@ def cleanup_booking_attachment_files(attachments):
                 "No se pudo limpiar el archivo adjunto %s",
                 name,
             )
+            
+@login_required
+def download_booking_attachment(request, attachment_id):
+    """
+    Descarga un adjunto privado si el usuario está autorizado
+    para acceder a la reserva asociada.
+    """
+    attachment = get_object_or_404(
+        BookingAttachment.objects.select_related(
+            "change_proposal__booking__property__owner",
+            "change_audit__booking__property__owner",
+            "cancellation_request__booking__property__owner",
+        ),
+        pk=attachment_id,
+    )
+
+    # Resolver la reserva según el tipo de acción al que pertenece.
+    if attachment.change_proposal_id is not None:
+        proposal = attachment.change_proposal
+        booking = proposal.booking
+
+    elif attachment.change_audit_id is not None:
+        audit = attachment.change_audit
+        booking = audit.booking
+        proposal = None
+
+    elif attachment.cancellation_request_id is not None:
+        cancellation_request = attachment.cancellation_request
+        booking = cancellation_request.booking
+        proposal = None
+
+    else:
+        # Protección adicional ante datos inconsistentes.
+        raise Http404
+
+    user = request.user
+
+    # Solo las partes de la reserva y el personal autorizado pueden
+    # descargar archivos de las acciones de la reserva.
+    is_staff = user.is_staff
+    is_tenant = booking.tenant_id == user.pk
+    is_owner = booking.property.owner_id == user.pk
+
+    authorized = is_staff or is_tenant or is_owner
+
+    # El token solo concede acceso a los archivos de su propuesta.
+    # No concede acceso a auditorías ni a solicitudes de cancelación.
+    if not authorized and proposal is not None:
+        raw_token = request.GET.get("token", "")
+        stored_hash = proposal.access_token_hash or ""
+
+        if raw_token and stored_hash:
+            provided_hash = hash_proposal_access_token(raw_token)
+
+            authorized = secrets.compare_digest(
+                stored_hash,
+                provided_hash,
+            )
+
+    if not authorized:
+        raise Http404
+
+    if not attachment.file:
+        raise Http404
+
+    try:
+        file_handle = attachment.file.open("rb")
+    except (FileNotFoundError, OSError, ValueError):
+        raise Http404
+
+    response = FileResponse(
+        file_handle,
+        as_attachment=True,
+        filename=attachment.original_filename or "adjunto",
+    )
+    response["X-Content-Type-Options"] = "nosniff"
+    response["Cache-Control"] = "private, no-store"
+
+    return response
 
 @login_required
 def propose_booking_change(request, booking_id):

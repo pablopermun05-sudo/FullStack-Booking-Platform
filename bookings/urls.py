@@ -32,4 +32,5 @@ urlpatterns = [
     path("property/<int:property_id>/bookings", views.property_bookings, name="property_bookings"),
     path("booking/<int:booking_id>/change", views.booking_change_form, name="booking_change_form"),
     path("booking/<int:booking_id>/force-change", views.force_booking_change, name="force_booking_change"),
+    path("booking-attachment/<int:attachment_id>/download/", views.download_booking_attachment, name="download_booking_attachment"),
 ]
