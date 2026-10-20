@@ -26,6 +26,7 @@ import logging
 from django.contrib import messages
 import secrets
 import os
+from django.core import signing
 from .emails import (
     send_booking_change_proposal_email,
     send_booking_change_proposal_status_email,
@@ -1353,6 +1354,36 @@ def download_booking_proposal_attachment(request, attachment_id):
 
     return response
 
+def download_forced_booking_attachment(request, attachment_id, token):
+    try:
+        data = signing.loads(
+            token,
+            salt="forced-booking-attachment",
+            max_age=7 * 24 * 60 * 60,
+        )
+    except signing.BadSignature:
+        raise Http404
+
+    if data.get("attachment_id") != attachment_id:
+        raise Http404
+
+    try:
+        attachment = BookingAttachment.objects.get(
+            pk=attachment_id,
+            change_audit_id=data.get("audit_id"),
+        )
+    except BookingAttachment.DoesNotExist:
+        raise Http404
+
+    return FileResponse(
+        attachment.file.open("rb"),
+        as_attachment=True,
+        filename=(
+            attachment.original_filename
+            or attachment.file.name.split("/")[-1]
+        ),
+    )
+
 @login_required
 def propose_booking_change(request, booking_id):
     if request.method != "POST":
@@ -1931,10 +1962,16 @@ def force_booking_change(request, booking_id):
                 
             transaction.on_commit(
                 lambda b=booking,
-                       before=before_values.copy(),
-                       after=after_values.copy():
+                    before=before_values.copy(),
+                    after=after_values.copy(),
+                    a=audit,
+                    req=request:
                     send_forced_booking_change_email(
-                        b, before, after
+                        b,
+                        before,
+                        after,
+                        audit=a,
+                        request=req,
                     )
             )
 

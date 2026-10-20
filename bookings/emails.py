@@ -7,40 +7,72 @@ from django.db import transaction
 from django.template.defaultfilters import escape
 from django.urls import reverse
 from django.utils import timezone
+from .models import BookingAttachment
+from urllib.parse import urlencode
+from django.core import signing
+from datetime import date
+from decimal import Decimal
 
 logger = logging.getLogger(__name__)
 
 def send_booking_change_proposal_email(request, booking, proposal, raw_token):
     """
     Envía al huésped una propuesta de cambio con formato HTML y texto.
-    Devuelve True si Django confirma el envío y False si falla.
+    Incluye el motivo y los adjuntos, si existen.
+    Devuelve True si el envío se confirma y False si falla.
     """
-    proposal_url = request.build_absolute_uri(
-      reverse(
-          "booking_change_proposal_detail",
-          kwargs={"token": raw_token},
-      )
-  )
+    try:
+        recipient_email = (booking.guest_email or "").strip()
 
-    property_title = booking.property.title
+        if not recipient_email:
+            logger.error(
+                "La reserva %s no tiene un email de huésped.",
+                booking.pk,
+            )
+            return False
 
-    # Teléfono del usuario propietario de la vivienda.
-    owner_phone = booking.property.owner.phone_number
-    safe_owner_phone = (
-        escape(str(owner_phone))
-        if owner_phone
-        else None
-    )
+        proposal_url = request.build_absolute_uri(
+            reverse(
+                "booking_change_proposal_detail",
+                kwargs={"token": raw_token},
+            )
+        )
 
-    guest_name = booking.guest_first_name or "huésped"
-    original_total = booking.total_price
-    proposed_total = proposal.proposed_total_price
-    expiry = timezone.localtime(proposal.expires_at)
+        reason = (proposal.reason or "").strip()
+        property_title = booking.property.title
+        guest_name = booking.guest_first_name or "huésped"
+        owner_phone = booking.property.owner.phone_number
 
-    subject = f"Propuesta de cambio de reserva | {property_title}"
+        original_total = booking.total_price
+        proposed_total = proposal.proposed_total_price
+        expiry = timezone.localtime(proposal.expires_at)
 
-    # Versión de texto plano.
-    text_message = f"""Hola {guest_name},
+        # Obtener los archivos adjuntos de esta propuesta.
+        proposal_attachments = BookingAttachment.objects.filter(
+            change_proposal=proposal
+        )
+
+        attachment_items = []
+
+        for attachment in proposal_attachments:
+            download_path = reverse(
+                "download_booking_proposal_attachment",
+                kwargs={"attachment_id": attachment.pk},
+            )
+            download_path += "?" + urlencode({"token": raw_token})
+
+            attachment_items.append({
+                "name": (
+                    attachment.original_filename
+                    or attachment.file.name.split("/")[-1]
+                ),
+                "url": request.build_absolute_uri(download_path),
+            })
+
+        subject = f"Propuesta de cambio de reserva | {property_title}"
+
+        # Texto plano.
+        text_message = f"""Hola {guest_name},
 
 El alojamiento {property_title} te ha enviado una propuesta para modificar tu reserva.
 
@@ -56,22 +88,143 @@ Salida: {proposal.proposed_final_date:%d/%m/%Y}
 Huéspedes: {proposal.proposed_guest_count}
 Importe total propuesto: {proposed_total:.2f} €
 
+MOTIVO DEL CAMBIO
+{reason or 'No se ha indicado un motivo.'}
+
 La propuesta caduca el {expiry:%d/%m/%Y a las %H:%M}.
 
-Revisa la propuesta y responde aquí:
+Revisa la propuesta aquí:
 {proposal_url}
-
-Si tienes dudas, contacta con el alojamiento{f' en el teléfono {owner_phone}' if owner_phone else ''}.
-
-Notificación automática de {property_title}.
 """
 
-    # Escapar los datos dinámicos para el HTML.
-    safe_guest = escape(guest_name)
-    safe_property = escape(property_title)
-    safe_url = escape(proposal_url)
+        if attachment_items:
+            text_message += "\nARCHIVOS ADJUNTOS\n"
+            for item in attachment_items:
+                text_message += f"- {item['name']}\n  {item['url']}\n"
 
-    html_message = f"""
+        if owner_phone:
+            text_message += (
+                f"\nSi tienes dudas, contacta con el alojamiento "
+                f"en el teléfono {owner_phone}.\n"
+            )
+
+        text_message += (
+            f"\nNotificación automática de {property_title}.\n"
+        )
+
+        # Escapar los valores dinámicos que se insertan en el HTML.
+        safe_guest = escape(str(guest_name))
+        safe_property = escape(str(property_title))
+        safe_url = escape(proposal_url)
+        safe_reason = escape(reason or "No se ha indicado un motivo.")
+        safe_owner_phone = escape(str(owner_phone)) if owner_phone else ""
+
+        reason_html = f"""
+        <tr>
+          <td style="padding:12px 32px 22px;">
+            <h2 style="margin:0 0 12px;color:#263a33;font-size:18px;">
+              Motivo del cambio
+            </h2>
+            <table role="presentation" width="100%" cellspacing="0"
+                   cellpadding="0"
+                   style="background:#f7f9f8;border-left:4px solid #527d69;">
+              <tr>
+                <td style="padding:16px;color:#52615d;font-size:14px;
+                           line-height:1.8;white-space:pre-line;">
+                  {safe_reason}
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        """
+
+        attachments_html = ""
+
+        if attachment_items:
+            attachment_cards = ""
+
+            for item in attachment_items:
+                filename = escape(item["name"])
+                file_url = escape(item["url"])
+
+                attachment_cards += f"""
+                <tr>
+                  <td style="padding:0 0 10px;">
+                    <table role="presentation" width="100%" cellspacing="0"
+                          cellpadding="0" border="0"
+                          style="border:1px solid #e1e8e4;border-radius:9px;
+                                  background:#ffffff;">
+                      <tr>
+                        <td width="54" valign="middle"
+                            style="padding:14px 0 14px 14px;">
+                          <table role="presentation" width="42" height="46"
+                                cellspacing="0" cellpadding="0" border="0"
+                                style="background:#edf6f1;border-radius:6px;">
+                            <tr>
+                              <td style="background-color:#e8f5e9;
+                                        color:#2e7d32;
+                                        width:48px;
+                                        height:48px;
+                                        text-align:center;
+                                        vertical-align:middle;
+                                        border-radius:8px;
+                                        font-size:26px;">
+                                  📄
+                              </td>
+                            </tr>
+                          </table>
+                        </td>
+                        <td valign="middle"
+                            style="padding:12px 10px 12px 12px;
+                                  font-family:Arial,Helvetica,sans-serif;">
+                          <p style="margin:0;color:#263a33;font-size:13px;
+                                    font-weight:bold;line-height:1.5;
+                                    word-break:break-word;">
+                            {filename}
+                          </p>
+                          <p style="margin:4px 0 0;color:#7b8781;font-size:11px;">
+                            Archivo adjunto a la propuesta
+                          </p>
+                        </td>
+                        <td align="right" valign="middle"
+                            style="padding:12px 14px 12px 4px;">
+                          <a href="{file_url}"
+                            style="display:inline-block;background:#173f35;
+                                    color:#ffffff;text-decoration:none;
+                                    padding:10px 12px;border-radius:5px;
+                                    font-size:12px;font-weight:bold;
+                                    white-space:nowrap;">
+                            Descargar
+                          </a>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                """
+
+            attachments_html = f"""
+            <tr>
+              <td style="padding:0 32px 24px;">
+                <h2 style="margin:0 0 6px;color:#263a33;font-size:18px;">
+                  Documentación adjunta
+                </h2>
+                <p style="margin:0 0 14px;color:#718078;font-size:13px;
+                          line-height:1.6;">
+                  Consulta o descarga los archivos incluidos en esta propuesta.
+                </p>
+                <table role="presentation" width="100%" cellspacing="0"
+                      cellpadding="0" border="0">
+                  {attachment_cards}
+                </table>
+              </td>
+            </tr>
+          """
+
+        safe_expiry = expiry.strftime("%d/%m/%Y a las %H:%M")
+
+        html_message = f"""
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -79,14 +232,10 @@ Notificación automática de {property_title}.
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Propuesta de cambio de reserva</title>
 </head>
-<body style="margin:0;padding:0;background-color:#f3f5f7;
+<body style="margin:0;padding:0;background:#f3f5f7;
              font-family:Arial,Helvetica,sans-serif;color:#263238;">
-  <div style="display:none;max-height:0;overflow:hidden;">
-    Tienes una propuesta de cambio pendiente para tu reserva en {safe_property}.
-  </div>
-
   <table role="presentation" width="100%" cellspacing="0" cellpadding="0"
-         style="background-color:#f3f5f7;padding:32px 12px;">
+         style="background:#f3f5f7;padding:32px 12px;">
     <tr>
       <td align="center">
         <table role="presentation" width="600" cellspacing="0" cellpadding="0"
@@ -105,62 +254,54 @@ Notificación automática de {property_title}.
           </tr>
 
           <tr>
-            <td style="padding:30px 32px 12px;">
+            <td style="padding:30px 32px 18px;">
               <p style="margin:0 0 12px;font-size:16px;">
                 Hola {safe_guest},
               </p>
               <p style="margin:0;color:#52615d;font-size:15px;line-height:1.7;">
                 <strong>{safe_property}</strong> te ha enviado una propuesta
                 para modificar las condiciones de tu reserva.
-                Revisa los detalles antes de responder.
               </p>
             </td>
           </tr>
 
           <tr>
-            <td style="padding:18px 32px 8px;">
+            <td style="padding:0 32px 20px;">
               <table role="presentation" width="100%" cellspacing="0"
                      cellpadding="0"
                      style="border:1px solid #e3e9e6;border-radius:8px;">
                 <tr>
-                  <td colspan="2"
-                      style="padding:16px 18px;background:#f7f9f8;
-                             font-size:14px;font-weight:bold;">
+                  <td colspan="2" style="padding:16px;background:#f7f9f8;
+                                         font-weight:bold;">
                     Reserva actual
                   </td>
                 </tr>
                 <tr>
-                  <td style="padding:12px 18px;color:#66736f;font-size:14px;">
-                    Entrada
-                  </td>
-                  <td align="right" style="padding:12px 18px;font-size:14px;">
+                  <td style="padding:10px 16px;color:#66736f;">Entrada</td>
+                  <td align="right" style="padding:10px 16px;">
                     {booking.initial_date:%d/%m/%Y}
                   </td>
                 </tr>
                 <tr>
-                  <td style="padding:12px 18px;color:#66736f;font-size:14px;">
-                    Salida
-                  </td>
-                  <td align="right" style="padding:12px 18px;font-size:14px;">
+                  <td style="padding:10px 16px;color:#66736f;">Salida</td>
+                  <td align="right" style="padding:10px 16px;">
                     {booking.final_date:%d/%m/%Y}
                   </td>
                 </tr>
                 <tr>
-                  <td style="padding:12px 18px;color:#66736f;font-size:14px;">
-                    Huéspedes
-                  </td>
-                  <td align="right" style="padding:12px 18px;font-size:14px;">
+                  <td style="padding:10px 16px;color:#66736f;">Huéspedes</td>
+                  <td align="right" style="padding:10px 16px;">
                     {booking.guest_count}
                   </td>
                 </tr>
                 <tr>
-                  <td style="padding:14px 18px;border-top:1px solid #e3e9e6;
-                             font-weight:bold;font-size:14px;">
+                  <td style="padding:14px 16px;border-top:1px solid #e3e9e6;
+                             font-weight:bold;">
                     Precio total actual
                   </td>
-                  <td align="right"
-                      style="padding:14px 18px;border-top:1px solid #e3e9e6;
-                             font-weight:bold;font-size:15px;">
+                  <td align="right" style="padding:14px 16px;
+                                           border-top:1px solid #e3e9e6;
+                                           font-weight:bold;">
                     {original_total:.2f} €
                   </td>
                 </tr>
@@ -169,49 +310,42 @@ Notificación automática de {property_title}.
           </tr>
 
           <tr>
-            <td style="padding:12px 32px 18px;">
+            <td style="padding:0 32px 22px;">
               <table role="presentation" width="100%" cellspacing="0"
                      cellpadding="0"
                      style="border:1px solid #cfe3d8;border-radius:8px;">
                 <tr>
-                  <td colspan="2"
-                      style="padding:16px 18px;background:#edf6f1;
-                             color:#173f35;font-size:14px;font-weight:bold;">
+                  <td colspan="2" style="padding:16px;background:#edf6f1;
+                                         color:#173f35;font-weight:bold;">
                     Nueva propuesta
                   </td>
                 </tr>
                 <tr>
-                  <td style="padding:12px 18px;color:#52615d;font-size:14px;">
-                    Entrada
-                  </td>
-                  <td align="right" style="padding:12px 18px;font-size:14px;">
+                  <td style="padding:10px 16px;color:#52615d;">Entrada</td>
+                  <td align="right" style="padding:10px 16px;">
                     {proposal.proposed_initial_date:%d/%m/%Y}
                   </td>
                 </tr>
                 <tr>
-                  <td style="padding:12px 18px;color:#52615d;font-size:14px;">
-                    Salida
-                  </td>
-                  <td align="right" style="padding:12px 18px;font-size:14px;">
+                  <td style="padding:10px 16px;color:#52615d;">Salida</td>
+                  <td align="right" style="padding:10px 16px;">
                     {proposal.proposed_final_date:%d/%m/%Y}
                   </td>
                 </tr>
                 <tr>
-                  <td style="padding:12px 18px;color:#52615d;font-size:14px;">
-                    Huéspedes
-                  </td>
-                  <td align="right" style="padding:12px 18px;font-size:14px;">
+                  <td style="padding:10px 16px;color:#52615d;">Huéspedes</td>
+                  <td align="right" style="padding:10px 16px;">
                     {proposal.proposed_guest_count}
                   </td>
                 </tr>
                 <tr>
-                  <td style="padding:14px 18px;border-top:1px solid #cfe3d8;
-                             font-weight:bold;font-size:14px;">
+                  <td style="padding:14px 16px;border-top:1px solid #cfe3d8;
+                             font-weight:bold;color:#173f35;">
                     Precio total propuesto
                   </td>
-                  <td align="right"
-                      style="padding:14px 18px;border-top:1px solid #cfe3d8;
-                             color:#173f35;font-weight:bold;font-size:20px;">
+                  <td align="right" style="padding:14px 16px;
+                                           border-top:1px solid #cfe3d8;
+                                           font-weight:bold;color:#173f35;">
                     {proposed_total:.2f} €
                   </td>
                 </tr>
@@ -219,20 +353,17 @@ Notificación automática de {property_title}.
             </td>
           </tr>
 
+          {reason_html}
+
+          {attachments_html}
+
           <tr>
             <td style="padding:0 32px 24px;">
-              <table role="presentation" width="100%" cellspacing="0"
-                     cellpadding="0"
-                     style="background:#fff8e8;border-radius:8px;">
-                <tr>
-                  <td style="padding:15px 17px;color:#775b20;font-size:13px;
-                             line-height:1.6;">
-                    <strong>Plazo para responder</strong><br>
-                    Esta propuesta caduca el
-                    <strong>{expiry:%d/%m/%Y a las %H:%M}</strong>.
-                  </td>
-                </tr>
-              </table>
+              <div style="background:#fff8e8;border-radius:8px;padding:15px 17px;
+                          color:#775b20;font-size:13px;line-height:1.6;">
+                <strong>Plazo para responder</strong><br>
+                Esta propuesta caduca el <strong>{safe_expiry}</strong>.
+              </div>
             </td>
           </tr>
 
@@ -251,9 +382,8 @@ Notificación automática de {property_title}.
             <td style="padding:22px 32px;background:#f7f9f8;
                        border-top:1px solid #e8eeeb;">
               <p style="margin:0;color:#65716c;font-size:12px;line-height:1.7;">
-                Este mensaje es una notificación automática relacionada con
-                tu reserva en {safe_property}. Si tienes dudas, contacta con
-                el alojamiento
+                Notificación automática de {safe_property}.
+                Si tienes dudas, contacta con el alojamiento
                 {f'en el teléfono {safe_owner_phone}' if safe_owner_phone else ''}.
               </p>
             </td>
@@ -266,24 +396,6 @@ Notificación automática de {property_title}.
 </html>
 """
 
-    try:
-        
-        recipient_email = (booking.guest_email or "").strip()
-
-        if not recipient_email:
-            logger.error(
-                "La reserva %s no tiene un email de huésped.",
-                booking.pk,
-            )
-            return False
-
-        if not recipient_email:
-            logger.error(
-                "La reserva %s no tiene un email de destinatario.",
-                booking.pk,
-            )
-            return False
-
         email = EmailMultiAlternatives(
             subject=subject,
             body=text_message,
@@ -292,9 +404,7 @@ Notificación automática de {property_title}.
         )
         email.attach_alternative(html_message, "text/html")
 
-        sent_count = email.send(fail_silently=False)
-
-        if sent_count != 1:
+        if email.send(fail_silently=False) != 1:
             logger.error(
                 "No se confirmó el envío de la propuesta %s a %s.",
                 proposal.pk,
@@ -647,347 +757,390 @@ Este es un aviso automático relacionado con la gestión de tu alojamiento.
         )
         return False
 
-def send_forced_booking_change_email(booking, before_values, after_values):
-    """
-    Notifica al huésped que un administrador ha modificado su reserva.
-    Devuelve True si el envío se confirma y False si falla.
-    """
-    from datetime import date
-    from decimal import Decimal
+def send_forced_booking_change_email(booking, before_values, after_values, audit=None, request=None):
+    """Notifica al huésped un cambio forzado de reserva."""
 
     recipient_email = (booking.guest_email or "").strip()
 
     if not recipient_email:
-        logger.warning(
-            "No se envió el aviso de cambio forzado: "
-            "la reserva %s no tiene email de huésped.",
+        logger.error(
+            "La reserva %s no tiene un email de huésped.",
             booking.pk,
         )
         return False
 
     property_title = booking.property.title
     guest_name = booking.guest_first_name or "huésped"
-    reason = after_values.get("reason", "")
+    reason = (after_values.get("reason") or "").strip()
+    owner_phone = getattr(booking.property.owner, "phone_number", None)
 
     def format_date(value):
-        if not value:
-            return "No disponible"
+        if not value or value == "—":
+            return "—"
         try:
-            if isinstance(value, str):
-                value = date.fromisoformat(value)
-            return value.strftime("%d/%m/%Y")
-        except (ValueError, TypeError):
+            return date.fromisoformat(str(value)).strftime("%d/%m/%Y")
+        except (TypeError, ValueError):
             return str(value)
 
     def format_price(value):
         try:
-            amount = Decimal(str(value))
-            formatted = f"{amount:,.2f}"
-            formatted = (
-                formatted.replace(",", "_")
-                .replace(".", ",")
-                .replace("_", ".")
+            if value is None or value == "—":
+                return "—"
+            return f"{Decimal(str(value)):.2f} €"
+        except (TypeError, ValueError, ArithmeticError):
+            return str(value)
+
+    def get_value(values, key):
+        value = values.get(key, "—")
+        return "—" if value is None or value == "" else value
+
+    # Obtener los archivos adjuntos de este cambio forzado.
+    forced_attachments = (
+        BookingAttachment.objects.filter(change_audit=audit)
+        if audit is not None
+        else BookingAttachment.objects.none()
+    )
+
+    attachment_items = []
+
+    for attachment in forced_attachments:
+        if request is None:
+            logger.warning(
+                "No se puede crear el enlace de descarga del adjunto %s "
+                "porque no se recibió request.",
+                attachment.pk,
             )
-            return f"{formatted} €"
-        except (ValueError, TypeError, ArithmeticError):
-            return "No disponible"
+            continue
 
-    old_initial = format_date(before_values.get("initial_date"))
-    old_final = format_date(before_values.get("final_date"))
-    old_guests = before_values.get("guest_count", "No disponible")
-    old_total = format_price(before_values.get("total_price"))
+        token = signing.dumps(
+            {
+                "attachment_id": attachment.pk,
+                "audit_id": audit.pk,
+            },
+            salt="forced-booking-attachment",
+        )
 
-    new_initial = format_date(after_values.get("initial_date"))
-    new_final = format_date(after_values.get("final_date"))
-    new_guests = after_values.get("guest_count", "No disponible")
-    new_total = format_price(after_values.get("total_price"))
+        download_path = reverse(
+            "download_forced_booking_attachment",
+            kwargs={
+                "attachment_id": attachment.pk,
+                "token": token,
+            },
+        )
 
-    safe_guest = escape(str(guest_name))
-    safe_property = escape(str(property_title))
-    safe_reason = escape(str(reason))
+        attachment_items.append({
+            "name": (
+                attachment.original_filename
+                or attachment.file.name.split("/")[-1]
+            ),
+            "url": request.build_absolute_uri(download_path),
+        })
 
-    subject = f"Cambio en tu reserva | {property_title}"
+    # Datos de la reserva anterior y de la reserva actual.
+    reservation_fields = (
+        ("Entrada", "initial_date", format_date),
+        ("Salida", "final_date", format_date),
+        ("Huéspedes", "guest_count", str),
+        ("Precio total", "total_price", format_price),
+    )
 
+    # Texto plano.
     text_message = f"""Hola {guest_name},
 
-Te informamos de que el administrador ha realizado un cambio en tu reserva de {property_title}.
+El alojamiento {property_title} ha realizado un cambio en las condiciones de tu reserva.
+
+RESERVA: {booking.pk}
 
 RESERVA ANTERIOR
-Entrada: {old_initial}
-Salida: {old_final}
-Huéspedes: {old_guests}
-Importe total: {old_total}
-
-NUEVAS CONDICIONES
-Entrada: {new_initial}
-Salida: {new_final}
-Huéspedes: {new_guests}
-Importe total: {new_total}
-
-Motivo del cambio:
-{reason}
-
-Si tienes dudas, contacta con el alojamiento.
-
-Notificación automática de {property_title}.
 """
 
-    
+    for label, field, formatter in reservation_fields:
+        value = formatter(get_value(before_values, field))
+        text_message += f"{label}: {value}\n"
+
+    text_message += "\nRESERVA ACTUAL\n"
+
+    for label, field, formatter in reservation_fields:
+        value = formatter(get_value(after_values, field))
+        text_message += f"{label}: {value}\n"
+
+    if reason:
+        text_message += f"\nMOTIVO DEL CAMBIO\n{reason}\n"
+
+    if attachment_items:
+        text_message += "\nDOCUMENTACIÓN ADJUNTA\n"
+        for item in attachment_items:
+            text_message += f"- {item['name']}\n  {item['url']}\n"
+
+    if owner_phone:
+        text_message += (
+            f"\nSi tienes dudas, contacta con el alojamiento "
+            f"en el teléfono {owner_phone}.\n"
+        )
+
+    text_message += (
+        f"\nNotificación automática de {property_title}.\n"
+    )
+
+    # Escapar los valores dinámicos insertados en el HTML.
+    safe_guest = escape(str(guest_name))
+    safe_property = escape(str(property_title))
+    safe_reason = escape(reason or "No se ha indicado un motivo.")
+    safe_owner_phone = escape(str(owner_phone)) if owner_phone else ""
+
+    # HTML del motivo.
+    reason_html = ""
+
+    if reason:
+        reason_html = f"""
+        <tr>
+          <td style="padding:12px 32px 22px;">
+            <h2 style="margin:0 0 12px;color:#263a33;font-size:18px;">
+              Motivo del cambio
+            </h2>
+            <table role="presentation" width="100%" cellspacing="0"
+                   cellpadding="0"
+                   style="background:#f7f9f8;border-left:4px solid #527d69;">
+              <tr>
+                <td style="padding:16px;color:#52615d;font-size:14px;
+                           line-height:1.8;white-space:pre-line;">
+                  {safe_reason}
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        """
+
+    # Generar las tablas HTML de la reserva anterior y la actual.
+    def build_reservation_table(title, values, highlighted=False):
+        background = "#edf6f1" if highlighted else "#f7f9f8"
+        border_color = "#cfe3d8" if highlighted else "#e3e9e6"
+        title_color = "#173f35" if highlighted else "#263a33"
+
+        rows_html = ""
+
+        for label, field, formatter in reservation_fields:
+            value = formatter(get_value(values, field))
+
+            rows_html += f"""
+            <tr>
+              <td style="padding:10px 16px;color:#52615d;
+                         border-bottom:1px solid {border_color};
+                         font-size:14px;">
+                {escape(label)}
+              </td>
+              <td align="right"
+                  style="padding:10px 16px;color:{title_color};
+                         border-bottom:1px solid {border_color};
+                         font-size:14px;font-weight:bold;">
+                {escape(str(value))}
+              </td>
+            </tr>
+            """
+
+        return f"""
+        <tr>
+          <td style="padding:0 32px 20px;">
+            <table role="presentation" width="100%" cellspacing="0"
+                   cellpadding="0"
+                   style="border:1px solid {border_color};border-radius:8px;">
+              <tr>
+                <td colspan="2"
+                    style="padding:16px;background:{background};
+                           color:{title_color};font-weight:bold;">
+                  {escape(title)}
+                </td>
+              </tr>
+              {rows_html}
+            </table>
+          </td>
+        </tr>
+        """
+
+    previous_reservation_html = build_reservation_table(
+        "Reserva anterior",
+        before_values,
+    )
+
+    current_reservation_html = build_reservation_table(
+        "Reserva actual",
+        after_values,
+        highlighted=True,
+    )
+
+    # Tarjetas HTML de archivos adjuntos.
+    attachments_html = ""
+
+    if attachment_items:
+        attachment_cards = ""
+
+        for item in attachment_items:
+            filename = escape(str(item["name"]))
+            file_url = escape(str(item["url"]))
+
+            attachment_cards += f"""
+            <tr>
+              <td style="padding:0 0 10px;">
+                <table role="presentation" width="100%" cellspacing="0"
+                       cellpadding="0" border="0"
+                       style="border:1px solid #e1e8e4;border-radius:9px;
+                              background:#ffffff;">
+                  <tr>
+                    <td width="54" valign="middle"
+                        style="padding:14px 0 14px 14px;">
+                      <table role="presentation" width="42" height="46"
+                             cellspacing="0" cellpadding="0" border="0"
+                             style="background:#edf6f1;border-radius:6px;">
+                        <tr>
+                          <td style="background-color:#e8f5e9;color:#2e7d32;
+                                     width:48px;height:48px;text-align:center;
+                                     vertical-align:middle;border-radius:8px;
+                                     font-size:26px;">
+                            📄
+                          </td>
+                        </tr>
+                      </table>
+                    </td>
+                    <td valign="middle"
+                        style="padding:12px 10px 12px 12px;
+                               font-family:Arial,Helvetica,sans-serif;">
+                      <p style="margin:0;color:#263a33;font-size:13px;
+                                font-weight:bold;line-height:1.5;
+                                word-break:break-word;">
+                        {filename}
+                      </p>
+                      <p style="margin:4px 0 0;color:#7b8781;font-size:11px;">
+                        Archivo adjunto al cambio de reserva
+                      </p>
+                    </td>
+                    <td align="right" valign="middle"
+                        style="padding:12px 14px 12px 4px;">
+                      <a href="{file_url}"
+                         style="display:inline-block;background:#173f35;
+                                color:#ffffff;text-decoration:none;
+                                padding:10px 12px;border-radius:5px;
+                                font-size:12px;font-weight:bold;
+                                white-space:nowrap;">
+                        Descargar
+                      </a>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            """
+
+        attachments_html = f"""
+        <tr>
+          <td style="padding:0 32px 24px;">
+            <h2 style="margin:0 0 6px;color:#263a33;font-size:18px;">
+              Documentación adjunta
+            </h2>
+            <p style="margin:0 0 14px;color:#718078;font-size:13px;
+                      line-height:1.6;">
+              Consulta o descarga los archivos relacionados con este cambio.
+            </p>
+            <table role="presentation" width="100%" cellspacing="0"
+                   cellpadding="0" border="0">
+              {attachment_cards}
+            </table>
+          </td>
+        </tr>
+        """
+
+    # Plantilla HTML.
     html_message = f"""
-<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="color-scheme" content="light">
-  <title>Actualización de tu reserva</title>
-</head>
-<body style="margin:0;padding:0;background-color:#f1f4f2;
-             font-family:Arial,Helvetica,sans-serif;color:#263a33;">
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Actualización de tu reserva</title>
+    </head>
+    <body style="margin:0;padding:0;background:#f3f5f7;
+                 font-family:Arial,Helvetica,sans-serif;color:#263238;">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0"
+             style="background:#f3f5f7;padding:32px 12px;">
+        <tr>
+          <td align="center">
+            <table role="presentation" width="600" cellspacing="0"
+                   cellpadding="0"
+                   style="width:100%;max-width:600px;background:#ffffff;
+                          border-radius:12px;overflow:hidden;">
+              <tr>
+                <td style="background:#173f35;padding:28px 32px;color:#ffffff;">
+                  <p style="margin:0;font-size:12px;letter-spacing:2px;
+                            text-transform:uppercase;color:#d5e8df;">
+                    Notificación de reserva
+                  </p>
+                  <h1 style="margin:10px 0 0;font-size:25px;line-height:1.3;">
+                    Actualización de tu reserva
+                  </h1>
+                </td>
+              </tr>
 
-  <div style="display:none;font-size:1px;color:#f1f4f2;max-height:0;
-              max-width:0;opacity:0;overflow:hidden;">
-    Tu reserva en {safe_property} ha sido actualizada.
-  </div>
+              <tr>
+                <td style="padding:30px 32px 18px;">
+                  <p style="margin:0 0 12px;font-size:16px;">
+                    Hola {safe_guest},
+                  </p>
+                  <p style="margin:0;color:#52615d;font-size:15px;line-height:1.7;">
+                    <strong>{safe_property}</strong> ha realizado un cambio
+                    en las condiciones de tu reserva.
+                  </p>
+                </td>
+              </tr>
 
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0"
-         border="0" style="background:#f1f4f2;width:100%;">
-    <tr>
-      <td align="center" style="padding:32px 12px;">
+              {previous_reservation_html}
 
-        <table role="presentation" width="600" cellspacing="0" cellpadding="0"
-               border="0"
-               style="width:100%;max-width:600px;background:#ffffff;
-                      border-radius:12px;overflow:hidden;">
+              {current_reservation_html}
 
-          <!-- Cabecera -->
-          <tr>
-            <td style="background:#173f35;padding:30px 32px 28px;">
-              <p style="margin:0;color:#c9ded4;font-size:11px;
-                        font-weight:bold;letter-spacing:2px;">
-                NOTIFICACIÓN DE RESERVA
-              </p>
-              <h1 style="margin:14px 0 10px;color:#ffffff;font-size:26px;
-                         line-height:1.3;font-weight:700;">
-                Tu reserva ha sido actualizada
-              </h1>
-              <p style="margin:0;color:#e0ece6;font-size:14px;line-height:1.7;">
-                Hola {safe_guest}, te informamos de un cambio en tu reserva.
-              </p>
-            </td>
-          </tr>
+              {reason_html}
 
-          <!-- Estado -->
-          <tr>
-            <td style="padding:26px 32px 8px;">
-              <table role="presentation" cellspacing="0" cellpadding="0"
-                     border="0">
-                <tr>
-                  <td style="background:#eaf5ee;border:1px solid #cce5d4;
-                             border-radius:20px;padding:9px 14px;">
-                    <span style="color:#21663e;font-size:12px;
-                                 font-weight:bold;">
-                      &#10003;&nbsp; CAMBIO CONFIRMADO
-                    </span>
-                  </td>
-                </tr>
-              </table>
-              <p style="margin:16px 0 0;color:#52615d;font-size:14px;
-                        line-height:1.8;">
-                El administrador ha actualizado las condiciones de tu reserva
-                en <strong style="color:#263a33;">{safe_property}</strong>.
-                A continuación encontrarás el resumen.
-              </p>
-            </td>
-          </tr>
+              {attachments_html}
 
-          <!-- Comparación de condiciones -->
-          <tr>
-            <td style="padding:22px 32px 8px;">
-              <h2 style="margin:0 0 14px;color:#263a33;font-size:18px;">
-                Resumen de la reserva
-              </h2>
+              <tr>
+                <td style="padding:22px 32px;background:#f7f9f8;
+                           border-top:1px solid #e8eeeb;">
+                  <p style="margin:0;color:#65716c;font-size:12px;line-height:1.7;">
+                    Notificación automática de {safe_property}.
+                    Si tienes dudas, contacta con el alojamiento
+                    {f'en el teléfono {safe_owner_phone}' if safe_owner_phone else ''}.
+                  </p>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+    </body>
+    </html>
+    """
 
-              <table role="presentation" width="100%" cellspacing="0"
-                     cellpadding="0" border="0"
-                     style="border:1px solid #e1e8e4;border-radius:9px;">
-
-                <tr>
-                  <td colspan="2"
-                      style="padding:15px 18px;background:#f7f9f8;
-                             border-bottom:1px solid #e1e8e4;">
-                    <p style="margin:0;color:#68766f;font-size:11px;
-                              font-weight:bold;letter-spacing:1px;">
-                      CONDICIONES ANTERIORES
-                    </p>
-                  </td>
-                </tr>
-
-                <tr>
-                  <td style="padding:13px 18px;color:#68766f;font-size:13px;">
-                    Fecha de entrada
-                  </td>
-                  <td align="right"
-                      style="padding:13px 18px;color:#263a33;font-size:13px;">
-                    {old_initial}
-                  </td>
-                </tr>
-                <tr>
-                  <td style="padding:13px 18px;color:#68766f;font-size:13px;">
-                    Fecha de salida
-                  </td>
-                  <td align="right"
-                      style="padding:13px 18px;color:#263a33;font-size:13px;">
-                    {old_final}
-                  </td>
-                </tr>
-                <tr>
-                  <td style="padding:13px 18px;color:#68766f;font-size:13px;">
-                    Número de huéspedes
-                  </td>
-                  <td align="right"
-                      style="padding:13px 18px;color:#263a33;font-size:13px;">
-                    {old_guests}
-                  </td>
-                </tr>
-                <tr>
-                  <td style="padding:13px 18px;color:#68766f;font-size:13px;
-                             border-bottom:1px solid #e1e8e4;">
-                    Importe total
-                  </td>
-                  <td align="right"
-                      style="padding:13px 18px;color:#263a33;font-size:13px;
-                             border-bottom:1px solid #e1e8e4;">
-                    {old_total}
-                  </td>
-                </tr>
-
-                <tr>
-                  <td colspan="2"
-                      style="padding:15px 18px;background:#edf6f0;
-                             border-bottom:1px solid #d7e9dd;">
-                    <p style="margin:0;color:#21663e;font-size:11px;
-                              font-weight:bold;letter-spacing:1px;">
-                      NUEVAS CONDICIONES
-                    </p>
-                  </td>
-                </tr>
-
-                <tr>
-                  <td style="padding:14px 18px;color:#52615d;font-size:13px;">
-                    Fecha de entrada
-                  </td>
-                  <td align="right"
-                      style="padding:14px 18px;color:#173f35;font-size:13px;
-                             font-weight:bold;">
-                    {new_initial}
-                  </td>
-                </tr>
-                <tr>
-                  <td style="padding:14px 18px;color:#52615d;font-size:13px;">
-                    Fecha de salida
-                  </td>
-                  <td align="right"
-                      style="padding:14px 18px;color:#173f35;font-size:13px;
-                             font-weight:bold;">
-                    {new_final}
-                  </td>
-                </tr>
-                <tr>
-                  <td style="padding:14px 18px;color:#52615d;font-size:13px;">
-                    Número de huéspedes
-                  </td>
-                  <td align="right"
-                      style="padding:14px 18px;color:#173f35;font-size:13px;
-                             font-weight:bold;">
-                    {new_guests}
-                  </td>
-                </tr>
-                <tr>
-                  <td style="padding:15px 18px;background:#edf6f0;
-                             border-top:1px solid #d7e9dd;
-                             color:#173f35;font-size:13px;font-weight:bold;">
-                    Importe total actualizado
-                  </td>
-                  <td align="right"
-                      style="padding:15px 18px;background:#edf6f0;
-                             border-top:1px solid #d7e9dd;
-                             color:#173f35;font-size:16px;font-weight:bold;">
-                    {new_total}
-                  </td>
-                </tr>
-
-              </table>
-            </td>
-          </tr>
-
-          <!-- Motivo -->
-          <tr>
-            <td style="padding:22px 32px 28px;">
-              <h2 style="margin:0 0 12px;color:#263a33;font-size:18px;">
-                Motivo del cambio
-              </h2>
-              <table role="presentation" width="100%" cellspacing="0"
-                     cellpadding="0" border="0"
-                     style="background:#f7f9f8;border-left:4px solid #527d69;">
-                <tr>
-                  <td style="padding:17px 18px;color:#52615d;font-size:14px;
-                             line-height:1.8;white-space:pre-line;">
-                    {safe_reason}
-                  </td>
-                </tr>
-              </table>
-              <p style="margin:20px 0 0;color:#52615d;font-size:13px;
-                        line-height:1.8;">
-                Si tienes alguna duda sobre este cambio, contacta con el
-                alojamiento.
-              </p>
-            </td>
-          </tr>
-
-          <!-- Pie -->
-          <tr>
-            <td style="padding:22px 32px;background:#f7f9f8;
-                       border-top:1px solid #e6ebe8;">
-              <p style="margin:0;color:#68766f;font-size:12px;line-height:1.8;">
-                Este es un mensaje automático relacionado con tu reserva en
-                <strong>{safe_property}</strong>.
-              </p>
-              <p style="margin:10px 0 0;color:#89938e;font-size:11px;">
-                Gracias por confiar en nosotros.
-              </p>
-            </td>
-          </tr>
-
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>
-"""
+    email = EmailMultiAlternatives(
+        subject=f"Actualización de tu reserva | {property_title}",
+        body=text_message,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        to=[recipient_email],
+    )
+    email.attach_alternative(html_message, "text/html")
 
     try:
-        email = EmailMultiAlternatives(
-            subject=subject,
-            body=text_message,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            to=[recipient_email],
-        )
-        email.attach_alternative(html_message, "text/html")
-
-        if email.send(fail_silently=False) != 1:
-            logger.error(
-                "No se confirmó el correo de cambio forzado de la reserva %s.",
-                booking.pk,
-            )
-            return False
-
-        return True
-
+        result = email.send(fail_silently=False)
     except Exception:
         logger.exception(
-            "Error al notificar el cambio forzado de la reserva %s.",
+            "Error al enviar el correo de cambio forzado de la reserva %s.",
             booking.pk,
         )
         return False
+
+    if result != 1:
+        logger.error(
+            "No se confirmó el envío del cambio forzado de la reserva %s a %s.",
+            booking.pk,
+            recipient_email,
+        )
+        return False
+
+    return True
