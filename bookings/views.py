@@ -6,7 +6,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.db import IntegrityError
 from django.db.models import Exists, F, Q, IntegerField, OuterRef, Subquery, Sum, Value, DecimalField, Prefetch
 from django.db.models.functions import Coalesce
-from .models import User, OwnerProfile, Property, Booking, BookingChangeProposal, BookingAttachment, BookingChangeAudit, BookingNight, PropertyAvailability, BookingHold, can_manage_properties
+from .models import User, OwnerProfile, Property, Booking, BookingChangeProposal, BookingAttachment, BookingChangeAudit, BookingNight, BookingCancellationRequest, PropertyAvailability, BookingHold, can_manage_properties
 from django import forms
 from django.forms import ModelForm
 from django.contrib.auth.forms import UserCreationForm
@@ -1735,6 +1735,174 @@ def propose_booking_change(request, booking_id):
     )
 
     return JsonResponse(response_data, status=201)
+
+@login_required
+def propose_booking_cancellation(request, booking_id):
+    if request.method != "POST":
+        return JsonResponse(
+            {"error": "Método no permitido."},
+            status=405,
+        )
+
+    if not can_manage_properties(request.user):
+        raise PermissionDenied
+
+    uploaded_files = request.FILES.getlist("attachments")
+    reason = (request.POST.get("reason") or "").strip()
+
+    # El motivo es obligatorio para las solicitudes del propietario.
+    if not reason:
+        return JsonResponse(
+            {"error": "El motivo de la cancelación es obligatorio."},
+            status=400,
+        )
+
+    if len(reason) > 1000:
+        return JsonResponse(
+            {"error": "El motivo no puede superar los 1000 caracteres."},
+            status=400,
+        )
+
+    if len(uploaded_files) > 5:
+        return JsonResponse(
+            {
+                "error": "Solo puedes adjuntar un máximo de 5 archivos."
+            },
+            status=400,
+        )
+
+    attachments_to_save = []
+    cancellation = None
+
+    try:
+        with transaction.atomic():
+            # Bloquear la reserva para evitar solicitudes concurrentes.
+            booking = get_object_or_404(
+                Booking.objects.select_for_update().select_related(
+                    "property",
+                    "property__owner",
+                ),
+                pk=booking_id,
+            )
+
+            # Esta vista es exclusivamente para el propietario.
+            if booking.property.owner_id != request.user.pk:
+                raise PermissionDenied
+
+            if booking.status not in Booking.ACTIVE_STATUSES:
+                return JsonResponse(
+                    {
+                        "error": (
+                            "No se pueden solicitar cancelaciones "
+                            "para esta reserva."
+                        )
+                    },
+                    status=400,
+                )
+
+            now = timezone.now()
+
+            # Caducar solicitudes anteriores vencidas.
+            BookingCancellationRequest.objects.filter(
+                booking=booking,
+                status=BookingCancellationRequest.Status.PENDING,
+                expires_at__isnull=False,
+                expires_at__lte=now,
+            ).update(
+                status=BookingCancellationRequest.Status.EXPIRED,
+            )
+
+            # No permitir dos solicitudes pendientes para la misma reserva.
+            pending_exists = (
+                BookingCancellationRequest.objects.filter(
+                    booking=booking,
+                    status=BookingCancellationRequest.Status.PENDING,
+                ).exists()
+            )
+
+            if pending_exists:
+                return JsonResponse(
+                    {
+                        "error": (
+                            "Ya existe una solicitud de cancelación "
+                            "pendiente para esta reserva."
+                        )
+                    },
+                    status=409,
+                )
+
+            # Crear la solicitud. La reserva sigue activa.
+            cancellation = BookingCancellationRequest.objects.create(
+                booking=booking,
+                requested_by=request.user,
+                request_type=(
+                    BookingCancellationRequest.RequestType.OWNER_REQUEST
+                ),
+                status=BookingCancellationRequest.Status.PENDING,
+                reason=reason,
+                created_at=now,
+                expires_at=now + timedelta(hours=48),
+            )
+
+            # Guardar los archivos vinculados a la solicitud.
+            for uploaded_file in uploaded_files:
+                attachment = BookingAttachment(
+                    cancellation_request=cancellation,
+                    uploaded_by=request.user,
+                    file=uploaded_file,
+                    original_filename=os.path.basename(
+                        uploaded_file.name
+                    )[:255],
+                    size=uploaded_file.size,
+                )
+
+                attachments_to_save.append(attachment)
+                attachment.save()
+
+    except ValidationError as exc:
+        cleanup_booking_attachment_files(attachments_to_save)
+        return JsonResponse(
+            {"error": exc.messages},
+            status=400,
+        )
+
+    except IntegrityError:
+        cleanup_booking_attachment_files(attachments_to_save)
+        return JsonResponse(
+            {
+                "error": (
+                    "Ya existe una solicitud de cancelación pendiente "
+                    "para esta reserva."
+                )
+            },
+            status=409,
+        )
+
+    except Exception:
+        cleanup_booking_attachment_files(attachments_to_save)
+        raise
+
+    return JsonResponse(
+        {
+            "success": True,
+            "message": (
+                "La solicitud de cancelación se ha creado correctamente."
+            ),
+            "cancellation_request": {
+                "id": cancellation.pk,
+                "booking_id": booking.pk,
+                "request_type": cancellation.request_type,
+                "status": cancellation.status,
+                "reason": cancellation.reason,
+                "created_at": cancellation.created_at.isoformat(),
+                "expires_at": cancellation.expires_at.isoformat(),
+                "attachments_count": len(attachments_to_save),
+            },
+            "booking_status": booking.status,
+            "notification_sent": False,
+        },
+        status=201,
+    )
 
 @login_required
 def force_booking_change(request, booking_id):
