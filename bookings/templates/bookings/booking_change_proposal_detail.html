@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -166,7 +167,8 @@
                 padding: 0 10px;
             }
 
-            .header, .content {
+            .header,
+            .content {
                 padding: 22px 18px;
             }
 
@@ -190,9 +192,9 @@
 </head>
 
 <body>
-<div class="container">
+    <div class="container">
 
-    {% if invalid_link %}
+        {% if invalid_link %}
         <div class="header">
             <h1>Enlace no válido</h1>
             <p>No se puede acceder a esta propuesta.</p>
@@ -200,7 +202,7 @@
         <div class="content">
             <p>El enlace es incorrecto o ya no existe.</p>
         </div>
-    {% else %}
+        {% else %}
 
         <div class="header">
             <div>GESTIÓN DE RESERVA</div>
@@ -209,31 +211,45 @@
 
             <div class="status {% if not can_respond %}status-final{% endif %}">
                 {% if can_respond %}
-                    Pendiente de respuesta
+                Pendiente de respuesta
                 {% else %}
-                    {{ proposal.get_status_display }}
+                {{ proposal.get_status_display }}
                 {% endif %}
             </div>
         </div>
 
         <div class="content">
 
-        {% if messages %}
+            {% if messages %}
             <div class="notice">
                 {% for message in messages %}
-                    <p>{{ message }}</p>
+                <p>{{ message }}</p>
                 {% endfor %}
             </div>
-        {% endif %}
-
-        {% if status_message %}
-                <div class="notice">
-                    <strong>{{ status_message }}</strong>
-                    <p class="muted">
-                        Ya no puedes responder a esta propuesta desde esta página.
-                    </p>
-                </div>
             {% endif %}
+
+            {% if status_message %}
+            <div class="notice">
+                <strong>{{ status_message }}</strong>
+                <p class="muted">
+                    Ya no puedes responder a esta propuesta desde esta página.
+                </p>
+            </div>
+            {% endif %}
+
+            <section class="section">
+                <h2>Motivo del cambio</h2>
+
+                <div class="notice">
+                    {% if proposal.reason %}
+                    <p style="white-space: pre-line; margin: 0;">{{ proposal.reason }}</p>
+                    {% else %}
+                    <p class="muted" style="margin: 0;">
+                        No se ha indicado un motivo para esta propuesta.
+                    </p>
+                    {% endif %}
+                </div>
+            </section>
 
             <section class="section">
                 <h2>Reserva actual</h2>
@@ -297,36 +313,34 @@
             </div>
 
             {% if can_respond %}
-                <section class="section">
-                    <h2>¿Qué deseas hacer?</h2>
-                    <p>
-                        Revisa las condiciones de la propuesta antes de tomar
-                        una decisión.
-                    </p>
+            <section class="section">
+                <h2>¿Qué deseas hacer?</h2>
+                <p>
+                    Revisa las condiciones de la propuesta antes de tomar
+                    una decisión.
+                </p>
 
-                    <div class="actions">
-                        <form method="post"
-                              action="{% url 'accept_booking_change_proposal' proposal.id %}"
-                              style="flex:1;display:flex;">
-                            {% csrf_token %}
-                            <input type="hidden" name="token" value="{{ access_token }}">
-                            <button class="button accept" type="submit">
-                                Aceptar propuesta
-                            </button>
-                        </form>
+                <div class="actions">
+                    <form method="post" action="{% url 'accept_booking_change_proposal' proposal.id %}"
+                        style="flex:1;display:flex;">
+                        {% csrf_token %}
+                        <input type="hidden" name="token" value="{{ access_token }}">
+                        <button class="button accept" type="submit">
+                            Aceptar propuesta
+                        </button>
+                    </form>
 
-                        <form method="post"
-                              action="{% url 'reject_booking_change_proposal' proposal.id %}"
-                              style="flex:1;display:flex;"
-                              onsubmit="return confirm('¿Seguro que quieres rechazar esta propuesta?');">
-                            {% csrf_token %}
-                            <input type="hidden" name="token" value="{{ access_token }}">
-                            <button class="button reject" type="submit">
-                                Rechazar propuesta
-                            </button>
-                        </form>
-                    </div>
-                </section>
+                    <form method="post" action="{% url 'reject_booking_change_proposal' proposal.id %}"
+                        style="flex:1;display:flex;"
+                        onsubmit="return confirm('¿Seguro que quieres rechazar esta propuesta?');">
+                        {% csrf_token %}
+                        <input type="hidden" name="token" value="{{ access_token }}">
+                        <button class="button reject" type="submit">
+                            Rechazar propuesta
+                        </button>
+                    </form>
+                </div>
+            </section>
             {% endif %}
 
             <p class="muted" style="margin-top:30px;">
@@ -334,8 +348,9 @@
                 Si tienes dudas, contacta con el alojamiento.
             </p>
         </div>
-    {% endif %}
+        {% endif %}
 
-</div>
+    </div>
 </body>
+
 </html>
