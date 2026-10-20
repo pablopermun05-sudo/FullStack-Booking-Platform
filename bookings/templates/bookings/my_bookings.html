@@ -202,16 +202,19 @@
 
         </div>
 
-        {% if booking.active_change_proposals %}
-        <div class="booking-proposals-panel" id="booking-proposals-{{ booking.id }}" hidden>
-
+        {% if booking.active_requests_count %}
+        <div
+            class="booking-proposals-panel"
+            id="booking-requests-{{ booking.id }}"
+            hidden
+        >
+            {# Solicitudes de edición #}
             {% for proposal in booking.active_change_proposals %}
             <article class="booking-proposal">
                 <h3>Propuesta de cambio de reserva</h3>
 
                 <div class="booking-proposal-reason">
                     <h4>Motivo de la modificación</h4>
-
                     {% if proposal.reason %}
                     <p>{{ proposal.reason|linebreaksbr }}</p>
                     {% else %}
@@ -227,7 +230,8 @@
                     <ul class="booking-attachment-list">
                         {% for attachment in attachments %}
                         <li class="booking-attachment-item">
-                            <i class="bi bi-file-earmark-text booking-attachment-icon" aria-hidden="true"></i>
+                            <i class="bi bi-file-earmark-text booking-attachment-icon"
+                            aria-hidden="true"></i>
 
                             <a href="{% url 'download_booking_attachment' attachment.id %}">
                                 {{ attachment.original_filename|default:"Descargar adjunto" }}
@@ -242,9 +246,7 @@
                         {% endfor %}
                     </ul>
                     {% else %}
-                    <p class="booking-no-attachments">
-                        No se adjuntaron archivos.
-                    </p>
+                    <p class="booking-no-attachments">No se adjuntaron archivos.</p>
                     {% endif %}
                     {% endwith %}
                 </div>
@@ -279,17 +281,91 @@
                 </p>
 
                 <div class="booking-actions">
-                    <form action="{% url 'accept_booking_change_proposal' proposal.id %}" method="post">
+                    <form action="{% url 'accept_booking_change_proposal' proposal.id %}"
+                        method="post">
                         {% csrf_token %}
                         <button type="submit" class="booking-btn booking-btn-primary">
                             Aceptar propuesta
                         </button>
                     </form>
 
-                    <form action="{% url 'reject_booking_change_proposal' proposal.id %}" method="post">
+                    <form action="{% url 'reject_booking_change_proposal' proposal.id %}"
+                        method="post">
                         {% csrf_token %}
                         <button type="submit" class="booking-btn booking-btn-cancel">
                             Rechazar propuesta
+                        </button>
+                    </form>
+                </div>
+            </article>
+            {% endfor %}
+
+            {# Solicitudes de cancelación #}
+            {% for cancellation in booking.active_cancellation_requests %}
+            <article class="booking-proposal cancellation-request">
+                <h3>Solicitud de cancelación</h3>
+
+                <p>
+                    <strong>Solicitada por:</strong>
+                    {{ cancellation.get_request_type_display }}
+                </p>
+
+                <div class="booking-proposal-reason">
+                    <h4>Motivo de la cancelación</h4>
+                    <p>{{ cancellation.reason|linebreaksbr }}</p>
+                </div>
+
+                <div class="booking-proposal-attachments">
+                    <h4>Archivos adjuntos</h4>
+
+                    {% with attachments=cancellation.attachments.all %}
+                    {% if attachments %}
+                    <ul class="booking-attachment-list">
+                        {% for attachment in attachments %}
+                        <li class="booking-attachment-item">
+                            <i class="bi bi-file-earmark-text booking-attachment-icon"
+                            aria-hidden="true"></i>
+
+                            <a href="{% url 'download_booking_attachment' attachment.id %}">
+                                {{ attachment.original_filename|default:"Descargar adjunto" }}
+                            </a>
+
+                            {% if attachment.size %}
+                            <span class="booking-attachment-size">
+                                ({{ attachment.size|filesizeformat }})
+                            </span>
+                            {% endif %}
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% else %}
+                    <p class="booking-no-attachments">No se adjuntaron archivos.</p>
+                    {% endif %}
+                    {% endwith %}
+                </div>
+
+                {% if cancellation.expires_at %}
+                <p>
+                    <strong>Fecha límite de respuesta:</strong>
+                    {{ cancellation.expires_at|date:"d M Y H:i" }}
+                </p>
+                {% endif %}
+
+                {# Los endpoints de respuesta se conectarán en el siguiente commit. #}
+                <div class="booking-actions">
+                    <form action="{% url 'accept_booking_cancellation' cancellation.id %}"
+                        method="post">
+                        {% csrf_token %}
+                        <button type="submit" class="booking-btn booking-btn-primary">
+                            Aceptar cancelación
+                        </button>
+                    </form>
+
+                    <form action="{% url 'reject_booking_cancellation' cancellation.id %}"
+                        method="post">
+                        {% csrf_token %}
+                        <button type="submit" class="booking-btn booking-btn-cancel">
+                            Rechazar solicitud
                         </button>
                     </form>
                 </div>
