@@ -27,6 +27,7 @@ from django.contrib import messages
 import secrets
 import os
 from django.core import signing
+from django.views.decorators.http import require_POST
 from .emails import (
     send_booking_change_proposal_email,
     send_booking_change_proposal_status_email,
@@ -2449,6 +2450,193 @@ def redirect_after_booking_change(request, raw_token):
         )
 
     return redirect("my_bookings")
+
+def _respond_to_booking_cancellation(
+    request,
+    cancellation_request_id,
+    accept,
+):
+    accept_header = request.headers.get("Accept", "")
+    is_html_form = (
+        "text/html" in accept_header
+        and "application/json" not in accept_header
+        and request.content_type != "application/json"
+    )
+
+    # Primera comprobación de autorización.
+    cancellation = get_object_or_404(
+        BookingCancellationRequest.objects.select_related("booking"),
+        pk=cancellation_request_id,
+        booking__tenant=request.user,
+    )
+
+    try:
+        with transaction.atomic():
+            # Mantener un orden de bloqueo consistente:
+            # primero reserva y después solicitud.
+            booking = get_object_or_404(
+                Booking.objects.select_for_update(),
+                pk=cancellation.booking_id,
+                tenant=request.user,
+            )
+
+            cancellation = get_object_or_404(
+                BookingCancellationRequest.objects.select_for_update(),
+                pk=cancellation_request_id,
+                booking=booking,
+            )
+
+            # Revalidar autorización y estado bajo los bloqueos.
+            if booking.tenant_id != request.user.pk:
+                return JsonResponse(
+                    {"error": "No tienes permiso para responder."},
+                    status=403,
+                )
+
+            allowed_types = {
+                BookingCancellationRequest.RequestType.OWNER_REQUEST,
+                BookingCancellationRequest.RequestType.ADMIN_PROPOSAL,
+            }
+
+            if cancellation.request_type not in allowed_types:
+                error = "Esta solicitud no admite respuesta."
+                if is_html_form:
+                    messages.error(request, error)
+                    return redirect("my_bookings")
+                return JsonResponse({"error": error}, status=409)
+
+            if cancellation.status != BookingCancellationRequest.Status.PENDING:
+                error = "La solicitud ya no está pendiente."
+                if is_html_form:
+                    messages.error(request, error)
+                    return redirect("my_bookings")
+                return JsonResponse({"error": error}, status=409)
+
+            now = timezone.now()
+
+            if (
+                cancellation.expires_at is not None
+                and cancellation.expires_at <= now
+            ):
+                cancellation.status = (
+                    BookingCancellationRequest.Status.EXPIRED
+                )
+                cancellation.save(update_fields=["status"])
+
+                error = "La solicitud de cancelación ha caducado."
+                if is_html_form:
+                    messages.error(request, error)
+                    return redirect("my_bookings")
+                return JsonResponse({"error": error}, status=409)
+
+            if booking.status not in Booking.ACTIVE_STATUSES:
+                error = "La reserva ya no admite cancelaciones."
+                if is_html_form:
+                    messages.error(request, error)
+                    return redirect("my_bookings")
+                return JsonResponse({"error": error}, status=409)
+
+            if (
+                booking.status == Booking.Status.PENDING
+                and booking.expires_at is not None
+                and booking.expires_at <= now
+            ):
+                booking.expire()
+                error = "La reserva pendiente ha caducado."
+                if is_html_form:
+                    messages.error(request, error)
+                    return redirect("my_bookings")
+                return JsonResponse({"error": error}, status=409)
+
+            if accept:
+                booking.cancel()
+
+                cancellation.status = (
+                    BookingCancellationRequest.Status.ACCEPTED
+                )
+                cancellation.response_reason = ""
+                cancellation.responded_at = now
+                cancellation.save(
+                    update_fields=[
+                        "status",
+                        "response_reason",
+                        "responded_at",
+                    ]
+                )
+
+            else:
+                response_reason = (
+                    request.POST.get("response_reason") or ""
+                ).strip()
+
+                if len(response_reason) > 1000:
+                    error = (
+                        "El motivo del rechazo no puede superar "
+                        "los 1000 caracteres."
+                    )
+                    if is_html_form:
+                        messages.error(request, error)
+                        return redirect("my_bookings")
+                    return JsonResponse({"error": error}, status=400)
+
+                cancellation.status = (
+                    BookingCancellationRequest.Status.REJECTED
+                )
+                cancellation.response_reason = response_reason
+                cancellation.responded_at = now
+                cancellation.save(
+                    update_fields=[
+                        "status",
+                        "response_reason",
+                        "responded_at",
+                    ]
+                )
+
+    except IntegrityError:
+        error = "No se ha podido procesar la respuesta."
+        if is_html_form:
+            messages.error(request, error)
+            return redirect("my_bookings")
+        return JsonResponse({"error": error}, status=409)
+
+    if is_html_form:
+        if accept:
+            messages.success(
+                request,
+                "Has aceptado la solicitud y la reserva se ha cancelado.",
+            )
+        else:
+            messages.success(
+                request,
+                "Has rechazado la solicitud. La reserva sigue activa.",
+            )
+        return redirect("my_bookings")
+
+    return JsonResponse(
+        {
+            "id": cancellation.pk,
+            "status": cancellation.status,
+        },
+        status=200,
+    )
+
+@login_required
+@require_POST
+def accept_booking_cancellation(request, cancellation_request_id):
+    return _respond_to_booking_cancellation(
+        request,
+        cancellation_request_id,
+        accept=True,
+    )
+
+@login_required
+@require_POST
+def reject_booking_cancellation(request, cancellation_request_id):
+    return _respond_to_booking_cancellation(
+        request,
+        cancellation_request_id,
+        accept=False,
+    )
 
 def accept_booking_change_proposal(request, proposal_id):
     if request.method != "POST":
