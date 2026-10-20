@@ -959,6 +959,11 @@ class BookingChangeAudit(models.Model):
         null=True,
         blank=True,
     )
+    reason = models.TextField(
+        max_length=1000,
+        blank=True,
+        default="",
+    )
     changed_at = models.DateTimeField(auto_now_add=True)
     before_values = models.JSONField()
     after_values = models.JSONField()

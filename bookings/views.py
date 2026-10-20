@@ -1684,6 +1684,7 @@ def force_booking_change(request, booking_id):
             audit = BookingChangeAudit.objects.create(
                 booking=booking,
                 actor=request.user,
+                reason=reason,
                 before_values=before_values,
                 after_values=after_values,
             )
