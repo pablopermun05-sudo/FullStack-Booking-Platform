@@ -2229,6 +2229,7 @@ def accept_booking_change_proposal(request, proposal_id):
             BookingChangeAudit.objects.create(
                 booking=booking,
                 actor=request.user if request.user.is_authenticated else None,
+                reason=proposal.reason,
                 before_values=before_values,
                 after_values=after_values,
             )
