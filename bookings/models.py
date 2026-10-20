@@ -982,6 +982,7 @@ class BookingCancellationRequest(models.Model):
         OWNER_REQUEST = "OWNER_REQUEST", "Owner cancellation request"
         ADMIN_PROPOSAL = "ADMIN_PROPOSAL", "Admin cancellation proposal"
         ADMIN_FORCED = "ADMIN_FORCED", "Admin forced cancellation"
+        CUSTOMER_REQUEST = "CUSTOMER_REQUEST", "Customer cancellation request"
 
     class Status(models.TextChoices):
         PENDING = "PENDING", "Pending"
@@ -989,6 +990,7 @@ class BookingCancellationRequest(models.Model):
         REJECTED = "REJECTED", "Rejected"
         CANCELLED = "CANCELLED", "Cancelled"
         EXPIRED = "EXPIRED", "Expired"
+        EXECUTED = "EXECUTED", "Executed directly"
 
     booking = models.ForeignKey(
         Booking,
@@ -1009,6 +1011,17 @@ class BookingCancellationRequest(models.Model):
         choices=Status.choices,
         default=Status.PENDING,
     )
+
+    # Hash del token utilizado para acceder a la solicitud desde el correo.
+    # Solo se utilizará en solicitudes que requieran respuesta del cliente.
+    access_token_hash = models.CharField(
+        max_length=64,
+        unique=True,
+        null=True,
+        blank=True,
+        editable=False,
+    )
+
     reason = models.TextField(max_length=1000)
     response_reason = models.TextField(
         max_length=1000,
