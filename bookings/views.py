@@ -663,33 +663,58 @@ def property_bookings(request, property_id):
 def cancel_booking(request, booking_id):
     if request.method != "POST":
         return JsonResponse(
-            {"error": "Method not allowed"},
+            {"error": "Método no permitido."},
             status=405,
         )
 
     with transaction.atomic():
-        
         booking = get_object_or_404(
             Booking.objects.select_for_update(),
             pk=booking_id,
         )
 
+        # El cliente solo puede cancelar sus propias reservas.
         if booking.tenant_id != request.user.pk:
             return JsonResponse(
-                {"error": "No tienes permiso para cancelar esta reserva."},
+                {
+                    "error": (
+                        "No tienes permiso para cancelar esta reserva."
+                    )
+                },
                 status=403,
             )
-            
-        # Solo se pueden cancelar reservas pendientes o confirmadas.
-        if booking.status not in ("PENDING", "CONFIRMED"):
+
+        # Solo se pueden cancelar reservas activas.
+        if booking.status not in Booking.ACTIVE_STATUSES:
             return redirect("my_bookings")
 
-        # Si la reserva pendiente ya caducó, no se cancela:
-        # se marca como caducada.
+        # Si la reserva pendiente ha caducado, no se cancela.
         if booking.status == "PENDING" and booking.is_expired():
             booking.expire()
             return redirect("my_bookings")
 
+        # Si había solicitudes de cancelación pendientes del propietario
+        # o del administrador, dejan de tener efecto.
+        BookingCancellationRequest.objects.filter(
+            booking=booking,
+            status=BookingCancellationRequest.Status.PENDING,
+        ).update(
+            status=BookingCancellationRequest.Status.CANCELLED,
+        )
+
+        # Registrar la cancelación voluntaria.
+        # Este texto es interno: no se solicita al cliente.
+        BookingCancellationRequest.objects.create(
+            booking=booking,
+            requested_by=request.user,
+            request_type=(
+                BookingCancellationRequest.RequestType.CUSTOMER_REQUEST
+            ),
+            status=BookingCancellationRequest.Status.EXECUTED,
+            reason="Cancelación voluntaria iniciada por el cliente.",
+        )
+
+        # Cancelar la reserva dentro de la misma transacción.
         booking.cancel()
 
     return redirect("my_bookings")
