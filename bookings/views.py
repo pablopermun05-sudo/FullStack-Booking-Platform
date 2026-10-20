@@ -228,12 +228,21 @@ def my_bookings(request):
         booking__tenant=request.user,
     ).order_by("-created_at")
 
+    cancellation_requests = BookingCancellationRequest.objects.filter(
+        booking__tenant=request.user,
+    ).order_by("-created_at")
+
     bookings = bookings.prefetch_related(
         Prefetch(
             "change_proposals",
             queryset=proposals,
             to_attr="prefetched_change_proposals",
-        )
+        ),
+        Prefetch(
+            "cancellation_requests",
+            queryset=cancellation_requests,
+            to_attr="prefetched_cancellation_requests",
+        ),
     )
 
     paginator = Paginator(bookings, 6)
@@ -249,6 +258,26 @@ def my_bookings(request):
                 and proposal.expires_at > current_time
             )
         ]
+        booking.active_cancellation_requests = [
+            cancellation
+            for cancellation in booking.prefetched_cancellation_requests
+            if (
+                cancellation.status == BookingCancellationRequest.Status.PENDING
+                and cancellation.request_type in {
+                    BookingCancellationRequest.RequestType.OWNER_REQUEST,
+                    BookingCancellationRequest.RequestType.ADMIN_PROPOSAL,
+                }
+                and (
+                    cancellation.expires_at is None
+                    or cancellation.expires_at > current_time
+                )
+            )
+        ]
+
+        booking.active_requests_count = (
+            len(booking.active_change_proposals)
+            + len(booking.active_cancellation_requests)
+        )
 
     return render(
         request,

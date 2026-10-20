@@ -146,18 +146,28 @@
 
                 <div class="booking-actions-column">
 
-                    {% if booking.active_change_proposals %}
-                    <button type="button" class="booking-notification-trigger"
-                        aria-label="Ver propuestas de cambio pendientes" aria-expanded="false"
-                        aria-controls="booking-proposals-{{ booking.id }}" data-proposals-toggle>
+                    {% if booking.active_requests_count %}
+                    <button
+                        type="button"
+                        class="booking-notification-trigger"
+                        aria-label="Ver {{ booking.active_requests_count }} solicitudes pendientes"
+                        aria-expanded="false"
+                        aria-controls="booking-requests-{{ booking.id }}"
+                        data-proposals-toggle
+                    >
                         <i class="bi bi-bell-fill" aria-hidden="true"></i>
                         <span class="booking-notification-badge">
-                            {{ booking.active_change_proposals|length }}
+                            {{ booking.active_requests_count }}
                         </span>
                     </button>
                     {% else %}
-                    <button type="button" class="booking-notification-trigger booking-notification-disabled"
-                        aria-label="No hay propuestas pendientes" title="No hay propuestas pendientes" disabled>
+                    <button
+                        type="button"
+                        class="booking-notification-trigger booking-notification-disabled"
+                        aria-label="No hay solicitudes pendientes"
+                        title="No hay solicitudes pendientes"
+                        disabled
+                    >
                         <i class="bi bi-bell-slash" aria-hidden="true"></i>
                     </button>
                     {% endif %}
