@@ -1860,13 +1860,6 @@ body {
     opacity: 1;
 }
 
-
-/* =========================================
-   PANEL DE PROPUESTAS
-   Fila completa debajo de la imagen y contenido.
-   Al abrirse, empuja las siguientes reservas.
-   ========================================= */
-
 .booking-card > .booking-proposals-panel {
     grid-column: 1 / -1;
     grid-row: 2;

@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Propuesta de cambio de reserva</title>
-
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <style>
         * {
             box-sizing: border-box;
@@ -27,7 +27,7 @@
 
         .header {
             background: #173f35;
-            color: white;
+            color: #ffffff;
             padding: 30px;
             border-radius: 14px 14px 0 0;
         }
@@ -35,6 +35,7 @@
         .header h1 {
             margin: 5px 0;
             font-size: 28px;
+            line-height: 1.3;
         }
 
         .header p {
@@ -43,10 +44,21 @@
         }
 
         .content {
-            background: white;
+            background: #ffffff;
             padding: 30px;
             border-radius: 0 0 14px 14px;
-            box-shadow: 0 8px 30px rgba(0, 0, 0, .06);
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.06);
+        }
+
+        .section {
+            margin-top: 28px;
+        }
+
+        .section h2 {
+            margin: 0 0 14px;
+            color: #263b32;
+            font-size: 19px;
+            line-height: 1.4;
         }
 
         .status {
@@ -65,13 +77,30 @@
             color: #43534c;
         }
 
-        .section {
-            margin-top: 28px;
+        .notice {
+            margin-bottom: 20px;
+            padding: 18px;
+            border-radius: 9px;
+            background: #f7f9f8;
+            border: 1px solid #e5ebe7;
+            overflow-wrap: anywhere;
         }
 
-        .section h2 {
-            font-size: 19px;
-            margin-bottom: 14px;
+        .notice p {
+            margin: 0;
+        }
+
+        .notice p+p {
+            margin-top: 8px;
+        }
+
+        .notice strong {
+            color: #263b32;
+        }
+
+        .muted {
+            color: #65716c;
+            font-size: 13px;
         }
 
         .details {
@@ -81,6 +110,7 @@
         }
 
         .detail {
+            min-width: 0;
             padding: 16px;
             background: #f7f9f8;
             border: 1px solid #e5ebe7;
@@ -89,9 +119,9 @@
 
         .detail span {
             display: block;
+            margin-bottom: 5px;
             color: #65716c;
             font-size: 13px;
-            margin-bottom: 5px;
         }
 
         .detail strong {
@@ -102,6 +132,225 @@
         .proposed .detail {
             background: #edf6f1;
             border-color: #cfe3d8;
+        }
+
+        .booking-proposal-reason,
+        .booking-proposal-attachments {
+            min-width: 0;
+        }
+
+        .proposal-info-card {
+            min-width: 0;
+            padding: 22px;
+            background: #f7f9f8;
+            border: 1px solid #e5ebe7;
+            border-radius: 12px;
+        }
+
+        .proposal-info-heading {
+            display: flex;
+            align-items: center;
+            gap: 13px;
+            padding-bottom: 18px;
+            border-bottom: 1px solid #e3e9e5;
+        }
+
+        .proposal-info-heading>div {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .proposal-info-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            width: 44px;
+            height: 44px;
+            border-radius: 10px;
+            background: #e6efe9;
+            color: #173f35;
+            font-size: 20px;
+        }
+
+        .proposal-info-heading h3 {
+            margin: 0;
+            color: #263b32;
+            font-size: 16px;
+            font-weight: 700;
+            line-height: 1.4;
+        }
+
+        .proposal-info-subtitle {
+            margin: 4px 0 0;
+            color: #65716c;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .proposal-reason-card {
+            background: #f7f9f8;
+        }
+
+        .proposal-reason-content {
+            margin-top: 18px;
+            padding: 17px 19px;
+            background: #ffffff;
+            border: 1px solid #e5ebe7;
+            border-left: 3px solid #527c68;
+            border-radius: 6px 9px 9px 6px;
+        }
+
+        .proposal-reason-content p {
+            margin: 0;
+            color: #34443c;
+            font-size: 15px;
+            line-height: 1.8;
+            overflow-wrap: anywhere;
+            word-break: normal;
+        }
+
+        .proposal-reason-content p+p {
+            margin-top: 12px;
+        }
+
+        .proposal-reason-content .proposal-empty-message {
+            color: #65716c;
+            font-style: italic;
+        }
+
+        .proposal-attachments-card {
+            background: #f7f9f8;
+        }
+
+        .proposal-attachment-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin: 18px 0 0;
+            padding: 0;
+            list-style: none;
+        }
+
+        .proposal-attachment-item {
+            display: flex;
+            align-items: center;
+            gap: 13px;
+            min-width: 0;
+            padding: 14px;
+            background: #ffffff;
+            border: 1px solid #e3e9e5;
+            border-radius: 9px;
+            transition:
+                border-color 0.2s ease,
+                background-color 0.2s ease,
+                box-shadow 0.2s ease;
+        }
+
+        .proposal-attachment-item:hover {
+            border-color: #b8cec0;
+            background: #fcfdfc;
+            box-shadow: 0 2px 8px rgba(23, 63, 53, 0.04);
+        }
+
+        .proposal-attachment-file-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            width: 42px;
+            height: 46px;
+            border-radius: 8px;
+            background: #edf4ef;
+            color: #285b43;
+            font-size: 22px;
+        }
+
+        .proposal-attachment-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .proposal-attachment-link {
+            display: inline-block;
+            max-width: 100%;
+            color: #214f3b;
+            font-size: 14px;
+            font-weight: 700;
+            line-height: 1.5;
+            text-decoration: none;
+            overflow-wrap: anywhere;
+            word-break: break-word;
+        }
+
+        .proposal-attachment-link:hover {
+            color: #173f35;
+            text-decoration: underline;
+            text-underline-offset: 3px;
+        }
+
+        .proposal-attachment-link:focus-visible,
+        .proposal-attachment-download:focus-visible {
+            outline: 2px solid #527c68;
+            outline-offset: 3px;
+        }
+
+        .proposal-attachment-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 3px;
+            margin-top: 4px;
+            color: #758078;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+
+        .proposal-attachment-size {
+            color: #758078;
+        }
+
+        .proposal-attachment-download {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            width: 38px;
+            height: 38px;
+            border: 1px solid #dce6df;
+            border-radius: 8px;
+            background: #f7faf8;
+            color: #285b43;
+            text-decoration: none;
+            font-size: 16px;
+            transition:
+                background-color 0.2s ease,
+                border-color 0.2s ease;
+        }
+
+        .proposal-attachment-download:hover {
+            background: #e6efe9;
+            border-color: #b8cec0;
+        }
+
+        .proposal-empty-attachments {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            padding: 26px 16px 8px;
+            color: #65716c;
+            text-align: center;
+        }
+
+        .proposal-empty-attachments>i {
+            color: #8a9c90;
+            font-size: 28px;
+        }
+
+        .proposal-empty-attachments p {
+            margin: 0;
+            font-size: 14px;
+            line-height: 1.6;
         }
 
         .expiry {
@@ -117,11 +366,21 @@
             margin-bottom: 4px;
         }
 
+        .expiry p {
+            margin-bottom: 0;
+        }
+
         .actions {
             display: flex;
             flex-wrap: wrap;
             gap: 12px;
             margin-top: 25px;
+        }
+
+        .actions form {
+            flex: 1;
+            display: flex;
+            min-width: 0;
         }
 
         .button {
@@ -133,35 +392,57 @@
             border-radius: 7px;
             text-align: center;
             text-decoration: none;
+            font-family: inherit;
             font-size: 15px;
             font-weight: bold;
+            line-height: 1.5;
             cursor: pointer;
+            transition:
+                background-color 0.2s ease,
+                border-color 0.2s ease,
+                transform 0.15s ease;
+        }
+
+        .button:focus-visible {
+            outline: 2px solid #527c68;
+            outline-offset: 3px;
+        }
+
+        .button:active {
+            transform: translateY(1px);
         }
 
         .accept {
-            color: white;
+            color: #ffffff;
             background: #173f35;
+        }
+
+        .accept:hover {
+            background: #245747;
         }
 
         .reject {
             color: #a12c2c;
-            background: white;
+            background: #ffffff;
             border: 1px solid #d9bcbc;
         }
 
-        .notice {
-            padding: 18px;
-            border-radius: 9px;
-            background: #f7f9f8;
-            border: 1px solid #e5ebe7;
+        .reject:hover {
+            background: #fff5f5;
+            border-color: #c99595;
         }
 
-        .muted {
-            color: #65716c;
-            font-size: 13px;
+        a {
+            overflow-wrap: anywhere;
+        }
+
+        button,
+        input {
+            font-family: inherit;
         }
 
         @media (max-width: 560px) {
+
             .container {
                 margin: 16px auto;
                 padding: 0 10px;
@@ -172,6 +453,14 @@
                 padding: 22px 18px;
             }
 
+            .header {
+                border-radius: 12px 12px 0 0;
+            }
+
+            .content {
+                border-radius: 0 0 12px 12px;
+            }
+
             .header h1 {
                 font-size: 23px;
             }
@@ -180,12 +469,110 @@
                 grid-template-columns: 1fr;
             }
 
+            .detail {
+                padding: 14px;
+            }
+
             .actions {
                 flex-direction: column;
             }
 
+            .actions form {
+                width: 100%;
+            }
+
             .button {
                 width: 100%;
+                min-width: 0;
+            }
+
+            /* Paneles informativos */
+
+            .proposal-info-card {
+                padding: 16px;
+            }
+
+            .proposal-info-heading {
+                gap: 10px;
+                padding-bottom: 15px;
+            }
+
+            .proposal-info-icon {
+                width: 39px;
+                height: 39px;
+                font-size: 18px;
+            }
+
+            .proposal-info-heading h3 {
+                font-size: 15px;
+            }
+
+            .proposal-info-subtitle {
+                font-size: 12px;
+            }
+
+            /* Motivo */
+
+            .proposal-reason-content {
+                margin-top: 14px;
+                padding: 14px;
+            }
+
+            .proposal-reason-content p {
+                font-size: 14px;
+                line-height: 1.75;
+            }
+
+            /* Documentación */
+
+            .proposal-attachment-list {
+                margin-top: 14px;
+                gap: 9px;
+            }
+
+            .proposal-attachment-item {
+                gap: 10px;
+                padding: 11px;
+            }
+
+            .proposal-attachment-file-icon {
+                width: 36px;
+                height: 40px;
+                font-size: 19px;
+            }
+
+            .proposal-attachment-link {
+                font-size: 13px;
+            }
+
+            .proposal-attachment-meta {
+                font-size: 11px;
+            }
+
+            .proposal-attachment-download {
+                width: 34px;
+                height: 34px;
+                font-size: 14px;
+            }
+
+            .proposal-empty-attachments {
+                padding: 22px 8px 6px;
+            }
+
+            .expiry {
+                padding: 15px;
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+
+            *,
+            *::before,
+            *::after {
+                scroll-behavior: auto !important;
+                transition-duration: 0.01ms !important;
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
             }
         }
     </style>
@@ -195,19 +582,24 @@
     <div class="container">
 
         {% if invalid_link %}
+
         <div class="header">
             <h1>Enlace no válido</h1>
             <p>No se puede acceder a esta propuesta.</p>
         </div>
+
         <div class="content">
             <p>El enlace es incorrecto o ya no existe.</p>
         </div>
+
         {% else %}
 
         <div class="header">
             <div>GESTIÓN DE RESERVA</div>
+
             <h1>Propuesta de cambio</h1>
-            <p>{{ property.title }} · Reserva #{{ booking.pk }}</p>
+
+            <p>{{ property.title }}</p>
 
             <div class="status {% if not can_respond %}status-final{% endif %}">
                 {% if can_respond %}
@@ -231,153 +623,272 @@
             {% if status_message %}
             <div class="notice">
                 <strong>{{ status_message }}</strong>
+
                 <p class="muted">
                     Ya no puedes responder a esta propuesta desde esta página.
                 </p>
             </div>
             {% endif %}
 
-            <section class="section">
-                <div class="booking-proposal-reason">
-                    <h4>Motivo de la modificación</h4>
+            <!-- Motivo de la modificación -->
+            <section class="section booking-proposal-reason">
+                <h2>Motivo de la modificación</h2>
 
-                    {% if proposal.reason %}
-                    <p>{{ proposal.reason|linebreaksbr }}</p>
-                    {% else %}
-                    <p>No se indicó ningún motivo.</p>
-                    {% endif %}
+                <div class="proposal-info-card proposal-reason-card">
+
+                    <div class="proposal-info-heading">
+                        <span class="proposal-info-icon" aria-hidden="true">
+                            <i class="bi bi-chat-left-text"></i>
+                        </span>
+
+                        <div>
+                            <h3>Justificación del cambio</h3>
+
+                            <p class="proposal-info-subtitle">
+                                Motivo indicado por el alojamiento
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="proposal-reason-content">
+                        {% if proposal.reason %}
+                        <p>{{ proposal.reason|linebreaksbr }}</p>
+                        {% else %}
+                        <p class="proposal-empty-message">
+                            No se ha indicado ningún motivo para esta modificación.
+                        </p>
+                        {% endif %}
+                    </div>
+
                 </div>
             </section>
 
-            <div class="booking-proposal-attachments">
-                <h4>Documentación adjunta</h4>
+            <!-- Documentación adjunta -->
+            <section class="section booking-proposal-attachments">
+                <h2>Documentación adjunta</h2>
 
-                {% with attachments=proposal.attachments.all %}
-                {% if attachments %}
-                <ul class="booking-attachment-list">
-                    {% for attachment in attachments %}
-                    <li class="booking-attachment-item">
-                        <i class="bi bi-file-earmark-text booking-attachment-icon" aria-hidden="true">
-                        </i>
+                <div class="proposal-info-card proposal-attachments-card">
 
-                        <a
-                            href="{% url 'download_booking_proposal_attachment' attachment.id %}?token={{ access_token|urlencode }}">
-                            {{ attachment.original_filename|default:"Descargar adjunto" }}
-                        </a>
+                    <div class="proposal-info-heading">
+                        <span class="proposal-info-icon" aria-hidden="true">
+                            <i class="bi bi-paperclip"></i>
+                        </span>
 
-                            {% if attachment.size %}
-                            <span class="booking-attachment-size">
-                                ({{ attachment.size|filesizeformat }})
+                        <div>
+                            <h3>Archivos de la propuesta</h3>
+
+                            <p class="proposal-info-subtitle">
+                                Documentación proporcionada por el alojamiento
+                            </p>
+                        </div>
+                    </div>
+
+                    {% with attachments=proposal.attachments.all %}
+
+                    {% if attachments %}
+
+                    <ul class="proposal-attachment-list">
+                        {% for attachment in attachments %}
+
+                        <li class="proposal-attachment-item">
+
+                            <span class="proposal-attachment-file-icon" aria-hidden="true">
+                                <i class="bi bi-file-earmark-text"></i>
                             </span>
-                            {% endif %}
-                    </li>
-                    {% endfor %}
-                </ul>
-                {% else %}
-                <p class="booking-no-attachments">
-                    No se adjuntaron archivos.
-                </p>
-                {% endif %}
-                {% endwith %}
-            </div>
 
+                            <div class="proposal-attachment-info">
+
+                                <a class="proposal-attachment-link"
+                                    href="{% url 'download_booking_proposal_attachment' attachment.id %}?token={{ access_token|urlencode }}">
+                                    {{ attachment.original_filename|default:"Descargar adjunto" }}
+                                </a>
+
+                                <div class="proposal-attachment-meta">
+                                    <span>Documento adjunto</span>
+
+                                    {% if attachment.size %}
+                                    <span class="proposal-attachment-size">
+                                        · {{ attachment.size|filesizeformat }}
+                                    </span>
+                                    {% endif %}
+                                </div>
+
+                            </div>
+
+                            <a class="proposal-attachment-download"
+                                href="{% url 'download_booking_proposal_attachment' attachment.id %}?token={{ access_token|urlencode }}"
+                                aria-label="Descargar {{ attachment.original_filename|default:'documento adjunto' }}"
+                                title="Descargar archivo">
+                                <i class="bi bi-download" aria-hidden="true"></i>
+                            </a>
+
+                        </li>
+
+                        {% endfor %}
+                    </ul>
+
+                    {% else %}
+
+                    <div class="proposal-empty-attachments">
+                        <i class="bi bi-folder2-open" aria-hidden="true"></i>
+
+                        <p>
+                            No se ha adjuntado documentación a esta propuesta.
+                        </p>
+                    </div>
+
+                    {% endif %}
+
+                    {% endwith %}
+
+                </div>
+            </section>
+
+            <!-- Reserva actual -->
             <section class="section">
                 <h2>Reserva actual</h2>
 
                 <div class="details">
+
                     <div class="detail">
                         <span>Entrada actual</span>
-                        <strong>{{ original_booking.initial_date|date:"d/m/Y" }}</strong>
+
+                        <strong>
+                            {{ original_booking.initial_date|date:"d/m/Y" }}
+                        </strong>
                     </div>
 
                     <div class="detail">
                         <span>Salida actual</span>
-                        <strong>{{ original_booking.final_date|date:"d/m/Y" }}</strong>
+
+                        <strong>
+                            {{ original_booking.final_date|date:"d/m/Y" }}
+                        </strong>
                     </div>
 
                     <div class="detail">
                         <span>Número de huéspedes</span>
-                        <strong>{{ original_booking.guest_count }}</strong>
+
+                        <strong>
+                            {{ original_booking.guest_count }}
+                        </strong>
                     </div>
 
                     <div class="detail">
                         <span>Precio total actual</span>
-                        <strong>{{ original_booking.total_price|floatformat:2 }} €</strong>
+
+                        <strong>
+                            {{ original_booking.total_price|floatformat:2 }} €
+                        </strong>
                     </div>
+
                 </div>
             </section>
 
+            <!-- Cambio propuesto -->
             <section class="section proposed">
                 <h2>Cambio propuesto por el alojamiento</h2>
 
                 <div class="details">
+
                     <div class="detail">
                         <span>Nueva entrada</span>
-                        <strong>{{ proposal.proposed_initial_date|date:"d/m/Y" }}</strong>
+
+                        <strong>
+                            {{ proposal.proposed_initial_date|date:"d/m/Y" }}
+                        </strong>
                     </div>
 
                     <div class="detail">
                         <span>Nueva salida</span>
-                        <strong>{{ proposal.proposed_final_date|date:"d/m/Y" }}</strong>
+
+                        <strong>
+                            {{ proposal.proposed_final_date|date:"d/m/Y" }}
+                        </strong>
                     </div>
 
                     <div class="detail">
                         <span>Número de huéspedes propuesto</span>
-                        <strong>{{ proposal.proposed_guest_count }}</strong>
+
+                        <strong>
+                            {{ proposal.proposed_guest_count }}
+                        </strong>
                     </div>
 
                     <div class="detail">
                         <span>Precio total propuesto</span>
-                        <strong>{{ proposal.proposed_total_price|floatformat:2 }} €</strong>
+
+                        <strong>
+                            {{ proposal.proposed_total_price|floatformat:2 }} €
+                        </strong>
                     </div>
+
                 </div>
             </section>
 
+            <!-- Fecha límite para responder -->
             <div class="expiry">
+
                 <strong>Fecha límite para responder</strong>
+
                 {{ expires_at_local|date:"d/m/Y" }}
                 a las {{ expires_at_local|date:"H:i" }}
+
                 <p class="muted">
                     Si no respondes antes de esa fecha, la propuesta caducará.
                 </p>
+
             </div>
 
+            <!-- Acciones de respuesta -->
             {% if can_respond %}
+
             <section class="section">
                 <h2>¿Qué deseas hacer?</h2>
+
                 <p>
                     Revisa las condiciones de la propuesta antes de tomar
                     una decisión.
                 </p>
 
                 <div class="actions">
+
                     <form method="post" action="{% url 'accept_booking_change_proposal' proposal.id %}"
-                        style="flex:1;display:flex;">
+                        style="flex: 1; display: flex;">
                         {% csrf_token %}
+
                         <input type="hidden" name="token" value="{{ access_token }}">
+
                         <button class="button accept" type="submit">
                             Aceptar propuesta
                         </button>
                     </form>
 
                     <form method="post" action="{% url 'reject_booking_change_proposal' proposal.id %}"
-                        style="flex:1;display:flex;"
+                        style="flex: 1; display: flex;"
                         onsubmit="return confirm('¿Seguro que quieres rechazar esta propuesta?');">
                         {% csrf_token %}
+
                         <input type="hidden" name="token" value="{{ access_token }}">
+
                         <button class="button reject" type="submit">
                             Rechazar propuesta
                         </button>
                     </form>
+
                 </div>
             </section>
+
             {% endif %}
 
-            <p class="muted" style="margin-top:30px;">
+            <!-- Pie de página -->
+            <p class="muted" style="margin-top: 30px;">
                 Notificación de reserva de {{ property.title }}.
                 Si tienes dudas, contacta con el alojamiento.
             </p>
+
         </div>
+
         {% endif %}
 
     </div>
