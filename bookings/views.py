@@ -1020,6 +1020,92 @@ def view_booking_change_proposal_by_token(request, token):
         status=200,
     )
 
+def booking_change_proposal_detail(request, token):
+    token_hash = hash_proposal_access_token(token)
+
+    with transaction.atomic():
+        proposal_reference = (
+            BookingChangeProposal.objects
+            .filter(access_token_hash=token_hash)
+            .values("pk", "booking_id")
+            .first()
+        )
+
+        if proposal_reference is None:
+            return render(
+                request,
+                "bookings/booking_change_proposal_detail.html",
+                {"invalid_link": True},
+                status=404,
+            )
+
+        booking = get_object_or_404(
+            Booking.objects.select_for_update().select_related(
+                "property",
+                "property__owner",
+            ),
+            pk=proposal_reference["booking_id"],
+        )
+
+        proposal = get_object_or_404(
+            BookingChangeProposal.objects.select_for_update().prefetch_related(
+                "attachments"
+            ),
+            pk=proposal_reference["pk"],
+            booking=booking,
+            access_token_hash=token_hash,
+        )
+
+        if (
+            proposal.status == BookingChangeProposal.Status.PENDING
+            and proposal.is_expired()
+        ):
+            proposal.status = BookingChangeProposal.Status.EXPIRED
+            proposal.save(update_fields=["status"])
+
+            transaction.on_commit(
+                lambda booking=booking, proposal=proposal:
+                    send_booking_change_proposal_status_email(
+                        booking, proposal, "expired"
+                    )
+            )
+
+    can_respond = proposal.status == BookingChangeProposal.Status.PENDING
+
+    original_booking = proposal.original_booking_snapshot or {}
+
+    if original_booking.get("initial_date"):
+        original_booking["initial_date"] = date.fromisoformat(
+            original_booking["initial_date"]
+        )
+
+    if original_booking.get("final_date"):
+        original_booking["final_date"] = date.fromisoformat(
+            original_booking["final_date"]
+        )
+
+    context = {
+        "invalid_link": False,
+        "property": booking.property,
+        "booking": booking,
+        "proposal": proposal,
+        "original_booking": original_booking,
+        "expires_at_local": timezone.localtime(proposal.expires_at)
+        if proposal.expires_at else None,
+        "can_respond": can_respond,
+        "access_token": token,
+        "status_message": (
+            "Esta propuesta ha caducado o ya ha sido resuelta."
+            if not can_respond else ""
+        ),
+    }
+
+    return render(
+        request,
+        "bookings/booking_change_proposal_detail.html",
+        context,
+    )
+
 @login_required
 def booking_change_form(request, booking_id):
     if not can_manage_properties(request.user):
@@ -1203,6 +1289,49 @@ def download_booking_attachment(request, attachment_id):
             )
 
     if not authorized:
+        raise Http404
+
+    if not attachment.file:
+        raise Http404
+
+    try:
+        file_handle = attachment.file.open("rb")
+    except (FileNotFoundError, OSError, ValueError):
+        raise Http404
+
+    response = FileResponse(
+        file_handle,
+        as_attachment=True,
+        filename=attachment.original_filename or "adjunto",
+    )
+    response["X-Content-Type-Options"] = "nosniff"
+    response["Cache-Control"] = "private, no-store"
+
+    return response
+
+def download_booking_proposal_attachment(request, attachment_id):
+    raw_token = request.GET.get("token", "")
+
+    if not raw_token:
+        raise Http404
+
+    token_hash = hash_proposal_access_token(raw_token)
+
+    attachment = get_object_or_404(
+        BookingAttachment.objects.select_related(
+            "change_proposal__booking"
+        ),
+        pk=attachment_id,
+        change_proposal__isnull=False,
+        change_proposal__access_token_hash=token_hash,
+    )
+
+    proposal = attachment.change_proposal
+
+    if proposal.status != BookingChangeProposal.Status.PENDING:
+        raise Http404
+
+    if proposal.is_expired():
         raise Http404
 
     if not attachment.file:

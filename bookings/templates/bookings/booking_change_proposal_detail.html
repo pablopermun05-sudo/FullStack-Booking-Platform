@@ -238,18 +238,48 @@
             {% endif %}
 
             <section class="section">
-                <h2>Motivo del cambio</h2>
+                <div class="booking-proposal-reason">
+                    <h4>Motivo de la modificación</h4>
 
-                <div class="notice">
                     {% if proposal.reason %}
-                    <p style="white-space: pre-line; margin: 0;">{{ proposal.reason }}</p>
+                    <p>{{ proposal.reason|linebreaksbr }}</p>
                     {% else %}
-                    <p class="muted" style="margin: 0;">
-                        No se ha indicado un motivo para esta propuesta.
-                    </p>
+                    <p>No se indicó ningún motivo.</p>
                     {% endif %}
                 </div>
             </section>
+
+            <div class="booking-proposal-attachments">
+                <h4>Documentación adjunta</h4>
+
+                {% with attachments=proposal.attachments.all %}
+                {% if attachments %}
+                <ul class="booking-attachment-list">
+                    {% for attachment in attachments %}
+                    <li class="booking-attachment-item">
+                        <i class="bi bi-file-earmark-text booking-attachment-icon" aria-hidden="true">
+                        </i>
+
+                        <a
+                            href="{% url 'download_booking_proposal_attachment' attachment.id %}?token={{ access_token|urlencode }}">
+                            {{ attachment.original_filename|default:"Descargar adjunto" }}
+                        </a>
+
+                            {% if attachment.size %}
+                            <span class="booking-attachment-size">
+                                ({{ attachment.size|filesizeformat }})
+                            </span>
+                            {% endif %}
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="booking-no-attachments">
+                    No se adjuntaron archivos.
+                </p>
+                {% endif %}
+                {% endwith %}
+            </div>
 
             <section class="section">
                 <h2>Reserva actual</h2>
