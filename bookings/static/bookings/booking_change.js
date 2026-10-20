@@ -24,47 +24,190 @@ document.addEventListener('DOMContentLoaded', () => {
     const MAX_ATTACHMENTS = 5;
     const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024;
 
+    // Archivos importados: conserva la selección al abrir el selector
+    // varias veces y permite quitar archivos antes de enviar el formulario.
+    let selectedAttachments = [];
+
+    function syncAttachmentsInput() {
+        const dataTransfer = new DataTransfer();
+
+        selectedAttachments.forEach(file => {
+            dataTransfer.items.add(file);
+        });
+
+        attachmentsInput.files = dataTransfer.files;
+    }
+
+    function formatFileSize(bytes) {
+        if (bytes < 1024 * 1024) {
+            return `${(bytes / 1024).toFixed(0)} KB`;
+        }
+
+        return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+    }
+
+    function renderAttachmentsList() {
+        if (!attachmentsList) {
+            return;
+        }
+
+        attachmentsList.replaceChildren();
+
+        const header = document.createElement('div');
+        header.className = 'booking-selected-files-header';
+
+        const count = document.createElement('span');
+        count.className = 'booking-selected-files-count';
+        count.textContent =
+            `Archivos importados (${selectedAttachments.length} de ${MAX_ATTACHMENTS})`;
+
+        header.appendChild(count);
+        attachmentsList.appendChild(header);
+
+        if (selectedAttachments.length === 0) {
+            const emptyMessage = document.createElement('p');
+            emptyMessage.className = 'booking-selected-files-empty';
+            emptyMessage.textContent = 'Todavía no has añadido ningún archivo.';
+            attachmentsList.appendChild(emptyMessage);
+            return;
+        }
+
+        const list = document.createElement('ul');
+        list.className = 'booking-selected-files-list';
+
+        selectedAttachments.forEach((file, index) => {
+            const item = document.createElement('li');
+            item.className = 'booking-selected-file';
+
+            const icon = document.createElement('i');
+            icon.className = 'bi bi-file-earmark-text booking-selected-file-icon';
+            icon.setAttribute('aria-hidden', 'true');
+
+            const details = document.createElement('div');
+            details.className = 'booking-selected-file-details';
+
+            const name = document.createElement('span');
+            name.className = 'booking-selected-file-name';
+            name.textContent = file.name;
+            name.title = file.name;
+
+            const size = document.createElement('span');
+            size.className = 'booking-selected-file-size';
+            size.textContent = formatFileSize(file.size);
+
+            details.append(name, size);
+
+            const removeButton = document.createElement('button');
+            removeButton.type = 'button';
+            removeButton.className = 'booking-selected-file-remove';
+            removeButton.setAttribute(
+                'aria-label',
+                `Quitar archivo ${file.name}`
+            );
+            removeButton.title = 'Quitar archivo';
+            removeButton.innerHTML = '&times;';
+
+            removeButton.addEventListener('click', () => {
+                selectedAttachments.splice(index, 1);
+                syncAttachmentsInput();
+                renderAttachmentsList();
+                messageBox.classList.add('d-none');
+            });
+
+            item.append(icon, details, removeButton);
+            list.appendChild(item);
+        });
+
+        attachmentsList.appendChild(list);
+    }
+
+
     if (attachmentsInput) {
+        const dropzone = document.querySelector('.booking-attachments-dropzone');
+
+        function addAttachments(files) {
+            let validationMessage = '';
+
+            for (const file of Array.from(files)) {
+                const alreadySelected = selectedAttachments.some(
+                    existing =>
+                        existing.name === file.name &&
+                        existing.size === file.size &&
+                        existing.lastModified === file.lastModified
+                );
+
+                if (alreadySelected) {
+                    continue;
+                }
+
+                if (file.size > MAX_ATTACHMENT_SIZE) {
+                    validationMessage =
+                        `El archivo "${file.name}" supera el límite de 10 MB.`;
+                    continue;
+                }
+
+                if (selectedAttachments.length >= MAX_ATTACHMENTS) {
+                    validationMessage =
+                        'Solo puedes adjuntar un máximo de 5 archivos.';
+                    break;
+                }
+
+                selectedAttachments.push(file);
+            }
+
+            syncAttachmentsInput();
+            renderAttachmentsList();
+
+            if (validationMessage) {
+                showMessage(validationMessage);
+            } else {
+                messageBox.classList.add('d-none');
+            }
+        }
+
         attachmentsInput.addEventListener('change', () => {
             const files = Array.from(attachmentsInput.files);
 
-            if (files.length > MAX_ATTACHMENTS) {
-                attachmentsInput.value = '';
-                if (attachmentsList) {
-                    attachmentsList.textContent = '';
-                }
-                showMessage('Puedes adjuntar un máximo de 5 archivos.');
-                return;
-            }
+            addAttachments(files);
 
-            const oversizedFile = files.find(
-                file => file.size > MAX_ATTACHMENT_SIZE
-            );
-
-            if (oversizedFile) {
-                attachmentsInput.value = '';
-                if (attachmentsList) {
-                    attachmentsList.textContent = '';
-                }
-                showMessage(
-                    `El archivo "${oversizedFile.name}" supera el límite de 10 MB.`
-                );
-                return;
-            }
-
-            if (attachmentsList) {
-                attachmentsList.replaceChildren();
-
-                files.forEach(file => {
-                    const item = document.createElement('div');
-                    item.textContent =
-                        `${file.name} (${(file.size / (1024 * 1024)).toFixed(2)} MB)`;
-                    attachmentsList.appendChild(item);
-                });
-            }
-
-            messageBox.classList.add('d-none');
+            // Permite volver a elegir un archivo después de quitarlo.
+            attachmentsInput.value = '';
+            syncAttachmentsInput();
         });
+
+        if (dropzone) {
+            // Evita que el navegador abra el archivo al soltarlo.
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                dropzone.addEventListener(eventName, event => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                });
+            });
+
+            ['dragenter', 'dragover'].forEach(eventName => {
+                dropzone.addEventListener(eventName, () => {
+                    dropzone.classList.add('is-dragging');
+                });
+            });
+
+            ['dragleave', 'drop'].forEach(eventName => {
+                dropzone.addEventListener(eventName, () => {
+                    dropzone.classList.remove('is-dragging');
+                });
+            });
+
+            dropzone.addEventListener('drop', event => {
+                const files = event.dataTransfer
+                    ? Array.from(event.dataTransfer.files)
+                    : [];
+
+                if (files.length > 0) {
+                    addAttachments(files);
+                }
+            });
+        }
+
+        renderAttachmentsList();
     }
 
     const initialDateInput = document.getElementById('proposed-initial-date');
@@ -222,7 +365,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const files = Array.from(attachmentsInput.files);
 
                 if (files.length > MAX_ATTACHMENTS) {
-                    throw new Error('Puedes adjuntar un máximo de 5 archivos.');
+                    throw new Error('Solo puedes adjuntar un máximo de 5 archivos.');
                 }
 
                 for (const file of files) {

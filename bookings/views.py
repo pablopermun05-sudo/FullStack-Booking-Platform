@@ -1276,7 +1276,7 @@ def propose_booking_change(request, booking_id):
     if len(uploaded_files) > 5:
         return JsonResponse(
             {
-                "error": "Puedes adjuntar un máximo de 5 archivos."
+                "error": "Solo puedes adjuntar un máximo de 5 archivos."
             },
             status=400,
         )
