@@ -6,7 +6,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.db import IntegrityError
 from django.db.models import Exists, F, Q, IntegerField, OuterRef, Subquery, Sum, Value, DecimalField, Prefetch
 from django.db.models.functions import Coalesce
-from .models import User, OwnerProfile, Property, Booking, BookingChangeProposal, BookingChangeAudit, BookingNight, PropertyAvailability, BookingHold, can_manage_properties
+from .models import User, OwnerProfile, Property, Booking, BookingChangeProposal, BookingAttachment, BookingChangeAudit, BookingNight, PropertyAvailability, BookingHold, can_manage_properties
 from django import forms
 from django.forms import ModelForm
 from django.contrib.auth.forms import UserCreationForm
@@ -29,7 +29,6 @@ from .emails import (
     send_booking_change_proposal_email,
     send_booking_change_proposal_status_email,
 )
-
 
 
 # Create your views here.
@@ -1125,6 +1124,25 @@ def booking_change_form(request, booking_id):
         },
     )
 
+logger = logging.getLogger(__name__)
+def cleanup_booking_attachment_files(attachments):
+    for attachment in attachments:
+        name = attachment.file.name
+
+        if not name or not name.startswith("booking_attachments/"):
+            continue
+
+        try:
+            storage = attachment.file.storage
+            if storage.exists(name):
+                storage.delete(name)
+        except Exception:
+            # La limpieza no debe ocultar el error original.
+            logger.exception(
+                "No se pudo limpiar el archivo adjunto %s",
+                name,
+            )
+
 @login_required
 def propose_booking_change(request, booking_id):
     if request.method != "POST":
@@ -1154,6 +1172,8 @@ def propose_booking_change(request, booking_id):
             status=400,
         )
         
+    uploaded_files = []
+
     if request.content_type == "application/json":
         try:
             data = json.loads(request.body)
@@ -1168,8 +1188,18 @@ def propose_booking_change(request, booking_id):
                 {"error": "El cuerpo JSON debe ser un objeto."},
                 status=400,
             )
+
     else:
         data = request.POST
+        uploaded_files = request.FILES.getlist("attachments")
+        
+    if len(uploaded_files) > 5:
+        return JsonResponse(
+            {
+                "error": "Puedes adjuntar un máximo de 5 archivos."
+            },
+            status=400,
+        )
 
     reason = (data.get("reason") or "").strip()
 
@@ -1256,6 +1286,8 @@ def propose_booking_change(request, booking_id):
             },
             status=400,
         )
+        
+    attachments_to_save = []
 
     try:
         with transaction.atomic():
@@ -1348,17 +1380,36 @@ def propose_booking_change(request, booking_id):
             proposal.proposed_total_price = total_price
 
             proposal.save()
+            
+            for uploaded_file in uploaded_files:
+                attachment = BookingAttachment(
+                    change_proposal=proposal,
+                    uploaded_by=request.user,
+                    file=uploaded_file,
+                    original_filename=os.path.basename(uploaded_file.name)[:255],
+                    size=uploaded_file.size,
+                )
+
+                # Guardarlo antes de save() permite limpiar el archivo si
+                # falla la validación o la escritura en la base de datos.
+                attachments_to_save.append(attachment)
+                attachment.save()
 
     except ValidationError as exc:
+        cleanup_booking_attachment_files(attachments_to_save)
         return JsonResponse(
             {"error": exc.messages},
             status=400,
         )
     except IntegrityError:
+        cleanup_booking_attachment_files(attachments_to_save)
         return JsonResponse(
             {"error": "Ya existe una propuesta pendiente para esta reserva."},
             status=409,
         )
+    except Exception:
+        cleanup_booking_attachment_files(attachments_to_save)
+        raise
     
     try:
         # El bloque transaction.atomic() ya ha terminado.
@@ -1408,6 +1459,19 @@ def force_booking_change(request, booking_id):
         
     if not request.user.is_staff:
         raise PermissionDenied
+    
+    uploaded_files = request.FILES.getlist("attachments")
+
+    if len(uploaded_files) > 5:
+        return JsonResponse(
+            {
+                "success": False,
+                "error": "Puedes adjuntar un máximo de 5 archivos por acción.",
+            },
+            status=400,
+        )
+
+    attachments_to_save = []
 
     reason = (request.POST.get("force_reason") or "").strip()
     confirmation = request.POST.get("force_confirmation") == "on"
@@ -1617,12 +1681,24 @@ def force_booking_change(request, booking_id):
                 "nights": new_nightly_prices,
             }
 
-            BookingChangeAudit.objects.create(
+            audit = BookingChangeAudit.objects.create(
                 booking=booking,
                 actor=request.user,
                 before_values=before_values,
                 after_values=after_values,
             )
+
+            for uploaded_file in uploaded_files:
+                attachment = BookingAttachment(
+                    change_audit=audit,
+                    uploaded_by=request.user,
+                    file=uploaded_file,
+                    original_filename=os.path.basename(uploaded_file.name)[:255],
+                    size=uploaded_file.size,
+                )
+
+                attachments_to_save.append(attachment)
+                attachment.save()
 
             pending_proposals = list(
                 BookingChangeProposal.objects.select_for_update().filter(
@@ -1643,6 +1719,7 @@ def force_booking_change(request, booking_id):
                 )
 
     except ValidationError as exc:
+        cleanup_booking_attachment_files(attachments_to_save)
         return JsonResponse(
             {
                 "success": False,
@@ -1656,6 +1733,7 @@ def force_booking_change(request, booking_id):
             status=400,
         )
     except IntegrityError:
+        cleanup_booking_attachment_files(attachments_to_save)
         return JsonResponse(
             {
                 "success": False,
@@ -1663,6 +1741,9 @@ def force_booking_change(request, booking_id):
             },
             status=409,
         )
+    except Exception:
+        cleanup_booking_attachment_files(attachments_to_save)
+        raise
 
     return JsonResponse(
         {

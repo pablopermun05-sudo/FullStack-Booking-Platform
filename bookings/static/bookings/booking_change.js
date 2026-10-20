@@ -18,10 +18,59 @@ document.addEventListener('DOMContentLoaded', () => {
     const proposalReasonFields = document.getElementById('proposal-reason-fields');
     const proposalReason = document.getElementById('proposal-reason');
 
+    const attachmentsInput = document.getElementById('booking-attachments');
+    const attachmentsList = document.getElementById('booking-attachments-list');
+
+    const MAX_ATTACHMENTS = 5;
+    const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024;
+
+    if (attachmentsInput) {
+        attachmentsInput.addEventListener('change', () => {
+            const files = Array.from(attachmentsInput.files);
+
+            if (files.length > MAX_ATTACHMENTS) {
+                attachmentsInput.value = '';
+                if (attachmentsList) {
+                    attachmentsList.textContent = '';
+                }
+                showMessage('Puedes adjuntar un máximo de 5 archivos.');
+                return;
+            }
+
+            const oversizedFile = files.find(
+                file => file.size > MAX_ATTACHMENT_SIZE
+            );
+
+            if (oversizedFile) {
+                attachmentsInput.value = '';
+                if (attachmentsList) {
+                    attachmentsList.textContent = '';
+                }
+                showMessage(
+                    `El archivo "${oversizedFile.name}" supera el límite de 10 MB.`
+                );
+                return;
+            }
+
+            if (attachmentsList) {
+                attachmentsList.replaceChildren();
+
+                files.forEach(file => {
+                    const item = document.createElement('div');
+                    item.textContent =
+                        `${file.name} (${(file.size / (1024 * 1024)).toFixed(2)} MB)`;
+                    attachmentsList.appendChild(item);
+                });
+            }
+
+            messageBox.classList.add('d-none');
+        });
+    }
+
     const initialDateInput = document.getElementById('proposed-initial-date');
     const finalDateInput = document.getElementById('proposed-final-date');
     const guestCountInput = document.getElementById('proposed-guest-count');
-    
+
     // Mantener sincronizada la cotización al cambiar las fechas,
     // tanto para propuestas como para cambios forzados.
     form.addEventListener('bookingDatesChanged', () => {
@@ -73,7 +122,7 @@ document.addEventListener('DOMContentLoaded', () => {
             : 'Enviar propuesta de cambio';
     }
 
-    
+
     function updatePriceDifference() {
         const totalElement = document.getElementById('proposed-total-price');
         const proposedTotalLabel = document.getElementById('proposed-total-price-label');
@@ -168,6 +217,24 @@ document.addEventListener('DOMContentLoaded', () => {
             formData.append('proposed_initial_date', proposedInitialDate);
             formData.append('proposed_final_date', proposedFinalDate);
             formData.append('proposed_guest_count', String(proposedGuestCount));
+
+            if (attachmentsInput) {
+                const files = Array.from(attachmentsInput.files);
+
+                if (files.length > MAX_ATTACHMENTS) {
+                    throw new Error('Puedes adjuntar un máximo de 5 archivos.');
+                }
+
+                for (const file of files) {
+                    if (file.size > MAX_ATTACHMENT_SIZE) {
+                        throw new Error(
+                            `El archivo "${file.name}" supera el límite de 10 MB.`
+                        );
+                    }
+
+                    formData.append('attachments', file);
+                }
+            }
 
             let endpoint = form.dataset.proposalUrl;
 

@@ -221,6 +221,25 @@
                             </div>
                         </div>
 
+
+                        <!-- Archivos adjuntos de la propuesta -->
+                        <div class="mb-4">
+                            <label for="booking-attachments" class="form-label fw-bold">
+                                Documentación adjunta (opcional)
+                            </label>
+
+                            <input type="file" id="booking-attachments" name="attachments" class="form-control" multiple
+                                accept=".pdf,.jpg,.jpeg,.png,.webp,.docx,.xlsx,.pptx,.txt,.csv">
+
+                            <div class="form-text">
+                                Puedes adjuntar hasta 5 archivos. Máximo 10 MB por archivo.
+                                Formatos permitidos: PDF, JPG, PNG, WebP, DOCX, XLSX, PPTX, TXT y CSV.
+                            </div>
+
+                            <div id="booking-attachments-list" class="small mt-2"></div>
+                        </div>
+
+
                         <!-- Alternativa de fechas -->
 
                         <div id="alternative-dates" class="alert alert-warning d-none" role="alert">
