@@ -37,4 +37,5 @@ urlpatterns = [
     path("booking-proposal-attachment/<int:attachment_id>/download/", views.download_booking_proposal_attachment, name="download_booking_proposal_attachment"),
     path("booking-attachment/forced/<int:attachment_id>/<str:token>/", views.download_forced_booking_attachment, name="download_forced_booking_attachment"),
     path("bookings/<int:booking_id>/cancellation/propose/", views.propose_booking_cancellation, name="propose_booking_cancellation"),
+    path("booking/<int:booking_id>/force-cancellation", views.force_booking_cancellation, name="force_booking_cancellation"),
 ]

@@ -2228,6 +2228,137 @@ def force_booking_change(request, booking_id):
         status=200,
     )
 
+@login_required
+def force_booking_cancellation(request, booking_id):
+    if request.method != "POST":
+        return JsonResponse(
+            {"error": "Método no permitido."},
+            status=405,
+        )
+
+    if not request.user.is_staff:
+        raise PermissionDenied
+
+    reason, uploaded_files, error_response = (
+        _validate_cancellation_request_input(request)
+    )
+    if error_response:
+        return error_response
+
+    attachments_to_save = []
+
+    try:
+        with transaction.atomic():
+            booking = get_object_or_404(
+                Booking.objects.select_for_update().select_related(
+                    "property",
+                    "property__owner",
+                ),
+                pk=booking_id,
+            )
+
+            if booking.status not in Booking.ACTIVE_STATUSES:
+                return JsonResponse(
+                    {
+                        "error": (
+                            "Solo se pueden cancelar reservas "
+                            "pendientes o confirmadas."
+                        )
+                    },
+                    status=400,
+                )
+
+            if (
+                booking.status == "PENDING"
+                and booking.is_expired()
+            ):
+                booking.expire()
+                return JsonResponse(
+                    {
+                        "error": (
+                            "La reserva pendiente ha caducado "
+                            "y se ha marcado como caducada."
+                        )
+                    },
+                    status=409,
+                )
+
+            now = timezone.now()
+
+            # Las solicitudes previas dejan de poder aceptarse o rechazarse.
+            BookingCancellationRequest.objects.filter(
+                booking=booking,
+                status=BookingCancellationRequest.Status.PENDING,
+            ).update(
+                status=BookingCancellationRequest.Status.CANCELLED,
+            )
+
+            cancellation = BookingCancellationRequest.objects.create(
+                booking=booking,
+                requested_by=request.user,
+                request_type=(
+                    BookingCancellationRequest.RequestType.ADMIN_FORCED
+                ),
+                status=BookingCancellationRequest.Status.EXECUTED,
+                reason=reason,
+                created_at=now,
+                responded_at=now,
+            )
+
+            for uploaded_file in uploaded_files:
+                attachment = BookingAttachment(
+                    cancellation_request=cancellation,
+                    uploaded_by=request.user,
+                    file=uploaded_file,
+                    original_filename=os.path.basename(
+                        uploaded_file.name
+                    )[:255],
+                    size=uploaded_file.size,
+                )
+                attachments_to_save.append(attachment)
+                attachment.save()
+
+            # La cancelación y sus adjuntos se guardan atómicamente.
+            booking.cancel()
+
+    except ValidationError as exc:
+        cleanup_booking_attachment_files(attachments_to_save)
+        return JsonResponse({"error": exc.messages}, status=400)
+
+    except IntegrityError:
+        cleanup_booking_attachment_files(attachments_to_save)
+        return JsonResponse(
+            {
+                "error": (
+                    "No se ha podido registrar la cancelación "
+                    "por un conflicto con otra operación."
+                )
+            },
+            status=409,
+        )
+
+    except Exception:
+        cleanup_booking_attachment_files(attachments_to_save)
+        raise
+
+    return JsonResponse(
+        {
+            "success": True,
+            "message": "La reserva se ha cancelado por decisión administrativa.",
+            "cancellation_request": {
+                "id": cancellation.pk,
+                "booking_id": booking.pk,
+                "request_type": cancellation.request_type,
+                "status": cancellation.status,
+                "reason": cancellation.reason,
+                "attachments_count": len(attachments_to_save),
+            },
+            "booking_status": booking.status,
+            "notification_sent": False,
+        },
+        status=200,
+    )
+
 def authorize_booking_change_proposal(request, booking, proposal, raw_token=""):
     """
     Autoriza al huésped mediante su sesión o mediante el token
@@ -2254,6 +2385,32 @@ def authorize_booking_change_proposal(request, booking, proposal, raw_token=""):
 
     if not secrets.compare_digest(stored_hash, provided_hash):
         raise PermissionDenied
+
+def _validate_cancellation_request_input(request):
+    uploaded_files = request.FILES.getlist("attachments")
+    reason = (request.POST.get("reason") or "").strip()
+
+    if not reason:
+        return None, None, JsonResponse(
+            {"error": "El motivo de la cancelación es obligatorio."},
+            status=400,
+        )
+
+    if len(reason) > 1000:
+        return None, None, JsonResponse(
+            {"error": "El motivo no puede superar los 1000 caracteres."},
+            status=400,
+        )
+
+    if len(uploaded_files) > 5:
+        return None, None, JsonResponse(
+            {
+                "error": "Solo puedes adjuntar un máximo de 5 archivos."
+            },
+            status=400,
+        )
+
+    return reason, uploaded_files, None
 
 def redirect_after_booking_change(request, raw_token):
     if raw_token:
