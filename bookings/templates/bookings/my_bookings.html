@@ -199,6 +199,46 @@
             <article class="booking-proposal">
                 <h3>Propuesta de cambio de reserva</h3>
 
+                <div class="booking-proposal-reason">
+                    <h4>Motivo de la modificación</h4>
+
+                    {% if proposal.reason %}
+                    <p>{{ proposal.reason|linebreaksbr }}</p>
+                    {% else %}
+                    <p>No se indicó ningún motivo.</p>
+                    {% endif %}
+                </div>
+
+                <div class="booking-proposal-attachments">
+                    <h4>Archivos adjuntos</h4>
+
+                    {% with attachments=proposal.attachments.all %}
+                    {% if attachments %}
+                    <ul class="booking-attachment-list">
+                        {% for attachment in attachments %}
+                        <li class="booking-attachment-item">
+                            <i class="bi bi-file-earmark-text booking-attachment-icon" aria-hidden="true"></i>
+
+                            <a href="{% url 'download_booking_attachment' attachment.id %}">
+                                {{ attachment.original_filename|default:"Descargar adjunto" }}
+                            </a>
+
+                            {% if attachment.size %}
+                            <span class="booking-attachment-size">
+                                ({{ attachment.size|filesizeformat }})
+                            </span>
+                            {% endif %}
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% else %}
+                    <p class="booking-no-attachments">
+                        No se adjuntaron archivos.
+                    </p>
+                    {% endif %}
+                    {% endwith %}
+                </div>
+
                 <p>
                     <strong>Entrada propuesta:</strong>
                     {{ proposal.proposed_initial_date|date:"d M Y" }}
