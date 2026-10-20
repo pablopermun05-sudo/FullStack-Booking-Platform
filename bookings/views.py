@@ -953,11 +953,15 @@ def view_booking_change_proposal_by_token(request, token):
     )
 
     if proposal_reference is None:
-        return JsonResponse(
-            {"error": "El enlace de la propuesta no es válido."},
+        return render(
+            request,
+            "bookings/booking_change_proposal_error.html",
+            {
+                "error": "El enlace de la propuesta no es válido.",
+            },
             status=404,
         )
-    
+
     with transaction.atomic():
         # Bloquear primero la reserva y después la propuesta.
         booking = get_object_or_404(
@@ -975,7 +979,7 @@ def view_booking_change_proposal_by_token(request, token):
             access_token_hash=token_hash,
         )
 
-        # Solo caducar y notificar si sigue pendiente y ha vencido.
+        # Caducar únicamente si sigue pendiente y ha vencido.
         if (
             proposal.status == BookingChangeProposal.Status.PENDING
             and proposal.is_expired()
@@ -989,37 +993,54 @@ def view_booking_change_proposal_by_token(request, token):
                         booking, proposal, "expired"
                     )
             )
-    
+
+    # Cargar la propuesta y las relaciones necesarias para la plantilla.
+    proposal = (
+        BookingChangeProposal.objects
+        .select_related("booking", "booking__property")
+        .prefetch_related("attachments")
+        .get(pk=proposal.pk)
+    )
+
     booking = proposal.booking
 
-    # Una propuesta vencida o ya resuelta no puede consultarse
-    # como una propuesta pendiente.
-    if proposal.status == BookingChangeProposal.Status.PENDING:
-        if proposal.is_expired():
-            proposal.status = BookingChangeProposal.Status.EXPIRED
-            proposal.save(update_fields=["status"])
+    can_respond = proposal.status == BookingChangeProposal.Status.PENDING
 
-    if proposal.status != BookingChangeProposal.Status.PENDING:
-        return JsonResponse(
-            {
-                "error": "La propuesta ha caducado o ya ha sido resuelta.",
-                "status": proposal.status,
-            },
-            status=410,
+    # Recuperar la fotografía de la reserva original.
+    original_booking = proposal.original_booking_snapshot or {}
+
+    if original_booking.get("initial_date"):
+        original_booking["initial_date"] = date.fromisoformat(
+            original_booking["initial_date"]
         )
 
-    return JsonResponse(
-        {
-            "id": proposal.pk,
-            "status": proposal.status,
-            "proposed_initial_date": (
-                proposal.proposed_initial_date.isoformat()
-            ),
-            "proposed_final_date": (
-                proposal.proposed_final_date.isoformat()
-            ),
-        },
-        status=200,
+    if original_booking.get("final_date"):
+        original_booking["final_date"] = date.fromisoformat(
+            original_booking["final_date"]
+        )
+
+    context = {
+        "invalid_link": False,
+        "property": booking.property,
+        "booking": booking,
+        "proposal": proposal,
+        "original_booking": original_booking,
+        "expires_at_local": (
+            timezone.localtime(proposal.expires_at)
+            if proposal.expires_at else None
+        ),
+        "can_respond": can_respond,
+        "access_token": token,
+        "status_message": (
+            "Esta propuesta ha caducado o ya ha sido resuelta."
+            if not can_respond else ""
+        ),
+    }
+
+    return render(
+        request,
+        "bookings/booking_change_proposal_detail.html",
+        context,
     )
 
 def booking_change_proposal_detail(request, token):
