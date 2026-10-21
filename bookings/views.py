@@ -2463,8 +2463,8 @@ def force_booking_cancellation(request, booking_id):
                     )[:255],
                     size=uploaded_file.size,
                 )
-                attachment.save()
                 attachments_to_save.append(attachment)
+                attachment.save()
 
             # Ejecutar la cancelación real de la reserva.
             if not booking.cancel():
