@@ -215,10 +215,13 @@
 
                 <div class="booking-proposal-reason">
                     <h4>Motivo de la modificación</h4>
+
                     {% if proposal.reason %}
                     <p>{{ proposal.reason|linebreaksbr }}</p>
                     {% else %}
-                    <p>No se indicó ningún motivo.</p>
+                    <p class="booking-reason-empty">
+                        No se ha indicado ningún motivo para esta modificación.
+                    </p>
                     {% endif %}
                 </div>
 
@@ -276,7 +279,7 @@
                 </p>
 
                 <p>
-                    <strong>Caduca:</strong>
+                    <strong>Fecha límite de respuesta:</strong>
                     {{ proposal.expires_at|date:"d M Y H:i" }}
                 </p>
 
@@ -304,11 +307,6 @@
             {% for cancellation in booking.active_cancellation_requests %}
             <article class="booking-proposal cancellation-request">
                 <h3>Solicitud de cancelación</h3>
-
-                <p>
-                    <strong>Solicitada por:</strong>
-                    {{ cancellation.get_request_type_display }}
-                </p>
 
                 <div class="booking-proposal-reason">
                     <h4>Motivo de la cancelación</h4>
