@@ -58,9 +58,9 @@
                         <div class="col-md-6">
                             <div class="border rounded p-3 h-100">
                                 <small class="text-body-secondary d-block">
-                                    Estado
+                                    Precio total de la reserva
                                 </small>
-                                <strong>{{ booking.status }}</strong>
+                                <strong>{{ booking.total_price|floatformat:2 }} €</strong>
                             </div>
                         </div>
                     </div>
