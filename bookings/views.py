@@ -1551,7 +1551,21 @@ def propose_booking_change(request, booking_id):
             status=400,
         )
 
-    reason = (data.get("reason") or "").strip()
+    reason_raw = data.get("reason")
+
+    if not isinstance(reason_raw, str):
+        return JsonResponse(
+            {"error": "The reason must be a string."},
+            status=400,
+        )
+
+    reason = reason_raw.strip()
+
+    if not reason:
+        return JsonResponse(
+            {"error": "The reason is required."},
+            status=400,
+        )
 
     if not reason:
         return JsonResponse(
