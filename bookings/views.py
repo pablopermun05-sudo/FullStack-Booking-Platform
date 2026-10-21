@@ -1008,12 +1008,8 @@ def view_booking_change_proposal_by_token(request, token):
     )
 
     if proposal_reference is None:
-        return render(
-            request,
-            "bookings/booking_change_proposal_error.html",
-            {
-                "error": "El enlace de la propuesta no es válido.",
-            },
+        return JsonResponse(
+            {"error": "El enlace de la propuesta no es válido."},
             status=404,
         )
 
@@ -1092,10 +1088,13 @@ def view_booking_change_proposal_by_token(request, token):
         ),
     }
 
+    response_status = 200 if can_respond else 410
+
     return render(
         request,
         "bookings/booking_change_proposal_detail.html",
         context,
+        status=response_status,
     )
 
 def booking_change_proposal_detail(request, token):

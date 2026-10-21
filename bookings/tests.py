@@ -3725,7 +3725,7 @@ class BookingCancellationViewTestCase(BookingTestBase):
         self.assertEqual(response.status_code, 405)
         self.assertEqual(
             response.json()["error"],
-            "Method not allowed",
+            "Método no permitido.",
         )
 
         self.assertTrue(
@@ -5378,7 +5378,7 @@ class BookingChangeProposalViewTestCase(BookingTestBase):
             mail.outbox[0].body,
         )
         self.assertIn(
-            "booking-change-proposal/access/",
+            "booking-change-proposal/detail/",
             mail.outbox[0].body,
         )
         self.assertIn(
@@ -6193,14 +6193,19 @@ class BookingChangeProposalTokenTestCase(BookingTestBase):
         response = self.client.get(self.url)
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(
-            response.json()["proposed_initial_date"],
-            self.proposal.proposed_initial_date.isoformat(),
+        self.assertTemplateUsed(
+            response,
+            "bookings/booking_change_proposal_detail.html",
         )
         self.assertEqual(
-            response.json()["proposed_final_date"],
-            self.proposal.proposed_final_date.isoformat(),
+            response.context["proposal"].proposed_initial_date,
+            self.proposal.proposed_initial_date,
         )
+        self.assertEqual(
+            response.context["proposal"].proposed_final_date,
+            self.proposal.proposed_final_date,
+        )
+        self.assertTrue(response.context["can_respond"])
 
     def test_invalid_token_cannot_access_proposal(self):
         response = self.client.get(
