@@ -72,7 +72,7 @@
                         method="post"
                         enctype="multipart/form-data"
                         data-proposal-url="{% url 'propose_booking_cancellation' booking.id %}"
-                        data-force-url="{% url 'propose_booking_cancellation' booking.id %}"
+                        data-force-url="{% url 'force_booking_cancellation' booking.id %}"
                     >
                         {% csrf_token %}
 
@@ -234,7 +234,9 @@
                                 class="btn btn-dark rounded-pill py-2"
                             >
                                 <i class="bi bi-send me-1"></i>
-                                Enviar propuesta de cancelación
+                                <span id="submit-cancellation-text">
+                                    Enviar propuesta de cancelación
+                                </span>
                             </button>
 
                             <a

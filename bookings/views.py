@@ -2323,20 +2323,44 @@ def force_booking_change(request, booking_id):
 def force_booking_cancellation(request, booking_id):
     if request.method != "POST":
         return JsonResponse(
-            {"error": "Método no permitido."},
+            {
+                "success": False,
+                "error": "Método no permitido.",
+            },
             status=405,
         )
 
     if not request.user.is_staff:
         raise PermissionDenied
 
+    # Validar la confirmación explícita del administrador.
+    if request.POST.get("force_confirmation") != "on":
+        return JsonResponse(
+            {
+                "success": False,
+                "error": (
+                    "Debes confirmar expresamente que deseas "
+                    "forzar la cancelación de la reserva."
+                ),
+            },
+            status=400,
+        )
+
     reason, uploaded_files, error_response = (
         _validate_cancellation_request_input(request)
     )
+
     if error_response:
-        return error_response
+        return JsonResponse(
+            {
+                "success": False,
+                "error": error_response.content.decode("utf-8"),
+            },
+            status=error_response.status_code,
+        )
 
     attachments_to_save = []
+    cancellation = None
 
     try:
         with transaction.atomic():
@@ -2348,42 +2372,74 @@ def force_booking_cancellation(request, booking_id):
                 pk=booking_id,
             )
 
+            # Solo se pueden cancelar reservas activas.
             if booking.status not in Booking.ACTIVE_STATUSES:
                 return JsonResponse(
                     {
+                        "success": False,
                         "error": (
                             "Solo se pueden cancelar reservas "
                             "pendientes o confirmadas."
-                        )
+                        ),
                     },
-                    status=400,
+                    status=409,
                 )
 
+            # Comprobar si una reserva pendiente ya ha caducado.
             if (
                 booking.status == "PENDING"
-                and booking.is_expired()
+                and booking.expires_at is not None
+                and booking.expires_at <= timezone.now()
             ):
                 booking.expire()
+
                 return JsonResponse(
                     {
+                        "success": False,
                         "error": (
                             "La reserva pendiente ha caducado "
                             "y se ha marcado como caducada."
-                        )
+                        ),
                     },
                     status=409,
                 )
 
             now = timezone.now()
 
-            # Las solicitudes previas dejan de poder aceptarse o rechazarse.
-            BookingCancellationRequest.objects.filter(
-                booking=booking,
-                status=BookingCancellationRequest.Status.PENDING,
-            ).update(
-                status=BookingCancellationRequest.Status.CANCELLED,
+            # Cerrar las solicitudes de cancelación pendientes anteriores.
+            pending_cancellations = list(
+                BookingCancellationRequest.objects.select_for_update().filter(
+                    booking=booking,
+                    status=BookingCancellationRequest.Status.PENDING,
+                )
             )
 
+            for pending_cancellation in pending_cancellations:
+                pending_cancellation.status = (
+                    BookingCancellationRequest.Status.CANCELLED
+                )
+                pending_cancellation.save(update_fields=["status"])
+
+            # Cerrar las propuestas de cambio pendientes.
+            pending_proposals = list(
+                BookingChangeProposal.objects.select_for_update().filter(
+                    booking=booking,
+                    status=BookingChangeProposal.Status.PENDING,
+                )
+            )
+
+            for proposal in pending_proposals:
+                proposal.status = BookingChangeProposal.Status.CANCELLED
+                proposal.save(update_fields=["status"])
+
+                transaction.on_commit(
+                    lambda b=booking, p=proposal:
+                        send_booking_change_proposal_status_email(
+                            b, p, "cancelled"
+                        )
+                )
+
+            # Registrar la cancelación como ejecutada, nunca como pendiente.
             cancellation = BookingCancellationRequest.objects.create(
                 booking=booking,
                 requested_by=request.user,
@@ -2396,6 +2452,7 @@ def force_booking_cancellation(request, booking_id):
                 responded_at=now,
             )
 
+            # Guardar los archivos adjuntos.
             for uploaded_file in uploaded_files:
                 attachment = BookingAttachment(
                     cancellation_request=cancellation,
@@ -2406,24 +2463,41 @@ def force_booking_cancellation(request, booking_id):
                     )[:255],
                     size=uploaded_file.size,
                 )
-                attachments_to_save.append(attachment)
                 attachment.save()
+                attachments_to_save.append(attachment)
 
-            # La cancelación y sus adjuntos se guardan atómicamente.
-            booking.cancel()
+            # Ejecutar la cancelación real de la reserva.
+            if not booking.cancel():
+                raise IntegrityError(
+                    "No se ha podido ejecutar la cancelación."
+                )
 
     except ValidationError as exc:
         cleanup_booking_attachment_files(attachments_to_save)
-        return JsonResponse({"error": exc.messages}, status=400)
+
+        return JsonResponse(
+            {
+                "success": False,
+                "error": "La cancelación no supera las validaciones.",
+                "details": (
+                    exc.message_dict
+                    if hasattr(exc, "message_dict")
+                    else exc.messages
+                ),
+            },
+            status=400,
+        )
 
     except IntegrityError:
         cleanup_booking_attachment_files(attachments_to_save)
+
         return JsonResponse(
             {
+                "success": False,
                 "error": (
                     "No se ha podido registrar la cancelación "
                     "por un conflicto con otra operación."
-                )
+                ),
             },
             status=409,
         )
@@ -2435,13 +2509,18 @@ def force_booking_cancellation(request, booking_id):
     return JsonResponse(
         {
             "success": True,
-            "message": "La reserva se ha cancelado por decisión administrativa.",
+            "message": (
+                "La reserva se ha cancelado por decisión administrativa."
+            ),
+            "booking_id": booking.pk,
             "cancellation_request": {
                 "id": cancellation.pk,
                 "booking_id": booking.pk,
                 "request_type": cancellation.request_type,
                 "status": cancellation.status,
                 "reason": cancellation.reason,
+                "created_at": cancellation.created_at.isoformat(),
+                "responded_at": cancellation.responded_at.isoformat(),
                 "attachments_count": len(attachments_to_save),
             },
             "booking_status": booking.status,
@@ -2449,7 +2528,7 @@ def force_booking_cancellation(request, booking_id):
         },
         status=200,
     )
-
+    
 def authorize_booking_change_proposal(request, booking, proposal, raw_token=""):
     """
     Autoriza al huésped mediante su sesión o mediante el token

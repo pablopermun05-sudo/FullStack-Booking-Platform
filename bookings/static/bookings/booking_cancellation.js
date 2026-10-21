@@ -36,6 +36,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (forceConfirmation) {
             forceConfirmation.required = isForced;
+
+            if (!isForced) {
+                forceConfirmation.checked = false;
+            }
         }
 
         submitButton.innerHTML = isForced
@@ -264,11 +268,15 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const formData = new FormData(form);
 
-            // El endpoint de propuesta y el de forzado pueden ser distintos
-            // en el futuro; por ahora la vista gestiona ambos modos.
             const endpoint = isForced
                 ? form.dataset.forceUrl
                 : form.dataset.proposalUrl;
+
+            if (!endpoint) {
+                throw new Error(
+                    'No se ha configurado la URL para esta modalidad de cancelación.'
+                );
+            }
 
             const response = await fetch(endpoint, {
                 method: 'POST',
