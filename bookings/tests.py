@@ -2,7 +2,7 @@ from django.test import Client, TestCase, TransactionTestCase
 from django.urls import reverse
 
 from bookings.views import PENDING_BOOKING_MINUTES
-from .models import User, OwnerProfile, Property, Booking, BookingChangeProposal, BookingChangeAudit, BookingNight, BookingHold, PropertyAvailability, can_manage_properties
+from .models import User, OwnerProfile, Property, Booking, BookingChangeProposal, BookingChangeAudit, BookingNight, BookingHold, BookingCancellationRequest, PropertyAvailability, can_manage_properties
 from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import ValidationError
 from django.utils import timezone
@@ -24,6 +24,7 @@ from django.core import mail
 from django.test import override_settings, Client
 from datetime import timedelta
 import uuid
+from django.contrib.auth import get_user_model
 
 class OwnerProfileTestCase(TestCase):
     def test_owner_profile_is_pending_by_default(self):
@@ -7359,4 +7360,336 @@ class PropertyAvailabilityTestCase(TestCase):
                 property=self.property,
             ).count(),
             0,
+        )
+        
+User = get_user_model()
+class BookingCancellationResponseTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        # Usuario propietario de la vivienda.
+        cls.owner = User.objects.create_user(
+            username="cancellation-owner",
+            email="cancellation-owner@example.com",
+            password="test-password",
+            first_name="Propietario",
+            last_name="Prueba",
+        )
+
+        # Huésped titular de la reserva.
+        cls.guest = User.objects.create_user(
+            username="cancellation-guest",
+            email="cancellation-guest@example.com",
+            password="test-password",
+            first_name="Huesped",
+            last_name="Prueba",
+        )
+
+        # Segundo huésped: no debe poder responder a la reserva ajena.
+        cls.other_guest = User.objects.create_user(
+            username="cancellation-other-guest",
+            email="cancellation-other-guest@example.com",
+            password="test-password",
+            first_name="Otro",
+            last_name="Huesped",
+        )
+
+        # Propiedad válida según las reglas de tu modelo.
+        cls.property = Property.objects.create(
+            title="Alojamiento de prueba",
+            description="Propiedad creada para pruebas automatizadas.",
+            location="Sevilla",
+            image="properties/test-property.jpg",
+            default_price_per_night=Decimal("100.00"),
+            default_min_nights=1,
+            children=2,
+            adults=4,
+            rooms=2,
+            notice_period_days=0,
+            allow_pets=False,
+            owner=cls.owner,
+        )
+
+        # Fechas futuras para cumplir las validaciones de Booking.clean().
+        today = date.today()
+        initial_date = today + timedelta(days=30)
+        final_date = initial_date + timedelta(days=3)
+
+        cls.booking = Booking.objects.create(
+            tenant=cls.guest,
+            property=cls.property,
+            initial_date=initial_date,
+            final_date=final_date,
+            status="CONFIRMED",
+            guest_first_name="Huesped",
+            guest_last_name="Prueba",
+            guest_email="cancellation-guest@example.com",
+            guest_phone_number="+34612345678",
+            guest_country="España",
+            guest_region="Andalucía",
+            guest_city="Sevilla",
+            guest_postal_code="41001",
+            guest_address="Calle de prueba 1",
+            is_for_self=True,
+            is_business_trip=False,
+            guest_count=2,
+            special_requests="",
+            arrival_time=time(15, 0),
+        )
+
+        # El propietario propone cancelar; el huésped responde.
+        cls.cancellation = BookingCancellationRequest.objects.create(
+            booking=cls.booking,
+            requested_by=cls.owner,
+            request_type=(
+                BookingCancellationRequest.RequestType.OWNER_REQUEST
+            ),
+            status=BookingCancellationRequest.Status.PENDING,
+            reason="Necesitamos cancelar la reserva.",
+            expires_at=timezone.now() + timedelta(hours=48),
+        )
+
+    def test_guest_can_accept_cancellation(self):
+        self.client.force_login(self.guest)
+
+        response = self.client.post(
+            reverse(
+                "accept_booking_cancellation",
+                args=[self.cancellation.pk],
+            ),
+            HTTP_ACCEPT="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+        self.booking.refresh_from_db()
+        self.cancellation.refresh_from_db()
+
+        self.assertEqual(self.booking.status, "CANCELLED")
+        self.assertEqual(
+            self.cancellation.status,
+            BookingCancellationRequest.Status.ACCEPTED,
+        )
+        self.assertIsNotNone(self.cancellation.responded_at)
+
+    def test_guest_can_reject_cancellation_with_reason(self):
+        self.client.force_login(self.guest)
+
+        response = self.client.post(
+            reverse(
+                "reject_booking_cancellation",
+                args=[self.cancellation.pk],
+            ),
+            {
+                "response_reason": "No podemos aceptar la cancelación.",
+            },
+            HTTP_ACCEPT="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+        self.cancellation.refresh_from_db()
+
+        self.assertEqual(
+            self.cancellation.status,
+            BookingCancellationRequest.Status.REJECTED,
+        )
+        self.assertEqual(
+            self.cancellation.response_reason,
+            "No podemos aceptar la cancelación.",
+        )
+        self.assertIsNotNone(self.cancellation.responded_at)
+
+    def test_other_guest_cannot_respond(self):
+        self.client.force_login(self.other_guest)
+
+        response = self.client.post(
+            reverse(
+                "accept_booking_cancellation",
+                args=[self.cancellation.pk],
+            ),
+            HTTP_ACCEPT="application/json",
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+        self.cancellation.refresh_from_db()
+
+        self.assertEqual(
+            self.cancellation.status,
+            BookingCancellationRequest.Status.PENDING,
+        )
+
+    def test_expired_request_cannot_be_accepted(self):
+        # Simulamos que el tiempo ha pasado sin violar la validación
+        # expires_at > created_at del modelo.
+        now = timezone.now()
+
+        BookingCancellationRequest.objects.filter(
+            pk=self.cancellation.pk,
+        ).update(
+            created_at=now - timedelta(days=2),
+            expires_at=now - timedelta(days=1),
+        )
+
+        self.client.force_login(self.guest)
+
+        response = self.client.post(
+            reverse(
+                "accept_booking_cancellation",
+                args=[self.cancellation.pk],
+            ),
+            HTTP_ACCEPT="application/json",
+        )
+
+        self.assertEqual(response.status_code, 409)
+
+        self.cancellation.refresh_from_db()
+
+        self.assertEqual(
+            self.cancellation.status,
+            BookingCancellationRequest.Status.EXPIRED,
+        )
+
+    def test_already_answered_request_cannot_be_processed_again(self):
+        self.cancellation.status = (
+            BookingCancellationRequest.Status.REJECTED
+        )
+        self.cancellation.responded_at = timezone.now()
+        self.cancellation.save(
+            update_fields=["status", "responded_at"],
+        )
+
+        self.client.force_login(self.guest)
+
+        response = self.client.post(
+            reverse(
+                "accept_booking_cancellation",
+                args=[self.cancellation.pk],
+            ),
+            HTTP_ACCEPT="application/json",
+        )
+
+        self.assertEqual(response.status_code, 409)
+
+        self.booking.refresh_from_db()
+
+        self.assertEqual(self.booking.status, "CONFIRMED")
+
+    def test_admin_forced_cancellation_cannot_be_accepted_here(self):
+        self.cancellation.request_type = (
+            BookingCancellationRequest.RequestType.ADMIN_FORCED
+        )
+        self.cancellation.save(update_fields=["request_type"])
+
+        self.client.force_login(self.guest)
+
+        response = self.client.post(
+            reverse(
+                "accept_booking_cancellation",
+                args=[self.cancellation.pk],
+            ),
+            HTTP_ACCEPT="application/json",
+        )
+
+        self.assertEqual(response.status_code, 409)
+
+        self.booking.refresh_from_db()
+
+        self.assertEqual(self.booking.status, "CONFIRMED")
+            
+    def test_accepting_cancellation_closes_pending_change_proposals(self):
+        proposal = BookingChangeProposal.objects.create(
+            booking=self.booking,
+            reason="Cambio solicitado para la reserva.",
+            proposed_initial_date=self.booking.initial_date + timedelta(days=1),
+            proposed_final_date=self.booking.final_date + timedelta(days=1),
+            proposed_guest_count=2,
+            proposed_total_price=Decimal("200.00"),
+            proposed_nightly_prices=[],
+            expires_at=timezone.now() + timedelta(hours=48),
+        )
+
+        self.client.force_login(self.guest)
+
+        response = self.client.post(
+            reverse(
+                "accept_booking_cancellation",
+                args=[self.cancellation.pk],
+            ),
+            HTTP_ACCEPT="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+        self.booking.refresh_from_db()
+        proposal.refresh_from_db()
+        self.cancellation.refresh_from_db()
+
+        self.assertEqual(self.booking.status, "CANCELLED")
+        self.assertEqual(
+            self.cancellation.status,
+            BookingCancellationRequest.Status.ACCEPTED,
+        )
+        self.assertEqual(
+            proposal.status,
+            BookingChangeProposal.Status.CANCELLED,
+        )
+
+
+    def test_rejecting_cancellation_keeps_booking_confirmed(self):
+        self.client.force_login(self.guest)
+
+        response = self.client.post(
+            reverse(
+                "reject_booking_cancellation",
+                args=[self.cancellation.pk],
+            ),
+            data={"response_reason": "Necesito mantener la reserva."},
+            HTTP_ACCEPT="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+        self.booking.refresh_from_db()
+        self.cancellation.refresh_from_db()
+
+        self.assertEqual(self.booking.status, "CONFIRMED")
+        self.assertEqual(
+            self.cancellation.status,
+            BookingCancellationRequest.Status.REJECTED,
+        )
+        self.assertEqual(
+            self.cancellation.response_reason,
+            "Necesito mantener la reserva.",
+        )
+
+
+    def test_accepting_cancellation_does_not_accept_pending_change_proposal(self):
+        proposal = BookingChangeProposal.objects.create(
+            booking=self.booking,
+            reason="Propuesta pendiente.",
+            proposed_initial_date=self.booking.initial_date + timedelta(days=1),
+            proposed_final_date=self.booking.final_date + timedelta(days=1),
+            proposed_guest_count=2,
+            proposed_total_price=Decimal("200.00"),
+            proposed_nightly_prices=[],
+            expires_at=timezone.now() + timedelta(hours=48),
+        )
+
+        self.client.force_login(self.guest)
+
+        response = self.client.post(
+            reverse(
+                "accept_booking_cancellation",
+                args=[self.cancellation.pk],
+            ),
+            HTTP_ACCEPT="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+        proposal.refresh_from_db()
+        self.assertNotEqual(
+            proposal.status,
+            BookingChangeProposal.Status.ACCEPTED,
         )

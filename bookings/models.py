@@ -618,6 +618,7 @@ class BookingChangeProposal(models.Model):
         ACCEPTED = "ACCEPTED", "Accepted"
         REJECTED = "REJECTED", "Rejected"
         EXPIRED = "EXPIRED", "Expired"
+        CANCELLED = "CANCELLED", "Cancelled"
         
     original_booking_snapshot = models.JSONField(
         null=True,

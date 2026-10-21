@@ -2537,7 +2537,7 @@ def _respond_to_booking_cancellation(
                 return JsonResponse({"error": error}, status=409)
 
             if (
-                booking.status == Booking.Status.PENDING
+                booking.status == "PENDING"
                 and booking.expires_at is not None
                 and booking.expires_at <= now
             ):
@@ -2549,7 +2549,31 @@ def _respond_to_booking_cancellation(
                 return JsonResponse({"error": error}, status=409)
 
             if accept:
-                booking.cancel()
+                if not booking.cancel():
+                    error = "No se ha podido cancelar la reserva."
+                    if is_html_form:
+                        messages.error(request, error)
+                        return redirect("my_bookings")
+                    return JsonResponse({"error": error}, status=409)
+
+                # La reserva ya está cancelada: ninguna modificación pendiente
+                # debe seguir ofreciendo una acción sobre ella.
+                BookingChangeProposal.objects.filter(
+                    booking=booking,
+                    status=BookingChangeProposal.Status.PENDING,
+                ).update(
+                    status=BookingChangeProposal.Status.CANCELLED
+                )
+
+                # Cerrar las demás solicitudes de cancelación pendientes.
+                BookingCancellationRequest.objects.filter(
+                    booking=booking,
+                    status=BookingCancellationRequest.Status.PENDING,
+                ).exclude(
+                    pk=cancellation.pk,
+                ).update(
+                    status=BookingCancellationRequest.Status.CANCELLED,
+                )
 
                 cancellation.status = (
                     BookingCancellationRequest.Status.ACCEPTED
