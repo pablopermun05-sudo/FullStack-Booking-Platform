@@ -192,6 +192,14 @@
                             <i class="bi bi-pencil-square"></i>
                             Proponer cambio
                         </a>
+
+                        <a
+                            href="{% url 'booking_cancellation_form' booking.id %}"
+                            class="owner-booking-edit-button"
+                        >
+                            <i class="bi bi-calendar-x"></i>
+                            Solicitar cancelación
+                        </a>
                     </div>
                 {% endif %}
 

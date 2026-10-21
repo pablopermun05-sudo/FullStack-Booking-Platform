@@ -1288,7 +1288,41 @@ def booking_change_form(request, booking_id):
             "booked_dates": sorted(booked_dates),
         },
     )
+    
+@login_required
+def booking_cancellation_form(request, booking_id):
+    if not can_manage_properties(request.user):
+        raise PermissionDenied
 
+    booking = get_object_or_404(
+        Booking.objects.select_related(
+            "property",
+            "property__owner",
+        ),
+        pk=booking_id,
+    )
+
+    # Mismos permisos que en el formulario de cambio.
+    if (
+        booking.property.owner_id != request.user.pk
+        and not request.user.is_staff
+    ):
+        raise PermissionDenied
+
+    if booking.status not in Booking.ACTIVE_STATUSES:
+        raise PermissionDenied(
+            "Esta reserva no admite solicitudes de cancelación."
+        )
+
+    return render(
+        request,
+        "bookings/booking_cancellation_form.html",
+        {
+            "booking": booking,
+            "property": booking.property,
+        },
+    )
+    
 logger = logging.getLogger(__name__)
 def cleanup_booking_attachment_files(attachments):
     for attachment in attachments:
@@ -1780,7 +1814,7 @@ def propose_booking_cancellation(request, booking_id):
     uploaded_files = request.FILES.getlist("attachments")
     reason = (request.POST.get("reason") or "").strip()
 
-    # El motivo es obligatorio para las solicitudes del propietario.
+    # Validar el motivo.
     if not reason:
         return JsonResponse(
             {"error": "El motivo de la cancelación es obligatorio."},
@@ -1793,10 +1827,13 @@ def propose_booking_cancellation(request, booking_id):
             status=400,
         )
 
+    # Limitar el número de archivos adjuntos.
     if len(uploaded_files) > 5:
         return JsonResponse(
             {
-                "error": "Solo puedes adjuntar un máximo de 5 archivos."
+                "error": (
+                    "Solo puedes adjuntar un máximo de 5 archivos."
+                )
             },
             status=400,
         )
@@ -1806,7 +1843,8 @@ def propose_booking_cancellation(request, booking_id):
 
     try:
         with transaction.atomic():
-            # Bloquear la reserva para evitar solicitudes concurrentes.
+            # Bloquear la reserva para serializar las operaciones
+            # que crean o modifican acciones pendientes.
             booking = get_object_or_404(
                 Booking.objects.select_for_update().select_related(
                     "property",
@@ -1815,10 +1853,12 @@ def propose_booking_cancellation(request, booking_id):
                 pk=booking_id,
             )
 
-            # Esta vista es exclusivamente para el propietario.
+            # En este flujo solo puede solicitar la cancelación
+            # el propietario de la vivienda.
             if booking.property.owner_id != request.user.pk:
                 raise PermissionDenied
 
+            # Comprobar que la reserva sigue admitiendo solicitudes.
             if booking.status not in Booking.ACTIVE_STATUSES:
                 return JsonResponse(
                     {
@@ -1827,30 +1867,48 @@ def propose_booking_cancellation(request, booking_id):
                             "para esta reserva."
                         )
                     },
-                    status=400,
+                    status=409,
                 )
 
+            # Obtener la hora una sola vez para mantener coherentes
+            # las comprobaciones de expiración.
             now = timezone.now()
 
-            # Caducar solicitudes anteriores vencidas.
-            BookingCancellationRequest.objects.filter(
-                booking=booking,
-                status=BookingCancellationRequest.Status.PENDING,
-                expires_at__isnull=False,
-                expires_at__lte=now,
-            ).update(
-                status=BookingCancellationRequest.Status.EXPIRED,
-            )
-
-            # No permitir dos solicitudes pendientes para la misma reserva.
-            pending_exists = (
-                BookingCancellationRequest.objects.filter(
+            # Caducar individualmente las solicitudes vencidas,
+            # siguiendo el patrón usado en las propuestas de cambio.
+            expired_requests = list(
+                BookingCancellationRequest.objects
+                .select_for_update()
+                .filter(
                     booking=booking,
-                    status=BookingCancellationRequest.Status.PENDING,
-                ).exists()
+                    status=(
+                        BookingCancellationRequest.Status.PENDING
+                    ),
+                    expires_at__isnull=False,
+                    expires_at__lte=now,
+                )
             )
 
-            if pending_exists:
+            for expired_request in expired_requests:
+                expired_request.status = (
+                    BookingCancellationRequest.Status.EXPIRED
+                )
+                expired_request.save(update_fields=["status"])
+
+            # No permitir más de una solicitud de cancelación pendiente.
+            pending_request = (
+                BookingCancellationRequest.objects
+                .select_for_update()
+                .filter(
+                    booking=booking,
+                    status=(
+                        BookingCancellationRequest.Status.PENDING
+                    ),
+                )
+                .first()
+            )
+
+            if pending_request is not None:
                 return JsonResponse(
                     {
                         "error": (
@@ -1861,7 +1919,7 @@ def propose_booking_cancellation(request, booking_id):
                     status=409,
                 )
 
-            # Crear la solicitud. La reserva sigue activa.
+            # Crear la solicitud sin cancelar la reserva.
             cancellation = BookingCancellationRequest.objects.create(
                 booking=booking,
                 requested_by=request.user,
@@ -1874,7 +1932,7 @@ def propose_booking_cancellation(request, booking_id):
                 expires_at=now + timedelta(hours=48),
             )
 
-            # Guardar los archivos vinculados a la solicitud.
+            # Guardar los archivos asociados a la solicitud.
             for uploaded_file in uploaded_files:
                 attachment = BookingAttachment(
                     cancellation_request=cancellation,
@@ -1886,6 +1944,8 @@ def propose_booking_cancellation(request, booking_id):
                     size=uploaded_file.size,
                 )
 
+                # Registrar el objeto antes de guardarlo para poder
+                # limpiar el archivo si falla su validación o guardado.
                 attachments_to_save.append(attachment)
                 attachment.save()
 
@@ -1901,8 +1961,8 @@ def propose_booking_cancellation(request, booking_id):
         return JsonResponse(
             {
                 "error": (
-                    "Ya existe una solicitud de cancelación pendiente "
-                    "para esta reserva."
+                    "Ya existe una solicitud de cancelación "
+                    "pendiente para esta reserva."
                 )
             },
             status=409,
@@ -1912,6 +1972,7 @@ def propose_booking_cancellation(request, booking_id):
         cleanup_booking_attachment_files(attachments_to_save)
         raise
 
+    # La transacción ha terminado correctamente.
     return JsonResponse(
         {
             "success": True,
