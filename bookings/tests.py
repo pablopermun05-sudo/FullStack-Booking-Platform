@@ -2,7 +2,7 @@ from django.test import Client, TestCase, TransactionTestCase
 from django.urls import reverse
 
 from bookings.views import PENDING_BOOKING_MINUTES
-from .models import User, OwnerProfile, Property, Booking, BookingChangeProposal, BookingChangeAudit, BookingNight, BookingHold, BookingCancellationRequest, PropertyAvailability, can_manage_properties
+from .models import User, OwnerProfile, Property, Booking, BookingChangeProposal, BookingChangeAudit, BookingNight, BookingHold, BookingCancellationRequest, BookingAttachment, PropertyAvailability, can_manage_properties
 from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import ValidationError
 from django.utils import timezone
@@ -25,6 +25,9 @@ from django.test import override_settings, Client
 from datetime import timedelta
 import uuid
 from django.contrib.auth import get_user_model
+from django.core import signing
+from django.core.files.base import ContentFile
+from django.http import FileResponse
 
 class OwnerProfileTestCase(TestCase):
     def test_owner_profile_is_pending_by_default(self):
@@ -7698,3 +7701,119 @@ class BookingCancellationResponseTests(TestCase):
             proposal.status,
             BookingChangeProposal.Status.ACCEPTED,
         )
+        
+class DownloadForcedBookingAttachmentTests(BookingTestBase):
+    FORCED_ATTACHMENT_SALT = "forced-booking-attachment"
+
+    def setUp(self):
+        super().setUp()
+
+        self.booking = self.booking1
+
+        if self.booking.pk is None or self.booking._state.adding:
+            self.booking.save()
+        
+        self.audit = BookingChangeAudit.objects.create(
+            booking=self.booking,
+            actor=None,
+            reason="Prueba de descarga",
+            before_values={"status": "PENDING"},
+            after_values={"status": "CONFIRMED"},
+        )
+
+        self.attachment = BookingAttachment(
+            change_audit=self.audit,
+            original_filename="evidence.txt",
+            uploaded_by=self.owner,
+            size=0,
+        )
+
+        self.attachment.file.save(
+            "evidence.txt",
+            ContentFile(b"Contenido de prueba"),
+            save=True,
+        )
+
+    def make_forced_attachment_token(self, attachment_id, audit_id):
+        return signing.dumps(
+            {
+                "attachment_id": attachment_id,
+                "audit_id": audit_id,
+            },
+            salt=self.FORCED_ATTACHMENT_SALT,
+        )
+
+    def forced_attachment_url(self, token=None):
+        if token is None:
+            token = self.make_forced_attachment_token(
+                self.attachment.pk,
+                self.attachment.change_audit_id,
+            )
+
+        return reverse(
+            "download_forced_booking_attachment",
+            kwargs={
+                "attachment_id": self.attachment.pk,
+                "token": token,
+            },
+        )
+
+    def test_download_success(self):
+        response = self.client.get(self.forced_attachment_url())
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIsInstance(response, FileResponse)
+        self.assertIn("attachment;", response["Content-Disposition"])
+        self.assertIn("evidence.txt", response["Content-Disposition"])
+        self.assertEqual(
+            b"".join(response.streaming_content),
+            b"Contenido de prueba",
+        )
+
+    def test_download_invalid_signature(self):
+        response = self.client.get(
+            self.forced_attachment_url(token="invalid-token")
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_download_wrong_attachment_id(self):
+        token = self.make_forced_attachment_token(
+            self.attachment.pk + 999,
+            self.audit.pk,
+        )
+
+        response = self.client.get(self.forced_attachment_url(token))
+        self.assertEqual(response.status_code, 404)
+
+    def test_download_wrong_audit_id(self):
+        token = self.make_forced_attachment_token(
+            self.attachment.pk,
+            self.audit.pk + 999,
+        )
+
+        response = self.client.get(self.forced_attachment_url(token))
+        self.assertEqual(response.status_code, 404)
+
+    def test_download_invalid_payload(self):
+        token = signing.dumps(
+            {"attachment_id": self.attachment.pk},
+            salt=self.FORCED_ATTACHMENT_SALT,
+        )
+
+        response = self.client.get(self.forced_attachment_url(token))
+        self.assertEqual(response.status_code, 404)
+
+    def test_download_file_missing_from_storage(self):
+        token = self.make_forced_attachment_token(
+            self.attachment.pk,
+            self.audit.pk,
+        )
+
+        with patch.object(
+            type(self.attachment.file.storage),
+            "open",
+            side_effect=FileNotFoundError,
+        ):
+            response = self.client.get(self.forced_attachment_url(token))
+
+        self.assertEqual(response.status_code, 404)

@@ -1473,26 +1473,49 @@ def download_forced_booking_attachment(request, attachment_id, token):
     except signing.BadSignature:
         raise Http404
 
-    if data.get("attachment_id") != attachment_id:
+    if not isinstance(data, dict):
+        raise Http404
+
+    token_attachment_id = data.get("attachment_id")
+    audit_id = data.get("audit_id")
+
+    if (
+        not isinstance(token_attachment_id, int)
+        or isinstance(token_attachment_id, bool)
+        or token_attachment_id != attachment_id
+        or not isinstance(audit_id, int)
+        or isinstance(audit_id, bool)
+        or audit_id <= 0
+    ):
         raise Http404
 
     try:
         attachment = BookingAttachment.objects.get(
             pk=attachment_id,
-            change_audit_id=data.get("audit_id"),
+            change_audit_id=audit_id,
         )
     except BookingAttachment.DoesNotExist:
         raise Http404
 
-    return FileResponse(
-        attachment.file.open("rb"),
-        as_attachment=True,
-        filename=(
-            attachment.original_filename
-            or attachment.file.name.split("/")[-1]
-        ),
+    if not attachment.file:
+        raise Http404
+
+    try:
+        file_handle = attachment.file.open("rb")
+    except (FileNotFoundError, ValueError):
+        raise Http404
+
+    filename = (
+        attachment.original_filename
+        or attachment.file.name.rsplit("/", 1)[-1]
     )
 
+    return FileResponse(
+        file_handle,
+        as_attachment=True,
+        filename=filename,
+    )
+    
 @login_required
 def propose_booking_change(request, booking_id):
     if request.method != "POST":
