@@ -423,6 +423,425 @@ Revisa la propuesta aquí:
         )
         return False
 
+def send_booking_cancellation_request_email(request, booking, cancellation, raw_token):
+    """
+    Envía al huésped una solicitud de cancelación con formato HTML y texto.
+    Incluye el motivo y los archivos adjuntos, si existen.
+    Devuelve True si el envío se confirma y False si falla.
+    """
+    try:
+        recipient_email = (booking.guest_email or "").strip()
+
+        if not recipient_email:
+            logger.error(
+                "La reserva %s no tiene un email de huésped.",
+                booking.pk,
+            )
+            return False
+
+        response_url = request.build_absolute_uri(
+            reverse(
+                "booking_cancellation_request_detail",
+                kwargs={"token": raw_token},
+            )
+        )
+
+        reason = (cancellation.reason or "").strip()
+        property_title = booking.property.title
+        guest_name = booking.guest_first_name or "huésped"
+        owner_phone = booking.property.owner.phone_number
+        total_price = booking.total_price
+
+        expiry = (
+            timezone.localtime(cancellation.expires_at)
+            if cancellation.expires_at
+            else None
+        )
+        expiry_text = (
+            expiry.strftime("%d/%m/%Y a las %H:%M")
+            if expiry
+            else "No indicada"
+        )
+
+        # Obtener los archivos adjuntos de esta solicitud.
+        cancellation_attachments = BookingAttachment.objects.filter(
+            cancellation_request=cancellation
+        )
+
+        attachment_items = []
+
+        for attachment in cancellation_attachments:
+            download_path = reverse(
+                "download_booking_cancellation_attachment",
+                kwargs={"attachment_id": attachment.pk},
+            )
+            download_path += "?" + urlencode({"token": raw_token})
+
+            attachment_items.append({
+                "name": (
+                    attachment.original_filename
+                    or attachment.file.name.split("/")[-1]
+                ),
+                "url": request.build_absolute_uri(download_path),
+            })
+
+        subject = (
+            f"Solicitud de cancelación de reserva | {property_title}"
+        )
+
+        # ---------------------------------------------------------
+        # TEXTO PLANO
+        # ---------------------------------------------------------
+        text_message = f"""Hola {guest_name},
+
+El alojamiento {property_title} ha solicitado cancelar tu reserva.
+
+RESERVA ACTUAL
+Entrada: {booking.initial_date:%d/%m/%Y}
+Salida: {booking.final_date:%d/%m/%Y}
+Huéspedes: {booking.guest_count}
+Importe total: {total_price:.2f} €
+
+MOTIVO DE LA CANCELACIÓN
+{reason or 'No se ha indicado un motivo.'}
+
+FECHA LÍMITE PARA RESPONDER
+{expiry_text}
+
+Importante: tu reserva sigue activa. Recibir esta solicitud no cancela
+automáticamente tu reserva.
+
+Puedes revisar la solicitud y aceptarla o rechazarla desde este enlace,
+sin necesidad de iniciar sesión:
+{response_url}
+"""
+
+        if attachment_items:
+            text_message += "\nARCHIVOS ADJUNTOS\n"
+            for item in attachment_items:
+                text_message += (
+                    f"- {item['name']}\n"
+                    f"  Descargar: {item['url']}\n"
+                )
+
+        if owner_phone:
+            text_message += (
+                f"\nSi tienes dudas, contacta con el alojamiento "
+                f"en el teléfono {owner_phone}.\n"
+            )
+
+        text_message += (
+            f"\nNotificación automática de {property_title}.\n"
+        )
+
+        # ---------------------------------------------------------
+        # VALORES HTML SEGUROS
+        # ---------------------------------------------------------
+        safe_guest = escape(str(guest_name))
+        safe_property = escape(str(property_title))
+        safe_url = escape(response_url)
+        safe_reason = escape(
+            reason or "No se ha indicado un motivo."
+        )
+        safe_expiry = escape(expiry_text)
+        safe_owner_phone = (
+            escape(str(owner_phone)) if owner_phone else ""
+        )
+
+        # ---------------------------------------------------------
+        # BLOQUE HTML DEL MOTIVO
+        # ---------------------------------------------------------
+        reason_html = f"""
+        <tr>
+          <td style="padding:0 32px 22px;">
+            <h2 style="margin:0 0 12px;color:#263a33;font-size:18px;">
+              Motivo de la cancelación
+            </h2>
+            <table role="presentation" width="100%" cellspacing="0"
+                   cellpadding="0" border="0"
+                   style="background:#f7f9f8;
+                          border-left:4px solid #527d69;">
+              <tr>
+                <td style="padding:16px;color:#52615d;font-size:14px;
+                           line-height:1.8;white-space:pre-line;">
+                  {safe_reason}
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        """
+
+        # ---------------------------------------------------------
+        # BLOQUE HTML DE LOS ARCHIVOS ADJUNTOS
+        # ---------------------------------------------------------
+        attachments_html = ""
+
+        if attachment_items:
+            attachment_cards = ""
+
+            for item in attachment_items:
+                filename = escape(str(item["name"]))
+                file_url = escape(item["url"])
+
+                attachment_cards += f"""
+                <tr>
+                  <td style="padding:0 0 10px;">
+                    <table role="presentation" width="100%"
+                           cellspacing="0" cellpadding="0" border="0"
+                           style="border:1px solid #e1e8e4;
+                                  border-radius:9px;background:#ffffff;">
+                      <tr>
+                        <td width="54" valign="middle"
+                            style="padding:14px 0 14px 14px;">
+                          <table role="presentation" width="42" height="46"
+                                 cellspacing="0" cellpadding="0" border="0"
+                                 style="background:#edf6f1;border-radius:6px;">
+                            <tr>
+                              <td style="color:#2e7d32;text-align:center;
+                                         vertical-align:middle;
+                                         font-size:25px;">
+                                &#128196;
+                              </td>
+                            </tr>
+                          </table>
+                        </td>
+                        <td valign="middle"
+                            style="padding:12px 10px 12px 12px;
+                                   font-family:Arial,Helvetica,sans-serif;">
+                          <p style="margin:0;color:#263a33;font-size:13px;
+                                    font-weight:bold;line-height:1.5;
+                                    word-break:break-word;">
+                            {filename}
+                          </p>
+                          <p style="margin:4px 0 0;color:#7b8781;
+                                    font-size:11px;">
+                            Archivo adjunto a la solicitud
+                          </p>
+                        </td>
+                        <td align="right" valign="middle"
+                            style="padding:12px 14px 12px 4px;">
+                          <a href="{file_url}"
+                             style="display:inline-block;background:#173f35;
+                                    color:#ffffff;text-decoration:none;
+                                    padding:10px 12px;border-radius:5px;
+                                    font-size:12px;font-weight:bold;
+                                    white-space:nowrap;">
+                            Descargar
+                          </a>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                """
+
+            attachments_html = f"""
+            <tr>
+              <td style="padding:0 32px 24px;">
+                <h2 style="margin:0 0 6px;color:#263a33;font-size:18px;">
+                  Documentación adjunta
+                </h2>
+                <p style="margin:0 0 14px;color:#718078;font-size:13px;
+                          line-height:1.6;">
+                  Consulta o descarga los archivos incluidos en esta
+                  solicitud de cancelación.
+                </p>
+                <table role="presentation" width="100%" cellspacing="0"
+                       cellpadding="0" border="0">
+                  {attachment_cards}
+                </table>
+              </td>
+            </tr>
+            """
+
+        # ---------------------------------------------------------
+        # HTML DEL CORREO
+        # ---------------------------------------------------------
+        html_message = f"""
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Solicitud de cancelación de reserva</title>
+</head>
+<body style="margin:0;padding:0;background:#f3f5f7;
+             font-family:Arial,Helvetica,sans-serif;color:#263238;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0"
+         border="0" style="background:#f3f5f7;padding:32px 12px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="600" cellspacing="0"
+               cellpadding="0" border="0"
+               style="width:100%;max-width:600px;background:#ffffff;
+                      border-radius:12px;overflow:hidden;">
+
+          <tr>
+            <td style="background:#173f35;padding:28px 32px;color:#ffffff;">
+              <p style="margin:0;font-size:12px;letter-spacing:2px;
+                        text-transform:uppercase;color:#d5e8df;">
+                Notificación de reserva
+              </p>
+              <h1 style="margin:10px 0 0;font-size:25px;line-height:1.3;">
+                Solicitud de cancelación
+              </h1>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:30px 32px 20px;">
+              <p style="margin:0 0 12px;font-size:16px;">
+                Hola {safe_guest},
+              </p>
+              <p style="margin:0;color:#52615d;font-size:15px;
+                        line-height:1.7;">
+                El alojamiento <strong>{safe_property}</strong> ha solicitado
+                cancelar tu reserva. Revisa los detalles y decide si aceptas
+                o rechazas la solicitud.
+              </p>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:0 32px 22px;">
+              <table role="presentation" width="100%" cellspacing="0"
+                     cellpadding="0" border="0"
+                     style="border:1px solid #e3e9e6;border-radius:8px;">
+                <tr>
+                  <td colspan="2" style="padding:16px;background:#f7f9f8;
+                                         font-weight:bold;">
+                    Detalles de la reserva
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:10px 16px;color:#66736f;">Entrada</td>
+                  <td align="right" style="padding:10px 16px;">
+                    {booking.initial_date:%d/%m/%Y}
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:10px 16px;color:#66736f;">Salida</td>
+                  <td align="right" style="padding:10px 16px;">
+                    {booking.final_date:%d/%m/%Y}
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:10px 16px;color:#66736f;">Huéspedes</td>
+                  <td align="right" style="padding:10px 16px;">
+                    {booking.guest_count}
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:14px 16px;border-top:1px solid #e3e9e6;
+                             font-weight:bold;">
+                    Importe total
+                  </td>
+                  <td align="right"
+                      style="padding:14px 16px;border-top:1px solid #e3e9e6;
+                             font-weight:bold;">
+                    {total_price:.2f} €
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          {reason_html}
+
+          <tr>
+            <td style="padding:0 32px 24px;">
+              <div style="background:#fff8e8;border-radius:8px;
+                          padding:15px 17px;color:#775b20;
+                          font-size:13px;line-height:1.7;">
+                <strong>Fecha límite para responder</strong><br>
+                {safe_expiry}
+              </div>
+            </td>
+          </tr>
+
+          {attachments_html}
+
+          <tr>
+            <td style="padding:0 32px 24px;">
+              <div style="background:#edf6f1;border-radius:8px;
+                          padding:16px;color:#173f35;font-size:13px;
+                          line-height:1.7;">
+                <strong>Importante:</strong> tu reserva sigue activa.
+                Recibir esta solicitud no la cancela automáticamente.
+                Puedes aceptar o rechazar la solicitud desde el siguiente
+                enlace, sin necesidad de iniciar sesión.
+              </div>
+            </td>
+          </tr>
+
+          <tr>
+            <td align="center" style="padding:0 32px 30px;">
+              <a href="{safe_url}"
+                 style="display:inline-block;background:#173f35;
+                        color:#ffffff;text-decoration:none;padding:15px 28px;
+                        border-radius:6px;font-size:15px;font-weight:bold;">
+                Revisar solicitud
+              </a>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:22px 32px;background:#f7f9f8;
+                       border-top:1px solid #e8eeeb;">
+              <p style="margin:0;color:#65716c;font-size:12px;
+                        line-height:1.7;">
+                Notificación automática de {safe_property}.
+                Si tienes dudas, contacta con el alojamiento
+                {f'en el teléfono {safe_owner_phone}' if safe_owner_phone else ''}.
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+"""
+
+        # ---------------------------------------------------------
+        # ENVÍO
+        # ---------------------------------------------------------
+        email = EmailMultiAlternatives(
+            subject=subject,
+            body=text_message,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            to=[recipient_email],
+        )
+        email.attach_alternative(html_message, "text/html")
+
+        if email.send(fail_silently=False) != 1:
+            logger.error(
+                "No se confirmó el envío de la solicitud de cancelación "
+                "%s a %s.",
+                cancellation.pk,
+                recipient_email,
+            )
+            return False
+
+        logger.info(
+            "Correo de cancelación enviado. Solicitud=%s, destinatario=%s",
+            cancellation.pk,
+            recipient_email,
+        )
+        return True
+
+    except Exception:
+        logger.exception(
+            "Error al enviar el correo de la solicitud de cancelación "
+            "%s para la reserva %s.",
+            cancellation.pk,
+            booking.pk,
+        )
+        return False
+
 def send_booking_change_proposal_status_email(booking, proposal, status):
     """
     Envía al propietario un correo HTML y de texto plano cuando una

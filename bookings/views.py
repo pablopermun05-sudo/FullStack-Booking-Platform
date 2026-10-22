@@ -32,8 +32,8 @@ from .emails import (
     send_booking_change_proposal_email,
     send_booking_change_proposal_status_email,
     send_forced_booking_change_email,
+    send_booking_cancellation_request_email
 )
-
 
 # Create your views here.
 class SearchForm(forms.Form):
@@ -1183,6 +1183,105 @@ def booking_change_proposal_detail(request, token):
         context,
     )
 
+def booking_cancellation_request_detail(request, token):
+    token_hash = hash_proposal_access_token(token)
+
+    with transaction.atomic():
+        cancellation_reference = (
+            BookingCancellationRequest.objects
+            .filter(access_token_hash=token_hash)
+            .values("pk", "booking_id")
+            .first()
+        )
+
+        if cancellation_reference is None:
+            return render(
+                request,
+                "bookings/booking_cancellation_request_detail.html",
+                {"invalid_link": True},
+                status=404,
+            )
+
+        booking = get_object_or_404(
+            Booking.objects.select_for_update().select_related(
+                "property",
+                "property__owner",
+            ),
+            pk=cancellation_reference["booking_id"],
+        )
+
+        cancellation = get_object_or_404(
+            BookingCancellationRequest.objects.select_for_update(),
+            pk=cancellation_reference["pk"],
+            booking=booking,
+            access_token_hash=token_hash,
+        )
+
+        now = timezone.now()
+
+        if (
+            cancellation.status
+            == BookingCancellationRequest.Status.PENDING
+            and cancellation.expires_at is not None
+            and cancellation.expires_at <= now
+        ):
+            cancellation.status = (
+                BookingCancellationRequest.Status.EXPIRED
+            )
+            cancellation.save(update_fields=["status"])
+
+    can_respond = (
+        cancellation.status == BookingCancellationRequest.Status.PENDING
+        and (
+            cancellation.expires_at is None
+            or cancellation.expires_at > timezone.now()
+        )
+        and booking.status in Booking.ACTIVE_STATUSES
+        and booking.final_date >= timezone.localdate()
+    )
+
+    status_messages = {
+        BookingCancellationRequest.Status.EXPIRED:
+            "Esta solicitud de cancelación ha caducado.",
+        BookingCancellationRequest.Status.ACCEPTED:
+            "Has aceptado esta solicitud de cancelación.",
+        BookingCancellationRequest.Status.REJECTED:
+            "Esta solicitud de cancelación ha sido rechazada.",
+        BookingCancellationRequest.Status.CANCELLED:
+            "Esta solicitud de cancelación ya no está activa.",
+        BookingCancellationRequest.Status.EXECUTED:
+            "La cancelación se ha ejecutado.",
+    }
+
+    status_message = status_messages.get(
+        cancellation.status,
+        "" if can_respond else "Ya no se puede responder a esta solicitud.",
+    )
+    
+    attachments = BookingAttachment.objects.filter(
+        cancellation_request=cancellation
+    ).order_by("id")
+
+    return render(
+        request,
+        "bookings/booking_cancellation_request_detail.html",
+        {
+            "invalid_link": False,
+            "cancellation": cancellation,
+            "booking": booking,
+            "property": booking.property,
+            "can_respond": can_respond,
+            "status_message": status_message,
+            "expires_at_local": (
+                timezone.localtime(cancellation.expires_at)
+                if cancellation.expires_at
+                else None
+            ),
+            "access_token": token,
+            "attachments": attachments,
+        },
+    )
+        
 @login_required
 def booking_change_form(request, booking_id):
     if not can_manage_properties(request.user):
@@ -1462,6 +1561,45 @@ def download_booking_proposal_attachment(request, attachment_id):
     response["Cache-Control"] = "private, no-store"
 
     return response
+
+def download_booking_cancellation_attachment(request, attachment_id):
+    """
+    Permite descargar un adjunto de cancelación mediante el token
+    privado de la solicitud, sin exigir inicio de sesión.
+    """
+    raw_token = request.GET.get("token", "").strip()
+
+    if not raw_token:
+        raise Http404("Enlace de descarga no válido.")
+
+    token_hash = hash_proposal_access_token(raw_token)
+
+    attachment = get_object_or_404(
+        BookingAttachment.objects.select_related("cancellation_request"),
+        pk=attachment_id,
+        cancellation_request__access_token_hash=token_hash,
+    )
+
+    cancellation = attachment.cancellation_request
+
+    # No permitir descargas una vez vencida la solicitud.
+    if (
+        cancellation.expires_at is not None
+        and cancellation.expires_at <= timezone.now()
+    ):
+        raise Http404("El enlace de descarga ha caducado.")
+
+    if not attachment.file:
+        raise Http404("El archivo no está disponible.")
+
+    return FileResponse(
+        attachment.file.open("rb"),
+        as_attachment=True,
+        filename=(
+            attachment.original_filename
+            or attachment.file.name.split("/")[-1]
+        ),
+    )
 
 def download_forced_booking_attachment(request, attachment_id, token):
     try:
@@ -1850,7 +1988,6 @@ def propose_booking_cancellation(request, booking_id):
     uploaded_files = request.FILES.getlist("attachments")
     reason = (request.POST.get("reason") or "").strip()
 
-    # Validar el motivo.
     if not reason:
         return JsonResponse(
             {"error": "El motivo de la cancelación es obligatorio."},
@@ -1863,7 +2000,6 @@ def propose_booking_cancellation(request, booking_id):
             status=400,
         )
 
-    # Limitar el número de archivos adjuntos.
     if len(uploaded_files) > 5:
         return JsonResponse(
             {
@@ -1876,11 +2012,10 @@ def propose_booking_cancellation(request, booking_id):
 
     attachments_to_save = []
     cancellation = None
+    raw_token = None
 
     try:
         with transaction.atomic():
-            # Bloquear la reserva para serializar las operaciones
-            # que crean o modifican acciones pendientes.
             booking = get_object_or_404(
                 Booking.objects.select_for_update().select_related(
                     "property",
@@ -1889,12 +2024,9 @@ def propose_booking_cancellation(request, booking_id):
                 pk=booking_id,
             )
 
-            # En este flujo solo puede solicitar la cancelación
-            # el propietario de la vivienda.
             if booking.property.owner_id != request.user.pk:
                 raise PermissionDenied
 
-            # Comprobar que la reserva sigue admitiendo solicitudes.
             if booking.status not in Booking.ACTIVE_STATUSES:
                 return JsonResponse(
                     {
@@ -1906,20 +2038,14 @@ def propose_booking_cancellation(request, booking_id):
                     status=409,
                 )
 
-            # Obtener la hora una sola vez para mantener coherentes
-            # las comprobaciones de expiración.
             now = timezone.now()
 
-            # Caducar individualmente las solicitudes vencidas,
-            # siguiendo el patrón usado en las propuestas de cambio.
             expired_requests = list(
                 BookingCancellationRequest.objects
                 .select_for_update()
                 .filter(
                     booking=booking,
-                    status=(
-                        BookingCancellationRequest.Status.PENDING
-                    ),
+                    status=BookingCancellationRequest.Status.PENDING,
                     expires_at__isnull=False,
                     expires_at__lte=now,
                 )
@@ -1931,15 +2057,12 @@ def propose_booking_cancellation(request, booking_id):
                 )
                 expired_request.save(update_fields=["status"])
 
-            # No permitir más de una solicitud de cancelación pendiente.
             pending_request = (
                 BookingCancellationRequest.objects
                 .select_for_update()
                 .filter(
                     booking=booking,
-                    status=(
-                        BookingCancellationRequest.Status.PENDING
-                    ),
+                    status=BookingCancellationRequest.Status.PENDING,
                 )
                 .first()
             )
@@ -1955,7 +2078,9 @@ def propose_booking_cancellation(request, booking_id):
                     status=409,
                 )
 
-            # Crear la solicitud sin cancelar la reserva.
+            # Generar el token privado y guardar solamente su hash.
+            raw_token, token_hash = generate_proposal_access_token()
+
             cancellation = BookingCancellationRequest.objects.create(
                 booking=booking,
                 requested_by=request.user,
@@ -1966,6 +2091,7 @@ def propose_booking_cancellation(request, booking_id):
                 reason=reason,
                 created_at=now,
                 expires_at=now + timedelta(hours=48),
+                access_token_hash=token_hash,
             )
 
             # Guardar los archivos asociados a la solicitud.
@@ -1980,8 +2106,6 @@ def propose_booking_cancellation(request, booking_id):
                     size=uploaded_file.size,
                 )
 
-                # Registrar el objeto antes de guardarlo para poder
-                # limpiar el archivo si falla su validación o guardado.
                 attachments_to_save.append(attachment)
                 attachment.save()
 
@@ -2008,7 +2132,31 @@ def propose_booking_cancellation(request, booking_id):
         cleanup_booking_attachment_files(attachments_to_save)
         raise
 
-    # La transacción ha terminado correctamente.
+    # Enviar el correo después de confirmar la transacción.
+    notification_sent = send_booking_cancellation_request_email(
+        request,
+        booking,
+        cancellation,
+        raw_token,
+    )
+
+    if not notification_sent:
+        logger.error(
+            "No se pudo enviar el correo de cancelación. "
+            "Solicitud=%s, reserva=%s, destinatario=%s",
+            cancellation.pk,
+            booking.pk,
+            booking.guest_email,
+        )
+    else:
+        logger.info(
+            "Correo de cancelación enviado correctamente. "
+            "Solicitud=%s, reserva=%s, destinatario=%s",
+            cancellation.pk,
+            booking.pk,
+            booking.guest_email,
+        )
+        
     return JsonResponse(
         {
             "success": True,
@@ -2022,11 +2170,15 @@ def propose_booking_cancellation(request, booking_id):
                 "status": cancellation.status,
                 "reason": cancellation.reason,
                 "created_at": cancellation.created_at.isoformat(),
-                "expires_at": cancellation.expires_at.isoformat(),
+                "expires_at": (
+                    cancellation.expires_at.isoformat()
+                    if cancellation.expires_at
+                    else None
+                ),
                 "attachments_count": len(attachments_to_save),
             },
             "booking_status": booking.status,
-            "notification_sent": False,
+            "notification_sent": notification_sent,
         },
         status=201,
     )
@@ -2592,6 +2744,28 @@ def authorize_booking_change_proposal(request, booking, proposal, raw_token=""):
     if not secrets.compare_digest(stored_hash, provided_hash):
         raise PermissionDenied
 
+def authorize_booking_cancellation(request, booking, cancellation, raw_token=""):
+    # Si el huésped ha iniciado sesión con la cuenta correcta,
+    # también puede responder desde su cuenta.
+    if (
+        request.user.is_authenticated
+        and booking.tenant_id == request.user.pk
+    ):
+        return
+
+    if not raw_token:
+        raise PermissionDenied
+
+    stored_hash = cancellation.access_token_hash or ""
+
+    if not stored_hash:
+        raise PermissionDenied
+
+    provided_hash = hash_proposal_access_token(raw_token)
+
+    if not secrets.compare_digest(stored_hash, provided_hash):
+        raise PermissionDenied
+    
 def _validate_cancellation_request_input(request):
     uploaded_files = request.FILES.getlist("attachments")
     reason = (request.POST.get("reason") or "").strip()
@@ -2627,11 +2801,16 @@ def redirect_after_booking_change(request, raw_token):
 
     return redirect("my_bookings")
 
-def _respond_to_booking_cancellation(
-    request,
-    cancellation_request_id,
-    accept,
-):
+def redirect_after_booking_cancellation(request, raw_token):
+    if raw_token:
+        return redirect(
+            "booking_cancellation_request_detail",
+            token=raw_token,
+        )
+
+    return redirect("my_bookings")
+
+def _respond_to_booking_cancellation(request, cancellation_request_id, accept):
     accept_header = request.headers.get("Accept", "")
     is_html_form = (
         "text/html" in accept_header
@@ -2639,21 +2818,29 @@ def _respond_to_booking_cancellation(
         and request.content_type != "application/json"
     )
 
+    # El token se envía en el formulario HTML.
+    raw_token = request.POST.get("token", "")
+
     # Primera comprobación de autorización.
     cancellation = get_object_or_404(
         BookingCancellationRequest.objects.select_related("booking"),
         pk=cancellation_request_id,
-        booking__tenant=request.user,
+    )
+
+    authorize_booking_cancellation(
+        request,
+        cancellation.booking,
+        cancellation,
+        raw_token,
     )
 
     try:
         with transaction.atomic():
             # Mantener un orden de bloqueo consistente:
-            # primero reserva y después solicitud.
+            # primero la reserva y después la solicitud.
             booking = get_object_or_404(
                 Booking.objects.select_for_update(),
                 pk=cancellation.booking_id,
-                tenant=request.user,
             )
 
             cancellation = get_object_or_404(
@@ -2662,12 +2849,13 @@ def _respond_to_booking_cancellation(
                 booking=booking,
             )
 
-            # Revalidar autorización y estado bajo los bloqueos.
-            if booking.tenant_id != request.user.pk:
-                return JsonResponse(
-                    {"error": "No tienes permiso para responder."},
-                    status=403,
-                )
+            # Revalidar la autorización con las filas bloqueadas.
+            authorize_booking_cancellation(
+                request,
+                booking,
+                cancellation,
+                raw_token,
+            )
 
             allowed_types = {
                 BookingCancellationRequest.RequestType.OWNER_REQUEST,
@@ -2676,16 +2864,27 @@ def _respond_to_booking_cancellation(
 
             if cancellation.request_type not in allowed_types:
                 error = "Esta solicitud no admite respuesta."
+
                 if is_html_form:
                     messages.error(request, error)
-                    return redirect("my_bookings")
+                    return redirect_after_booking_cancellation(
+                        request, raw_token
+                    )
+
                 return JsonResponse({"error": error}, status=409)
 
-            if cancellation.status != BookingCancellationRequest.Status.PENDING:
+            if (
+                cancellation.status
+                != BookingCancellationRequest.Status.PENDING
+            ):
                 error = "La solicitud ya no está pendiente."
+
                 if is_html_form:
                     messages.error(request, error)
-                    return redirect("my_bookings")
+                    return redirect_after_booking_cancellation(
+                        request, raw_token
+                    )
+
                 return JsonResponse({"error": error}, status=409)
 
             now = timezone.now()
@@ -2700,16 +2899,24 @@ def _respond_to_booking_cancellation(
                 cancellation.save(update_fields=["status"])
 
                 error = "La solicitud de cancelación ha caducado."
+
                 if is_html_form:
                     messages.error(request, error)
-                    return redirect("my_bookings")
+                    return redirect_after_booking_cancellation(
+                        request, raw_token
+                    )
+
                 return JsonResponse({"error": error}, status=409)
 
             if booking.status not in Booking.ACTIVE_STATUSES:
                 error = "La reserva ya no admite cancelaciones."
+
                 if is_html_form:
                     messages.error(request, error)
-                    return redirect("my_bookings")
+                    return redirect_after_booking_cancellation(
+                        request, raw_token
+                    )
+
                 return JsonResponse({"error": error}, status=409)
 
             if (
@@ -2718,22 +2925,30 @@ def _respond_to_booking_cancellation(
                 and booking.expires_at <= now
             ):
                 booking.expire()
+
                 error = "La reserva pendiente ha caducado."
+
                 if is_html_form:
                     messages.error(request, error)
-                    return redirect("my_bookings")
+                    return redirect_after_booking_cancellation(
+                        request, raw_token
+                    )
+
                 return JsonResponse({"error": error}, status=409)
 
             if accept:
                 if not booking.cancel():
                     error = "No se ha podido cancelar la reserva."
+
                     if is_html_form:
                         messages.error(request, error)
-                        return redirect("my_bookings")
+                        return redirect_after_booking_cancellation(
+                            request, raw_token
+                        )
+
                     return JsonResponse({"error": error}, status=409)
 
-                # La reserva ya está cancelada: ninguna modificación pendiente
-                # debe seguir ofreciendo una acción sobre ella.
+                # Cancelar las propuestas de cambio pendientes.
                 BookingChangeProposal.objects.filter(
                     booking=booking,
                     status=BookingChangeProposal.Status.PENDING,
@@ -2748,7 +2963,7 @@ def _respond_to_booking_cancellation(
                 ).exclude(
                     pk=cancellation.pk,
                 ).update(
-                    status=BookingCancellationRequest.Status.CANCELLED,
+                    status=BookingCancellationRequest.Status.CANCELLED
                 )
 
                 cancellation.status = (
@@ -2774,9 +2989,13 @@ def _respond_to_booking_cancellation(
                         "El motivo del rechazo no puede superar "
                         "los 1000 caracteres."
                     )
+
                     if is_html_form:
                         messages.error(request, error)
-                        return redirect("my_bookings")
+                        return redirect_after_booking_cancellation(
+                            request, raw_token
+                        )
+
                     return JsonResponse({"error": error}, status=400)
 
                 cancellation.status = (
@@ -2794,33 +3013,33 @@ def _respond_to_booking_cancellation(
 
     except IntegrityError:
         error = "No se ha podido procesar la respuesta."
+
         if is_html_form:
             messages.error(request, error)
-            return redirect("my_bookings")
+            return redirect_after_booking_cancellation(
+                request, raw_token
+            )
+
         return JsonResponse({"error": error}, status=409)
+    
+    if accept:
+        message = (
+            "La solicitud de cancelación ha sido aceptada "
+            "y la reserva se ha cancelado correctamente."
+        )
+    else:
+        message = "La solicitud de cancelación ha sido rechazada correctamente."
 
     if is_html_form:
-        if accept:
-            messages.success(
-                request,
-                "Has aceptado la solicitud y la reserva se ha cancelado.",
-            )
-        else:
-            messages.success(
-                request,
-                "Has rechazado la solicitud. La reserva sigue activa.",
-            )
-        return redirect("my_bookings")
+        messages.success(request, message)
+        return redirect_after_booking_cancellation(request, raw_token)
 
-    return JsonResponse(
-        {
-            "id": cancellation.pk,
-            "status": cancellation.status,
-        },
-        status=200,
-    )
-
-@login_required
+    return JsonResponse({
+        "id": cancellation.pk,
+        "status": cancellation.status,
+        "message": message,
+    })
+    
 @require_POST
 def accept_booking_cancellation(request, cancellation_request_id):
     return _respond_to_booking_cancellation(
@@ -2829,7 +3048,6 @@ def accept_booking_cancellation(request, cancellation_request_id):
         accept=True,
     )
 
-@login_required
 @require_POST
 def reject_booking_cancellation(request, cancellation_request_id):
     return _respond_to_booking_cancellation(
@@ -2838,6 +3056,7 @@ def reject_booking_cancellation(request, cancellation_request_id):
         accept=False,
     )
 
+@require_POST
 def accept_booking_change_proposal(request, proposal_id):
     if request.method != "POST":
         return JsonResponse(
@@ -3259,6 +3478,7 @@ def accept_booking_change_proposal(request, proposal_id):
         status=200,
     )
 
+@require_POST
 def reject_booking_change_proposal(request, proposal_id):
     if request.method != "POST":
         return JsonResponse(
@@ -3988,7 +4208,6 @@ class UserForm(ModelForm):
         super().__init__(*args, **kwargs)
         # Delete help texts
         self.fields['username'].help_text = ""
-
 
 def manage_profile(request):
     # If an authenticated user tries to access the registration URL, redirect them to edit profile
