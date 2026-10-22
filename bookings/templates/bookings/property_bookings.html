@@ -1,4 +1,3 @@
-
 {% extends "bookings/layout.html" %}
 
 {% block body %}
@@ -17,16 +16,12 @@
                 <!-- Imagen a la izquierda -->
                 <div class="col-md-4 owner-property-image-column">
                     {% if property.image %}
-                        <img
-                            src="{{ property.image.url }}"
-                            class="owner-property-image"
-                            alt="{{ property.title }}"
-                        >
+                    <img src="{{ property.image.url }}" class="owner-property-image" alt="{{ property.title }}">
                     {% else %}
-                        <div class="owner-property-no-image">
-                            <i class="bi bi-house-door"></i>
-                            <span>Foto no disponible</span>
-                        </div>
+                    <div class="owner-property-no-image">
+                        <i class="bi bi-house-door"></i>
+                        <span>Foto no disponible</span>
+                    </div>
                     {% endif %}
                 </div>
 
@@ -62,38 +57,30 @@
 
                             <nav class="owner-booking-filters" aria-label="Filtrar reservas">
 
-                                <a
-                                    href="?status=ACTIVE"
+                                <a href="?status=ACTIVE"
                                     class="owner-filter-chip {% if selected_status == 'ACTIVE' %}is-active{% endif %}"
-                                    {% if selected_status == 'ACTIVE' %}aria-current="page"{% endif %}
-                                >
+                                    {% if selected_status == 'ACTIVE' %}aria-current="page"{% endif %}>
                                     Activas
                                     <span>{{ filter_counts.ACTIVE }}</span>
                                 </a>
 
-                                <a
-                                    href="?status=ALL"
-                                    class="owner-filter-chip {% if selected_status == 'ALL' %}is-active{% endif %}"
-                                    {% if selected_status == 'ALL' %}aria-current="page"{% endif %}
-                                >
+                                <a href="?status=ALL"
+                                    class="owner-filter-chip {% if selected_status == 'ALL' %}is-active{% endif %}" 
+                                    {% if selected_status == 'ALL' %}aria-current="page" {% endif %}>
                                     Todas
                                     <span>{{ filter_counts.ALL }}</span>
                                 </a>
 
-                                <a
-                                    href="?status=CANCELLED"
+                                <a href="?status=CANCELLED"
                                     class="owner-filter-chip {% if selected_status == 'CANCELLED' %}is-active{% endif %}"
-                                    {% if selected_status == 'CANCELLED' %}aria-current="page"{% endif %}
-                                >
+                                    {% if selected_status == 'CANCELLED' %}aria-current="page" {% endif %}>
                                     Canceladas
                                     <span>{{ filter_counts.CANCELLED }}</span>
                                 </a>
 
-                                <a
-                                    href="?status=EXPIRED"
+                                <a href="?status=EXPIRED"
                                     class="owner-filter-chip {% if selected_status == 'EXPIRED' %}is-active{% endif %}"
-                                    {% if selected_status == 'EXPIRED' %}aria-current="page"{% endif %}
-                                >
+                                    {% if selected_status == 'EXPIRED' %}aria-current="page" {% endif %}>
                                     Caducadas
                                     <span>{{ filter_counts.EXPIRED }}</span>
                                 </a>
@@ -105,10 +92,8 @@
                                     {{ page_obj.paginator.count }} resultado(s)
                                 </span>
 
-                                <a
-                                    href="{% url 'property_availability' property.id %}"
-                                    class="owner-availability-button"
-                                >
+                                <a href="{% url 'property_availability' property.id %}"
+                                    class="owner-availability-button">
                                     <i class="bi bi-calendar3"></i>
                                     Ver disponibilidad
                                 </a>
@@ -129,19 +114,19 @@
 
         {% for booking in bookings %}
 
-            <article class="owner-booking-card">
-                
-                <div class="owner-booking-main">
-                    <div class="owner-booking-guest">
+        <article class="owner-booking-card">
 
-                        <p class="owner-booking-tenant mt-1">
-                            Huésped: 
-                            <i class="bi bi-person-fill"></i>
-                            {{ booking.tenant }}
-                        </p>
-                    </div>
+            <div class="owner-booking-main">
+                <div class="owner-booking-guest">
 
-                    <span class="owner-booking-status
+                    <p class="owner-booking-tenant mt-1">
+                        Huésped:
+                        <i class="bi bi-person-fill"></i>
+                        {{ booking.tenant }}
+                    </p>
+                </div>
+
+                <span class="owner-booking-status
                         {% if booking.status == 'PENDING' %}
                             status-pending
                         {% elif booking.status == 'CONFIRMED' %}
@@ -151,85 +136,92 @@
                         {% elif booking.status == 'EXPIRED' %}
                             status-expired
                         {% endif %}">
-                        {{ booking.get_status_display }}
-                    </span>
+                    {{ booking.get_status_display }}
+                </span>
+            </div>
+
+            <div class="owner-booking-info">
+
+                <div class="owner-booking-detail">
+                    <span>Entrada</span>
+                    <strong>{{ booking.initial_date|date:"d M Y" }}</strong>
                 </div>
 
-                <div class="owner-booking-info">
-
-                    <div class="owner-booking-detail">
-                        <span>Entrada</span>
-                        <strong>{{ booking.initial_date|date:"d M Y" }}</strong>
-                    </div>
-
-                    <div class="owner-booking-detail">
-                        <span>Salida</span>
-                        <strong>{{ booking.final_date|date:"d M Y" }}</strong>
-                    </div>
-
-                    <div class="owner-booking-detail">
-                        <span>Huéspedes</span>
-                        <strong>{{ booking.guest_count }}</strong>
-                    </div>
-
-                    <div class="owner-booking-detail owner-booking-price">
-                        <span>Precio total</span>
-                        <strong>{{ booking.calculated_total|floatformat:2 }} €</strong>
-                        <small>
-                            {{ booking.nights.count }}
-                            {% if booking.nights.count == 1 %}noche{% else %}noches{% endif %}
-                        </small>
-                    </div>
-
+                <div class="owner-booking-detail">
+                    <span>Salida</span>
+                    <strong>{{ booking.final_date|date:"d M Y" }}</strong>
                 </div>
 
-                {% if booking.status == "PENDING" or booking.status == "CONFIRMED" %}
-                    <div class="owner-booking-actions">
-                        <a
-                            href="{% url 'booking_change_form' booking.id %}"
-                            class="owner-booking-edit-button"
-                        >
-                            <i class="bi bi-pencil-square"></i>
-                            Proponer cambio
-                        </a>
+                <div class="owner-booking-detail">
+                    <span>Huéspedes</span>
+                    <strong>{{ booking.guest_count }}</strong>
+                </div>
 
-                        <a
-                            href="{% url 'booking_cancellation_form' booking.id %}"
-                            class="owner-booking-edit-button"
-                        >
-                            <i class="bi bi-calendar-x"></i>
-                            Solicitar cancelación
-                        </a>
-                    </div>
+                <div class="owner-booking-detail owner-booking-price">
+                    <span>Precio total</span>
+                    <strong>{{ booking.calculated_total|floatformat:2 }} €</strong>
+                    <small>
+                        {{ booking.nights.count }}
+                        {% if booking.nights.count == 1 %}noche{% else %}noches{% endif %}
+                    </small>
+                </div>
+
+            </div>
+
+            {% if booking.status == "PENDING" or booking.status == "CONFIRMED" %}
+            <div class="owner-booking-actions">
+                <a href="{% url 'booking_change_form' booking.id %}" class="owner-booking-edit-button">
+                    <i class="bi bi-pencil-square"></i>
+                    Proponer cambio
+                </a>
+
+                <a href="{% url 'booking_cancellation_form' booking.id %}" class="owner-booking-edit-button">
+                    <i class="bi bi-calendar-x"></i>
+                    Solicitar cancelación
+                </a>
+
+                {% if request.user.is_authenticated and request.user.is_staff %}
+                <form method="post" action="{% url 'delete_booking' booking.id %}"
+                    onsubmit="return confirm('¿Eliminar definitivamente esta reserva? Esta acción no se puede deshacer.');"
+                    style="display: inline;">
+                    {% csrf_token %}
+                    <button type="submit" class="owner-booking-edit-button"
+                        style="background-color: #dc3545; color: white; border-color: #dc3545;">
+                        <i class="bi bi-trash"></i>
+                        Eliminar reserva
+                    </button>
+                </form>
                 {% endif %}
+            </div>
+            {% endif %}
 
-            </article>
+        </article>
 
         {% empty %}
 
-            <div class="owner-booking-empty">
-                <i class="bi bi-calendar-x"></i>
+        <div class="owner-booking-empty">
+            <i class="bi bi-calendar-x"></i>
 
-                {% if selected_status == "ACTIVE" %}
-                    <h4>No hay reservas activas</h4>
-                    <p>Las reservas pendientes y confirmadas aparecerán aquí.</p>
-                {% elif selected_status == "CANCELLED" %}
-                    <h4>No hay reservas canceladas</h4>
-                    <p>No hay reservas canceladas para esta vivienda.</p>
-                {% elif selected_status == "EXPIRED" %}
-                    <h4>No hay reservas caducadas</h4>
-                    <p>No hay reservas caducadas para esta vivienda.</p>
-                {% else %}
-                    <h4>Aún no hay reservas</h4>
-                    <p>Cuando alguien reserve esta vivienda, aparecerá aquí.</p>
-                {% endif %}
+            {% if selected_status == "ACTIVE" %}
+            <h4>No hay reservas activas</h4>
+            <p>Las reservas pendientes y confirmadas aparecerán aquí.</p>
+            {% elif selected_status == "CANCELLED" %}
+            <h4>No hay reservas canceladas</h4>
+            <p>No hay reservas canceladas para esta vivienda.</p>
+            {% elif selected_status == "EXPIRED" %}
+            <h4>No hay reservas caducadas</h4>
+            <p>No hay reservas caducadas para esta vivienda.</p>
+            {% else %}
+            <h4>Aún no hay reservas</h4>
+            <p>Cuando alguien reserve esta vivienda, aparecerá aquí.</p>
+            {% endif %}
 
-                {% if selected_status != "ACTIVE" %}
-                    <a href="?status=ACTIVE" class="owner-booking-edit-button">
-                        Ver reservas activas
-                    </a>
-                {% endif %}
-            </div>
+            {% if selected_status != "ACTIVE" %}
+            <a href="?status=ACTIVE" class="owner-booking-edit-button">
+                Ver reservas activas
+            </a>
+            {% endif %}
+        </div>
 
         {% endfor %}
 
@@ -237,42 +229,42 @@
 
     <!-- Paginación -->
     {% if page_obj.paginator.num_pages > 1 %}
-        <nav class="owner-booking-pagination" aria-label="Paginación de reservas">
+    <nav class="owner-booking-pagination" aria-label="Paginación de reservas">
 
-            {% if page_obj.has_previous %}
-                <a href="?status={{ selected_status }}&page={{ page_obj.previous_page_number }}">
-                    ← Anterior
-                </a>
-            {% else %}
-                <span class="is-disabled">← Anterior</span>
-            {% endif %}
+        {% if page_obj.has_previous %}
+        <a href="?status={{ selected_status }}&page={{ page_obj.previous_page_number }}">
+            ← Anterior
+        </a>
+        {% else %}
+        <span class="is-disabled">← Anterior</span>
+        {% endif %}
 
-            <div class="owner-pagination-numbers">
-                {% for num in page_obj.paginator.page_range %}
+        <div class="owner-pagination-numbers">
+            {% for num in page_obj.paginator.page_range %}
 
-                    {% if page_obj.number == num %}
-                        <span class="is-current" aria-current="page">{{ num }}</span>
+            {% if page_obj.number == num %}
+            <span class="is-current" aria-current="page">{{ num }}</span>
 
-                    {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
-                        <a href="?status={{ selected_status }}&page={{ num }}">{{ num }}</a>
-                    {% endif %}
+            {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %} <a
+                href="?status={{ selected_status }}&page={{ num }}">{{ num }}</a>
+                {% endif %}
 
                 {% endfor %}
-            </div>
+        </div>
 
-            {% if page_obj.has_next %}
-                <a href="?status={{ selected_status }}&page={{ page_obj.next_page_number }}">
-                    Siguiente →
-                </a>
-            {% else %}
-                <span class="is-disabled">Siguiente →</span>
-            {% endif %}
+        {% if page_obj.has_next %}
+        <a href="?status={{ selected_status }}&page={{ page_obj.next_page_number }}">
+            Siguiente →
+        </a>
+        {% else %}
+        <span class="is-disabled">Siguiente →</span>
+        {% endif %}
 
-        </nav>
+    </nav>
 
-        <p class="owner-pagination-caption">
-            Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}
-        </p>
+    <p class="owner-pagination-caption">
+        Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}
+    </p>
     {% endif %}
 
 </div>

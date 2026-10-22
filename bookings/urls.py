@@ -11,6 +11,7 @@ urlpatterns = [
     path("property/create", views.manage_property, name="create_property"),
     path("property/edit/<int:property_id>", views.manage_property, name="edit_property"),
     path("booking/cancel/<int:booking_id>/", views.cancel_booking, name="cancel_booking"),
+    path("booking/delete/<int:booking_id>/", views.delete_booking, name="delete_booking"),
     path("my_properties", views.my_properties, name="my_properties"),
     path("my_bookings", views.my_bookings, name="my_bookings"),
     path("property/<int:property_id>/availability", views.property_availability, name="property_availability"),

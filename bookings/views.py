@@ -749,6 +749,40 @@ def cancel_booking(request, booking_id):
 
     return redirect("my_bookings")
 
+@require_POST
+def delete_booking(request, booking_id):
+    if not request.user.is_authenticated or not request.user.is_staff:
+        raise PermissionDenied
+
+    with transaction.atomic():
+        booking = get_object_or_404(
+            Booking.objects.select_for_update(),
+            pk=booking_id,
+        )
+
+        # 1. Obtener las solicitudes de cancelación.
+        cancellation_requests = BookingCancellationRequest.objects.filter(
+            booking=booking
+        )
+
+        # 2. Eliminar los archivos adjuntos de esas solicitudes.
+        BookingAttachment.objects.filter(
+            cancellation_request__in=cancellation_requests
+        ).delete()
+
+        # 3. Eliminar las solicitudes de cancelación.
+        cancellation_requests.delete()
+
+        # 4. Eliminar el historial de cambios de la reserva.
+        BookingChangeAudit.objects.filter(
+            booking=booking
+        ).delete()
+
+        # 5. Eliminar definitivamente la reserva.
+        booking.delete()
+
+    return redirect('index')
+
 def properties(request):
     if request.method != "GET":
         return JsonResponse({"error": "Petición GET necesaria."}, status=400)
