@@ -316,9 +316,15 @@ document.addEventListener('DOMContentLoaded', () => {
             );
 
             // Evita enviar la misma operación dos veces.
-            form.querySelectorAll('input, textarea, button').forEach(element => {
+            form.querySelectorAll('input, textarea').forEach(element => {
                 element.disabled = true;
             });
+
+            // Restaura el texto del botón al finalizar correctamente.
+            submitButton.disabled = false;
+            submitButton.textContent = isForced
+                ? 'Reserva cancelada'
+                : 'Propuesta enviada';
 
         } catch (error) {
             showMessage(
