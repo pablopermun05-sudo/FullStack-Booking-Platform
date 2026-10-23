@@ -32,7 +32,8 @@ from .emails import (
     send_booking_change_proposal_email,
     send_booking_change_proposal_status_email,
     send_forced_booking_change_email,
-    send_booking_cancellation_request_email
+    send_booking_cancellation_request_email,
+    send_forced_booking_cancellation_email
 )
 
 # Create your views here.
@@ -2672,6 +2673,9 @@ def force_booking_cancellation(request, booking_id):
 
     attachments_to_save = []
     cancellation = None
+    before_values = None
+    after_values = None
+    old_total = Decimal("0.00")
 
     try:
         with transaction.atomic():
@@ -2717,6 +2721,22 @@ def force_booking_cancellation(request, booking_id):
 
             now = timezone.now()
 
+            # Capturar los datos originales antes de cancelar.
+            old_total = sum(
+                (
+                    night.price_per_night
+                    for night in booking.nights.all()
+                ),
+                Decimal("0.00"),
+            )
+
+            before_values = {
+                "initial_date": booking.initial_date.isoformat(),
+                "final_date": booking.final_date.isoformat(),
+                "guest_count": booking.guest_count,
+                "total_price": str(old_total),
+            }
+
             # Cerrar las solicitudes de cancelación pendientes anteriores.
             pending_cancellations = list(
                 BookingCancellationRequest.objects.select_for_update().filter(
@@ -2750,7 +2770,7 @@ def force_booking_cancellation(request, booking_id):
                         )
                 )
 
-            # Registrar la cancelación como ejecutada, nunca como pendiente.
+            # Registrar la cancelación como ejecutada.
             cancellation = BookingCancellationRequest.objects.create(
                 booking=booking,
                 requested_by=request.user,
@@ -2782,6 +2802,29 @@ def force_booking_cancellation(request, booking_id):
                 raise IntegrityError(
                     "No se ha podido ejecutar la cancelación."
                 )
+
+            # Preparar los datos de la notificación.
+            after_values = {
+                **before_values,
+                "reason": reason,
+                "change_mode": "forced_cancellation",
+            }
+
+            # Enviar el correo solo después de confirmar la transacción.
+            transaction.on_commit(
+                lambda b=booking,
+                    before=before_values.copy(),
+                    after=after_values.copy(),
+                    c=cancellation,
+                    req=request:
+                    send_forced_booking_cancellation_email(
+                        b,
+                        before,
+                        after,
+                        cancellation=c,
+                        request=req,
+                    )
+            )
 
     except ValidationError as exc:
         cleanup_booking_attachment_files(attachments_to_save)
@@ -2835,7 +2878,7 @@ def force_booking_cancellation(request, booking_id):
                 "attachments_count": len(attachments_to_save),
             },
             "booking_status": booking.status,
-            "notification_sent": False,
+            "notification_sent": "scheduled",
         },
         status=200,
     )

@@ -1563,3 +1563,380 @@ RESERVA ANTERIOR
         return False
 
     return True
+  
+def send_forced_booking_cancellation_email(booking, before_values, after_values, cancellation=None, request=None):
+    """Notifica al huésped la cancelación forzada de una reserva."""
+
+    recipient_email = (booking.guest_email or "").strip()
+
+    if not recipient_email:
+        logger.error(
+            "La reserva %s no tiene un email de huésped.",
+            booking.pk,
+        )
+        return False
+
+    property_title = booking.property.title
+    guest_name = booking.guest_first_name or "huésped"
+    reason = (after_values.get("reason") or "").strip()
+    owner_phone = getattr(booking.property.owner, "phone_number", None)
+
+    def format_date(value):
+        if not value or value == "—":
+            return "—"
+        try:
+            return date.fromisoformat(str(value)).strftime("%d/%m/%Y")
+        except (TypeError, ValueError):
+            return str(value)
+
+    def format_price(value):
+        try:
+            if value is None or value == "—":
+                return "—"
+            return f"{Decimal(str(value)):.2f} €"
+        except (TypeError, ValueError, ArithmeticError):
+            return str(value)
+
+    def get_value(values, key):
+        value = values.get(key, "—")
+        return "—" if value is None or value == "" else value
+
+    
+    # Obtener los archivos adjuntos de esta cancelación forzada.
+    forced_attachments = (
+        BookingAttachment.objects.filter(cancellation_request=cancellation)
+        if cancellation is not None
+        else []
+    )
+
+    attachment_items = []
+
+    for attachment in forced_attachments:
+        if request is None:
+            logger.warning(
+                "No se puede crear el enlace de descarga del adjunto %s "
+                "porque no se recibió request.",
+                attachment.pk,
+            )
+            continue
+
+        token = signing.dumps(
+            {
+                "attachment_id": attachment.pk,
+                "cancellation_id": cancellation.pk,
+            },
+            salt="forced-booking-attachment",
+        )
+
+        download_path = reverse(
+            "download_forced_booking_attachment",
+            kwargs={
+                "attachment_id": attachment.pk,
+                "token": token,
+            },
+        )
+
+        attachment_items.append({
+            "name": (
+                attachment.original_filename
+                or attachment.file.name.split("/")[-1]
+            ),
+            "url": request.build_absolute_uri(download_path),
+        })
+
+    # Datos de la reserva cancelada.
+    reservation_fields = (
+        ("Entrada prevista", "initial_date", format_date),
+        ("Salida prevista", "final_date", format_date),
+        ("Huéspedes", "guest_count", str),
+        ("Precio total", "total_price", format_price),
+    )
+
+    # Texto plano.
+    text_message = f"""Hola {guest_name},
+
+Te informamos de que el alojamiento {property_title} ha cancelado tu reserva de forma forzada.
+
+RESERVA: {booking.pk}
+
+DATOS DE LA RESERVA CANCELADA
+"""
+
+    for label, field, formatter in reservation_fields:
+        value = formatter(get_value(before_values, field))
+        text_message += f"{label}: {value}\n"
+
+    if reason:
+        text_message += f"\nMOTIVO DE LA CANCELACIÓN\n{reason}\n"
+
+    if attachment_items:
+        text_message += "\nDOCUMENTACIÓN ADJUNTA\n"
+        for item in attachment_items:
+            text_message += f"- {item['name']}\n  {item['url']}\n"
+
+    if owner_phone:
+        text_message += (
+            f"\nSi tienes dudas sobre esta cancelación, contacta con el "
+            f"alojamiento en el teléfono {owner_phone}.\n"
+        )
+
+    text_message += (
+        f"\nEsta es una notificación automática de {property_title}.\n"
+    )
+
+    # Escapar los valores dinámicos insertados en el HTML.
+    safe_guest = escape(str(guest_name))
+    safe_property = escape(str(property_title))
+    safe_reason = escape(reason or "No se ha indicado un motivo.")
+    safe_owner_phone = escape(str(owner_phone)) if owner_phone else ""
+
+    # HTML del motivo de la cancelación.
+    reason_html = ""
+
+    if reason:
+        reason_html = f"""
+        <tr>
+          <td style="padding:12px 32px 22px;">
+            <h2 style="margin:0 0 12px;color:#263a33;font-size:18px;">
+              Motivo de la cancelación
+            </h2>
+            <table role="presentation" width="100%" cellspacing="0"
+                   cellpadding="0"
+                   style="background:#f7f9f8;border-left:4px solid #b85c5c;">
+              <tr>
+                <td style="padding:16px;color:#52615d;font-size:14px;
+                           line-height:1.8;white-space:pre-line;">
+                  {safe_reason}
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        """
+
+    # Generar la tabla HTML de la reserva cancelada.
+    def build_reservation_table(title, values, highlighted=False):
+        background = "#fff1f1" if highlighted else "#f7f9f8"
+        border_color = "#eed5d5" if highlighted else "#e3e9e6"
+        title_color = "#8b3030" if highlighted else "#263a33"
+
+        rows_html = ""
+
+        for label, field, formatter in reservation_fields:
+            value = formatter(get_value(values, field))
+
+            rows_html += f"""
+            <tr>
+              <td style="padding:10px 16px;color:#52615d;
+                         border-bottom:1px solid {border_color};
+                         font-size:14px;">
+                {escape(label)}
+              </td>
+              <td align="right"
+                  style="padding:10px 16px;color:{title_color};
+                         border-bottom:1px solid {border_color};
+                         font-size:14px;font-weight:bold;">
+                {escape(str(value))}
+              </td>
+            </tr>
+            """
+
+        return f"""
+        <tr>
+          <td style="padding:0 32px 20px;">
+            <table role="presentation" width="100%" cellspacing="0"
+                   cellpadding="0"
+                   style="border:1px solid {border_color};border-radius:8px;">
+              <tr>
+                <td colspan="2"
+                    style="padding:16px;background:{background};
+                           color:{title_color};font-weight:bold;">
+                  {escape(title)}
+                </td>
+              </tr>
+              {rows_html}
+            </table>
+          </td>
+        </tr>
+        """
+
+    cancelled_reservation_html = build_reservation_table(
+        "Reserva cancelada",
+        before_values,
+        highlighted=True,
+    )
+
+    # Tarjetas HTML de archivos adjuntos.
+    attachments_html = ""
+
+    if attachment_items:
+        attachment_cards = ""
+
+        for item in attachment_items:
+            filename = escape(str(item["name"]))
+            file_url = escape(str(item["url"]))
+
+            attachment_cards += f"""
+            <tr>
+              <td style="padding:0 0 10px;">
+                <table role="presentation" width="100%" cellspacing="0"
+                       cellpadding="0" border="0"
+                       style="border:1px solid #e1e8e4;border-radius:9px;
+                              background:#ffffff;">
+                  <tr>
+                    <td width="54" valign="middle"
+                        style="padding:14px 0 14px 14px;">
+                      <table role="presentation" width="42" height="46"
+                             cellspacing="0" cellpadding="0" border="0"
+                             style="background:#edf6f1;border-radius:6px;">
+                        <tr>
+                          <td style="background-color:#e8f5e9;color:#2e7d32;
+                                     width:48px;height:48px;text-align:center;
+                                     vertical-align:middle;border-radius:8px;
+                                     font-size:26px;">
+                            📄
+                          </td>
+                        </tr>
+                      </table>
+                    </td>
+                    <td valign="middle"
+                        style="padding:12px 10px 12px 12px;
+                               font-family:Arial,Helvetica,sans-serif;">
+                      <p style="margin:0;color:#263a33;font-size:13px;
+                                font-weight:bold;line-height:1.5;
+                                word-break:break-word;">
+                        {filename}
+                      </p>
+                      <p style="margin:4px 0 0;color:#7b8781;font-size:11px;">
+                        Archivo adjunto a la cancelación de la reserva
+                      </p>
+                    </td>
+                    <td align="right" valign="middle"
+                        style="padding:12px 14px 12px 4px;">
+                      <a href="{file_url}"
+                         style="display:inline-block;background:#173f35;
+                                color:#ffffff;text-decoration:none;
+                                padding:10px 12px;border-radius:5px;
+                                font-size:12px;font-weight:bold;
+                                white-space:nowrap;">
+                        Descargar
+                      </a>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            """
+
+        attachments_html = f"""
+        <tr>
+          <td style="padding:0 32px 24px;">
+            <h2 style="margin:0 0 6px;color:#263a33;font-size:18px;">
+              Documentación adjunta
+            </h2>
+            <p style="margin:0 0 14px;color:#718078;font-size:13px;
+                      line-height:1.6;">
+              Consulta o descarga los archivos relacionados con esta cancelación.
+            </p>
+            <table role="presentation" width="100%" cellspacing="0"
+                   cellpadding="0" border="0">
+              {attachment_cards}
+            </table>
+          </td>
+        </tr>
+        """
+
+    # Plantilla HTML.
+    html_message = f"""
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Cancelación de tu reserva</title>
+    </head>
+    <body style="margin:0;padding:0;background:#f3f5f7;
+                 font-family:Arial,Helvetica,sans-serif;color:#263238;">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0"
+             style="background:#f3f5f7;padding:32px 12px;">
+        <tr>
+          <td align="center">
+            <table role="presentation" width="600" cellspacing="0"
+                   cellpadding="0"
+                   style="width:100%;max-width:600px;background:#ffffff;
+                          border-radius:12px;overflow:hidden;">
+              <tr>
+                <td style="background:#173f35;padding:28px 32px;color:#ffffff;">
+                  <p style="margin:0;font-size:12px;letter-spacing:2px;
+                            text-transform:uppercase;color:#d5e8df;">
+                    Notificación de reserva
+                  </p>
+                  <h1 style="margin:10px 0 0;font-size:25px;line-height:1.3;">
+                    Reserva cancelada
+                  </h1>
+                </td>
+              </tr>
+
+              <tr>
+                <td style="padding:30px 32px 18px;">
+                  <p style="margin:0 0 12px;font-size:16px;">
+                    Hola {safe_guest},
+                  </p>
+                  <p style="margin:0;color:#52615d;font-size:15px;line-height:1.7;">
+                    Te informamos de que <strong>{safe_property}</strong>
+                    ha cancelado tu reserva de forma forzada.
+                  </p>
+                </td>
+              </tr>
+
+              {cancelled_reservation_html}
+
+              {reason_html}
+
+              {attachments_html}
+
+              <tr>
+                <td style="padding:22px 32px;background:#f7f9f8;
+                           border-top:1px solid #e8eeeb;">
+                  <p style="margin:0;color:#65716c;font-size:12px;line-height:1.7;">
+                    Esta es una notificación automática de {safe_property}.
+                    Si tienes dudas sobre la cancelación, contacta con el alojamiento
+                    {f'en el teléfono {safe_owner_phone}' if safe_owner_phone else ''}.
+                  </p>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+    </body>
+    </html>
+    """
+
+    email = EmailMultiAlternatives(
+        subject=f"Cancelación de tu reserva | {property_title}",
+        body=text_message,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        to=[recipient_email],
+    )
+    email.attach_alternative(html_message, "text/html")
+
+    try:
+        result = email.send(fail_silently=False)
+    except Exception:
+        logger.exception(
+            "Error al enviar el correo de cancelación forzada de la reserva %s.",
+            booking.pk,
+        )
+        return False
+
+    if result != 1:
+        logger.error(
+            "No se confirmó el envío de la cancelación forzada de la reserva "
+            "%s a %s.",
+            booking.pk,
+            recipient_email,
+        )
+        return False
+
+    return True
