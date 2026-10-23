@@ -382,7 +382,7 @@ class Booking(models.Model):
                             "Estas fechas están retenidas por otra sesión."
                         )
 
-                    booking = cls.objects.create(
+                    booking = cls(
                         tenant=tenant,
                         property=locked_property,
                         initial_date=initial_date,
@@ -406,8 +406,11 @@ class Booking(models.Model):
                         arrival_time=arrival_time,
                     )
 
+                    booking.full_clean()
+                    booking.save()
+
                     availability = PropertyAvailability.get_for_range(
-                        property,
+                        locked_property,
                         initial_date,
                         final_date,
                     )
