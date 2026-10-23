@@ -1,145 +1,290 @@
-document.addEventListener("DOMContentLoaded", () => {
-    const form = document.querySelector("#booking-details-form");
-    if (!form) return;
 
-    const errorDiv = document.querySelector("#booking-form-error");
-    const submitButton = document.querySelector("#submit-booking-details");
-    const cancelButton = document.querySelector("#cancel-booking-details");
-    const holdTokenInput = document.querySelector("#booking-hold-token");
+(() => {
+    "use strict";
 
-    let submissionInProgress = false;
-    let releaseRequested = false;
+    document.addEventListener("DOMContentLoaded", () => {
+        const form = document.getElementById("booking-details-form");
+        if (!form) return;
 
-    function getCookie(name) {
-        const cookies = document.cookie ? document.cookie.split(";") : [];
+        const errorDiv = document.getElementById("booking-form-error");
+        const submitButton = document.getElementById("submit-booking-details");
+        const cancelButton = document.getElementById("cancel-booking-details");
+        const holdTokenInput = document.getElementById("booking-hold-token");
 
-        for (const cookie of cookies) {
-            const value = cookie.trim();
+        const submitButtonText = document.getElementById(
+            "submit-booking-details-text"
+        );
+        const cancelButtonText = document.getElementById(
+            "cancel-booking-details-text"
+        );
 
-            if (value.startsWith(`${name}=`)) {
-                return decodeURIComponent(value.substring(name.length + 1));
+        let submissionInProgress = false;
+        let releaseRequested = false;
+        let releasePromise = null;
+
+        function getCookie(name) {
+            const cookies = document.cookie
+                ? document.cookie.split(";")
+                : [];
+
+            for (const cookie of cookies) {
+                const value = cookie.trim();
+
+                if (value.startsWith(`${name}=`)) {
+                    return decodeURIComponent(
+                        value.substring(name.length + 1)
+                    );
+                }
+            }
+
+            return null;
+        }
+
+        function getFormValue(formData, name) {
+            return String(formData.get(name) ?? "").trim();
+        }
+
+        function setError(message) {
+            errorDiv.textContent = message;
+            errorDiv.hidden = false;
+        }
+
+        function setSubmitText(text) {
+            if (submitButtonText) {
+                submitButtonText.textContent = text;
+            } else {
+                submitButton.textContent = text;
             }
         }
 
-        return null;
-    }
-
-    async function releaseHold(keepalive = false) {
-        if (releaseRequested) return;
-
-        releaseRequested = true;
-
-        const token = holdTokenInput.value;
-        if (!token) return;
-
-        try {
-            await fetch(form.dataset.releaseUrl, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "X-CSRFToken": getCookie("csrftoken"),
-                },
-                body: JSON.stringify({ hold_token: token }),
-                keepalive,
-            });
-        } catch (error) {
-            // Si el navegador no consigue enviar la petición,
-            // la retención seguirá caducando por sí sola.
-        }
-    }
-
-    cancelButton.addEventListener("click", async () => {
-        cancelButton.disabled = true;
-        cancelButton.textContent = "Cancelando…";
-
-        await releaseHold();
-
-        window.location.assign(form.dataset.cancelUrl);
-    });
-
-    window.addEventListener("pagehide", () => {
-        if (!submissionInProgress && !releaseRequested) {
-            // Es un intento de mejor esfuerzo: el navegador puede
-            // cerrar la página antes de completar la petición.
-            void releaseHold(true);
-        }
-    });
-
-    form.addEventListener("submit", async (event) => {
-        event.preventDefault();
-
-        if (submissionInProgress) return;
-
-        errorDiv.hidden = true;
-        errorDiv.textContent = "";
-
-        if (!form.reportValidity()) return;
-
-        const formData = new FormData(form);
-
-        const payload = {
-            start: form.elements.start.value,
-            end: form.elements.end.value,
-            guest_first_name: formData.get("guest_first_name").trim(),
-            guest_last_name: formData.get("guest_last_name").trim(),
-            guest_email: formData.get("guest_email").trim(),
-            guest_phone_number: formData.get("guest_phone_number").trim(),
-            guest_country: formData.get("guest_country").trim(),
-            guest_region: formData.get("guest_region").trim(),
-            guest_city: formData.get("guest_city").trim(),
-            guest_postal_code: formData.get("guest_postal_code").trim(),
-            guest_address: formData.get("guest_address").trim(),
-            guest_count: formData.get("guest_count"),
-            arrival_time: formData.get("arrival_time"),
-            is_for_self: formData.has("is_for_self"),
-            is_business_trip: formData.has("is_business_trip"),
-            tax_id: formData.get("tax_id").trim(),
-            special_requests: formData.get("special_requests").trim(),
-            hold_token: holdTokenInput.value,
-        };
-
-        submissionInProgress = true;
-        submitButton.disabled = true;
-        cancelButton.disabled = true;
-        submitButton.textContent = "Procesando reserva…";
-
-        try {
-            const response = await fetch(form.dataset.createUrl, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "X-CSRFToken": getCookie("csrftoken"),
-                },
-                body: JSON.stringify(payload),
-            });
-
-            const data = await response.json();
-
-            if (!response.ok || !data.success) {
-                const message = typeof data.error === "string"
-                    ? data.error
-                    : JSON.stringify(data.error || data);
-
-                throw new Error(
-                    message || "No se pudo crear la reserva."
-                );
+        function setCancelText(text) {
+            if (cancelButtonText) {
+                cancelButtonText.textContent = text;
+            } else {
+                cancelButton.textContent = text;
             }
+        }
 
-            // La retención ya se ha convertido en una reserva pendiente.
-            // No debemos intentar liberarla al salir de esta página.
+        async function releaseHold(keepalive = false) {
+            if (releasePromise) return releasePromise;
+            if (releaseRequested) return;
+
             releaseRequested = true;
 
-            window.location.assign(data.payment_url);
-        } catch (error) {
-            submissionInProgress = false;
-            cancelButton.disabled = false;
+            const token = holdTokenInput?.value;
+            if (!token) return;
 
-            errorDiv.textContent =
-                error.message || "Error al procesar la reserva.";
-            errorDiv.hidden = false;
+            releasePromise = (async () => {
+                try {
+                    const response = await fetch(form.dataset.releaseUrl, {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "X-CSRFToken": getCookie("csrftoken") || ""
+                        },
+                        body: JSON.stringify({ hold_token: token }),
+                        keepalive
+                    });
 
-            submitButton.disabled = false;
-            submitButton.textContent = "Confirmar reserva";
+                    if (!response.ok) {
+                        console.warn(
+                            "No se pudo confirmar la liberación de la retención."
+                        );
+                    }
+                } catch (error) {
+                    console.warn(
+                        "No se pudo enviar la petición para liberar la retención."
+                    );
+                }
+            })();
+
+            return releasePromise;
+        }
+
+        // Cancelación manual.
+        cancelButton.addEventListener("click", async () => {
+            if (submissionInProgress) return;
+
+            cancelButton.disabled = true;
+            setCancelText("Cancelando…");
+
+            await releaseHold();
+
+            window.location.assign(form.dataset.cancelUrl);
+        });
+
+        // Intento de liberar la retención si se abandona la página.
+        window.addEventListener("pagehide", () => {
+            if (!submissionInProgress && !releaseRequested) {
+                void releaseHold(true);
+            }
+        });
+
+        // Envío de los datos.
+        form.addEventListener("submit", async event => {
+            event.preventDefault();
+
+            if (submissionInProgress) return;
+
+            errorDiv.hidden = true;
+            errorDiv.textContent = "";
+
+            if (!form.reportValidity()) return;
+
+            submissionInProgress = true;
+            submitButton.disabled = true;
+            cancelButton.disabled = true;
+            setSubmitText("Procesando reserva…");
+
+            try {
+                // Espera a que se carguen las utilidades del teléfono.
+                if (window.bookingPhone?.ready) {
+                    try {
+                        await window.bookingPhone.ready;
+                    } catch (error) {
+                        // El servidor seguirá siendo responsable
+                        // de validar el teléfono.
+                    }
+                }
+
+                // Actualiza el campo oculto antes de leer FormData.
+                if (window.bookingPhone?.sync) {
+                    window.bookingPhone.sync();
+                }
+
+                const formData = new FormData(form);
+
+                const payload = {
+                    start: form.querySelector('[name="start"]').value,
+                    end: form.querySelector('[name="end"]').value,
+
+                    guest_first_name: getFormValue(formData, "guest_first_name"),
+                    guest_last_name: getFormValue(formData, "guest_last_name"),
+                    guest_email: getFormValue(formData, "guest_email"),
+                    guest_phone_number: getFormValue(formData, "guest_phone_number"),
+                    guest_country: getFormValue(formData, "guest_country"),
+                    guest_region: getFormValue(formData, "guest_region"),
+                    guest_city: getFormValue(formData, "guest_city"),
+                    guest_postal_code: getFormValue(formData, "guest_postal_code"),
+                    guest_address: getFormValue(formData, "guest_address"),
+
+                    guest_count: formData.get("guest_count"),
+                    arrival_time: formData.get("arrival_time"),
+
+                    is_for_self: formData.has("is_for_self"),
+                    is_business_trip: formData.has("is_business_trip"),
+
+                    tax_id: getFormValue(formData, "tax_id"),
+                    special_requests: getFormValue(formData, "special_requests"),
+
+                    hold_token: holdTokenInput?.value || ""
+                };
+
+                const csrfToken = getCookie("csrftoken");
+
+                const response = await fetch(form.dataset.createUrl, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        ...(csrfToken ? { "X-CSRFToken": csrfToken } : {})
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                let data;
+
+                try {
+                    data = await response.json();
+                } catch {
+                    throw new Error(
+                        "El servidor devolvió una respuesta inesperada. Inténtalo de nuevo."
+                    );
+                }
+
+                if (!response.ok || !data?.success) {
+                    const message = typeof data?.error === "string"
+                        ? data.error
+                        : "No se pudo crear la reserva. Comprueba los datos e inténtalo de nuevo.";
+
+                    throw new Error(message);
+                }
+
+                if (typeof data.payment_url !== "string" || !data.payment_url) {
+                    throw new Error(
+                        "La reserva se ha procesado, pero no se recibió la dirección de pago."
+                    );
+                }
+
+                // No liberar la retención: el servidor la ha convertido.
+                releaseRequested = true;
+
+                window.location.assign(data.payment_url);
+            } catch (error) {
+                submissionInProgress = false;
+
+                cancelButton.disabled = false;
+                submitButton.disabled = false;
+
+                setCancelText("Cancelar y volver");
+                setSubmitText("Siguiente paso");
+
+                setError(
+                    error instanceof Error
+                        ? error.message
+                        : "Error al procesar la reserva. Inténtalo de nuevo."
+                );
+            }
+        });
+
+        // Sincronización: reserva para uno mismo o para otra persona.
+        const forSelfRadio = document.getElementById("for-self-radio");
+        const forOtherRadio = document.getElementById("for-other-radio");
+        const isForSelfCheckbox = document.getElementById("is-for-self");
+
+        function syncForSelf() {
+            isForSelfCheckbox.checked = forSelfRadio.checked;
+        }
+
+        forSelfRadio.addEventListener("change", syncForSelf);
+        forOtherRadio.addEventListener("change", syncForSelf);
+        syncForSelf();
+
+        // Mostrar y validar el CIF/NIF para viajes de empresa.
+        const businessYesRadio = document.getElementById("business-yes-radio");
+        const businessNoRadio = document.getElementById("business-no-radio");
+        const isBusinessCheckbox = document.getElementById("is-business-trip");
+        const taxIdContainer = document.getElementById("tax-id-container");
+        const taxIdInput = document.getElementById("tax-id");
+
+        function syncBusinessTrip() {
+            const isBusiness = businessYesRadio.checked;
+
+            isBusinessCheckbox.checked = isBusiness;
+            taxIdContainer.style.display = isBusiness ? "block" : "none";
+            taxIdInput.required = isBusiness;
+
+            if (!isBusiness) {
+                taxIdInput.value = "";
+            }
+        }
+
+        businessYesRadio.addEventListener("change", syncBusinessTrip);
+        businessNoRadio.addEventListener("change", syncBusinessTrip);
+        syncBusinessTrip();
+
+        // Abrir el selector nativo de hora cuando el navegador lo permita.
+        const arrivalInput = document.getElementById("arrival-time");
+
+        if (arrivalInput) {
+            arrivalInput.addEventListener("click", function () {
+                if (typeof this.showPicker !== "function") return;
+
+                try {
+                    this.showPicker();
+                } catch {
+                    // Se conserva el comportamiento nativo del navegador.
+                }
+            });
         }
     });
-});
+})();

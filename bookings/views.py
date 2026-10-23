@@ -14,7 +14,7 @@ from django.contrib.auth.forms import AuthenticationForm
 from django.http import JsonResponse, FileResponse, Http404
 from datetime import date, time, timedelta
 from django.utils import timezone
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from django.core.paginator import Paginator, PageNotAnInteger, EmptyPage
 from django.contrib.auth.decorators import login_required
 import json
@@ -3987,6 +3987,16 @@ def booking_details(request, property_id):
     if hold is None:
         return redirect("property", property_id=property_id)
 
+    total_nights = (end - start).days
+    availability = PropertyAvailability.get_for_range(property_obj, start, end)
+    total_price = sum(
+        (day["price_per_night"] for day in availability), Decimal("0.00")
+    )
+    included_vat = (total_price * Decimal("0.10")).quantize(
+        Decimal("0.01"), rounding=ROUND_HALF_UP
+    )
+    max_guests = property_obj.adults + property_obj.children
+
     return render(
         request,
         "bookings/booking_details.html",
@@ -3994,6 +4004,12 @@ def booking_details(request, property_id):
             "property": property_obj,
             "initial_date": initial_date,
             "final_date": final_date,
+            "start_date": start,
+            "end_date": end,
+            "total_nights": total_nights,
+            "total_price": total_price,
+            "included_vat": included_vat,
+            "max_guests": max_guests,
             "hold_token": str(hold.token),
         },
     )

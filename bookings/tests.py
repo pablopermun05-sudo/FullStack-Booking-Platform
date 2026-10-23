@@ -3022,7 +3022,7 @@ class BookingModCreateBookingViewTestCase(BookingTestBase):
 
         response = self.client.get(
             reverse(
-                "confirm_booking",
+                "create_booking",
                 kwargs={"property_id": self.property.pk},
             )
         )
@@ -3036,7 +3036,7 @@ class BookingModCreateBookingViewTestCase(BookingTestBase):
 
         response = self.client.post(
             reverse(
-                "confirm_booking",
+                "create_booking",
                 kwargs={"property_id": self.property.pk},
             ),
             data="{invalid-json",
@@ -3052,7 +3052,7 @@ class BookingModCreateBookingViewTestCase(BookingTestBase):
 
         response = self.client.post(
             reverse(
-                "confirm_booking",
+                "create_booking",
                 kwargs={"property_id": self.property.pk},
             ),
             data={
@@ -3074,7 +3074,7 @@ class BookingModCreateBookingViewTestCase(BookingTestBase):
 
         response = self.client.post(
             reverse(
-                "confirm_booking",
+                "create_booking",
                 kwargs={"property_id": self.property.pk},
             ),
             data={
@@ -3094,7 +3094,7 @@ class BookingModCreateBookingViewTestCase(BookingTestBase):
 
         response = self.client.post(
             reverse(
-                "confirm_booking",
+                "create_booking",
                 kwargs={"property_id": 999999},
             ),
             data={
@@ -3130,7 +3130,7 @@ class BookingModCreateBookingViewTestCase(BookingTestBase):
 
         response = self.client.post(
             reverse(
-                "confirm_booking",
+                "create_booking",
                 kwargs={"property_id": self.property.pk},
             ),
             data=json.dumps({
@@ -3168,7 +3168,7 @@ class BookingModCreateBookingViewTestCase(BookingTestBase):
 
         response = self.client.post(
             reverse(
-                "confirm_booking",
+                "create_booking",
                 kwargs={"property_id": self.property.pk},
             ),
             data=json.dumps({
@@ -3206,7 +3206,7 @@ class BookingModCreateBookingViewTestCase(BookingTestBase):
 
         response = self.client.post(
             reverse(
-                "confirm_booking",
+                "create_booking",
                 kwargs={"property_id": self.property.pk},
             ),
             data=json.dumps({
@@ -3264,7 +3264,7 @@ class BookingModCreateBookingViewTestCase(BookingTestBase):
 
         response = self.client.post(
             reverse(
-                "confirm_booking",
+                "create_booking",
                 kwargs={"property_id": self.property.pk},
             ),
             data=json.dumps({
@@ -3313,7 +3313,7 @@ class BookingModCreateBookingViewTestCase(BookingTestBase):
             )
 
             response = self.client.post(
-                reverse("confirm_booking", args=[self.property.id]),
+                reverse("create_booking", args=[self.property.id]),
                 data=json.dumps({
                     "start": arrival_date.isoformat(),
                     "end": checkout_date.isoformat(),
@@ -3358,7 +3358,7 @@ class BookingModCreateBookingViewTestCase(BookingTestBase):
         )
 
         response = self.client.post(
-            reverse("confirm_booking", args=[self.property.id]),
+            reverse("create_booking", args=[self.property.id]),
             data=json.dumps({
                 "start": arrival_date.isoformat(),
                 "end": checkout_date.isoformat(),
@@ -3396,7 +3396,7 @@ class BookingModCreateBookingViewTestCase(BookingTestBase):
 
         response = self.client.post(
             reverse(
-                "confirm_booking",
+                "create_booking",
                 kwargs={"property_id": self.property.pk},
             ),
             data=json.dumps({
@@ -3433,7 +3433,7 @@ class BookingModCreateBookingViewTestCase(BookingTestBase):
 
         response = self.client.post(
             reverse(
-                "confirm_booking",
+                "create_booking",
                 kwargs={"property_id": self.property.pk},
             ),
             data=json.dumps({
@@ -3471,7 +3471,7 @@ class BookingModCreateBookingViewTestCase(BookingTestBase):
 
         response = self.client.post(
             reverse(
-                "confirm_booking",
+                "create_booking",
                 kwargs={"property_id": self.property.pk},
             ),
             data=json.dumps({
@@ -3505,7 +3505,7 @@ class BookingModCreateBookingViewTestCase(BookingTestBase):
 
         response = self.client.post(
             reverse(
-                "confirm_booking",
+                "create_booking",
                 kwargs={"property_id": self.property.pk},
             ),
             data=json.dumps({
@@ -3544,7 +3544,7 @@ class BookingModCreateBookingViewTestCase(BookingTestBase):
 
         response = self.client.post(
             reverse(
-                "confirm_booking",
+                "create_booking",
                 kwargs={"property_id": self.property.pk},
             ),
             data=json.dumps({
@@ -3603,7 +3603,7 @@ class BookingModCreateBookingViewTestCase(BookingTestBase):
 
         response = self.client.post(
             reverse(
-                "confirm_booking",
+                "create_booking",
                 kwargs={"property_id": self.property.pk},
             ),
             data=json.dumps(payload),
@@ -3653,7 +3653,7 @@ class BookingModCreateBookingViewTestCase(BookingTestBase):
 
         response = self.client.post(
             reverse(
-                "confirm_booking",
+                "create_booking",
                 kwargs={"property_id": self.property.pk},
             ),
             data=json.dumps(payload),
@@ -3689,7 +3689,7 @@ class BookingModCreateBookingViewTestCase(BookingTestBase):
 
         response = self.client.post(
             reverse(
-                "confirm_booking",
+                "create_booking",
                 kwargs={"property_id": self.property.pk},
             ),
             data=json.dumps({
@@ -4147,7 +4147,7 @@ class BookingConcurrencyTestCase(TransactionTestCase):
         ):
             response = self.client.post(
                 reverse(
-                    "confirm_booking",
+                    "create_booking",
                     kwargs={"property_id": self.property.pk},
                 ),
                 data={
@@ -5597,7 +5597,7 @@ class BookingChangeProposalRejectViewTestCase(BookingTestBase):
 
         response = self.client.post(
             reverse(
-                "confirm_booking",
+                "create_booking",
                 kwargs={"property_id": self.booking1.property_id},
             ),
             data=json.dumps(payload),
@@ -6104,7 +6104,7 @@ class BookingChangeProposalAcceptViewTestCase(BookingTestBase):
 
         response = self.client.post(
             self.reverse(
-                "confirm_booking",
+                "create_booking",
                 kwargs={"property_id": property_id},
             ),
             data=json.dumps(payload),
