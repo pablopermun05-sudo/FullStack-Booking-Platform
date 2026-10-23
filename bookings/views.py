@@ -783,6 +783,95 @@ def delete_booking(request, booking_id):
 
     return redirect('index')
 
+@login_required
+def manage_bookings(request):
+    
+    if not request.user.is_staff:
+        raise PermissionDenied
+
+    # Actualiza las reservas pendientes que hayan caducado.
+    pending_bookings = Booking.objects.filter(status="PENDING")
+
+    for booking in pending_bookings:
+        if booking.is_expired():
+            booking.expire()
+
+    all_bookings = Booking.objects.annotate(
+        calculated_total=Coalesce(
+            Sum("nights__price_per_night"),
+            Value(Decimal("0.00")),
+            output_field=DecimalField(
+                max_digits=10,
+                decimal_places=2,
+            ),
+        )
+    ).select_related(
+        "tenant",
+        "property",
+    ).order_by("-id")
+
+    valid_filters = {
+        "ALL",
+        "ACTIVE",
+        "PENDING",
+        "CONFIRMED",
+        "CANCELLED",
+        "EXPIRED",
+    }
+
+    selected_status = request.GET.get("status", "ACTIVE").upper()
+
+    if selected_status not in valid_filters:
+        selected_status = "ACTIVE"
+
+    filter_counts = {
+        "ALL": all_bookings.count(),
+        "ACTIVE": all_bookings.filter(
+            status__in=["PENDING", "CONFIRMED"]
+        ).count(),
+        "PENDING": all_bookings.filter(
+            status="PENDING"
+        ).count(),
+        "CONFIRMED": all_bookings.filter(
+            status="CONFIRMED"
+        ).count(),
+        "CANCELLED": all_bookings.filter(
+            status="CANCELLED"
+        ).count(),
+        "EXPIRED": all_bookings.filter(
+            status="EXPIRED"
+        ).count(),
+    }
+
+    if selected_status == "ACTIVE":
+        bookings = all_bookings.filter(
+            status__in=["PENDING", "CONFIRMED"]
+        )
+    elif selected_status == "PENDING":
+        bookings = all_bookings.filter(status="PENDING")
+    elif selected_status == "CONFIRMED":
+        bookings = all_bookings.filter(status="CONFIRMED")
+    elif selected_status == "CANCELLED":
+        bookings = all_bookings.filter(status="CANCELLED")
+    elif selected_status == "EXPIRED":
+        bookings = all_bookings.filter(status="EXPIRED")
+    else:
+        bookings = all_bookings
+
+    paginator = Paginator(bookings, 6)
+    page_obj = paginator.get_page(request.GET.get("page"))
+
+    return render(
+        request,
+        "bookings/manage_bookings.html",
+        {
+            "bookings": page_obj.object_list,
+            "page_obj": page_obj,
+            "selected_status": selected_status,
+            "filter_counts": filter_counts,
+        },
+    )
+
 def properties(request):
     if request.method != "GET":
         return JsonResponse({"error": "Petición GET necesaria."}, status=400)

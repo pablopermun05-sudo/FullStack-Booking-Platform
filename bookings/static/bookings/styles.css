@@ -695,7 +695,7 @@ body {
     margin-bottom: 0;
 }
 
-.my-bookings {
+.bookings-page {
     max-width: 1100px;
     margin: 0 auto;
     padding: 40px 20px 60px;
@@ -1594,7 +1594,7 @@ body {
    LISTADO DE RESERVAS
    ========================================= */
 
-.my-bookings {
+.bookings-page {
     width: 100%;
     max-width: 1200px;
     margin: 0 auto;
@@ -2782,7 +2782,7 @@ body {
    ========================================= */
 
 @media (max-width: 800px) {
-    .my-bookings {
+    .bookings-page {
         padding: 16px;
     }
 
@@ -3016,7 +3016,7 @@ body {
 }
 
 @media (max-width: 760px) {
-    .my-bookings {
+    .bookings-page {
         padding: 28px 14px 45px;
     }
 
