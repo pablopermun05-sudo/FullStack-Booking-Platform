@@ -819,7 +819,7 @@ def manage_bookings(request):
         "EXPIRED",
     }
 
-    selected_status = request.GET.get("status", "ACTIVE").upper()
+    selected_status = request.GET.get("status", "ALL").upper()
 
     if selected_status not in valid_filters:
         selected_status = "ACTIVE"
