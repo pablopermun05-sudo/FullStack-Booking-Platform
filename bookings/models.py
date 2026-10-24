@@ -1027,11 +1027,7 @@ class BookingCancellationRequest(models.Model):
     )
 
     reason = models.TextField(max_length=1000)
-    response_reason = models.TextField(
-        max_length=1000,
-        blank=True,
-        default="",
-    )
+
     created_at = models.DateTimeField(
         default=timezone.now,
         editable=False,

@@ -33,7 +33,8 @@ from .emails import (
     send_booking_change_proposal_status_email,
     send_forced_booking_change_email,
     send_booking_cancellation_request_email,
-    send_forced_booking_cancellation_email
+    send_forced_booking_cancellation_email,
+    send_booking_cancellation_proposal_status_email
 )
 
 # Create your views here.
@@ -1354,6 +1355,15 @@ def booking_cancellation_request_detail(request, token):
             )
             cancellation.save(update_fields=["status"])
 
+            transaction.on_commit(
+                lambda booking=booking, cancellation=cancellation:
+                    send_booking_cancellation_proposal_status_email(
+                        booking,
+                        cancellation,
+                        "expired",
+                    )
+            )
+
     can_respond = (
         cancellation.status == BookingCancellationRequest.Status.PENDING
         and (
@@ -2181,6 +2191,15 @@ def propose_booking_cancellation(request, booking_id):
                 )
                 expired_request.save(update_fields=["status"])
 
+                transaction.on_commit(
+                    lambda booking=booking, cancellation=expired_request:
+                        send_booking_cancellation_proposal_status_email(
+                            booking,
+                            cancellation,
+                            "expired",
+                        )
+                )
+
             pending_request = (
                 BookingCancellationRequest.objects
                 .select_for_update()
@@ -2631,6 +2650,30 @@ def force_booking_change(request, booking_id):
         status=200,
     )
 
+def notify_forced_cancellation(booking, before, after, cancellation, request):
+    try:
+        sent = send_forced_booking_cancellation_email(
+            booking,
+            before,
+            after,
+            cancellation=cancellation,
+            request=request,
+        )
+        if not sent:
+            logger.error(
+                "No se pudo enviar el correo de cancelación forzada. "
+                "Solicitud=%s, reserva=%s",
+                cancellation.pk,
+                booking.pk,
+            )
+    except Exception:
+        logger.exception(
+            "Error al enviar el correo de cancelación forzada. "
+            "Solicitud=%s, reserva=%s",
+            cancellation.pk,
+            booking.pk,
+        )
+            
 @login_required
 def force_booking_cancellation(request, booking_id):
     if request.method != "POST":
@@ -2751,6 +2794,15 @@ def force_booking_cancellation(request, booking_id):
                 )
                 pending_cancellation.save(update_fields=["status"])
 
+                transaction.on_commit(
+                    lambda b=booking, c=pending_cancellation:
+                        send_booking_cancellation_proposal_status_email(
+                            b,
+                            c,
+                            "cancelled",
+                        )
+                )
+
             # Cerrar las propuestas de cambio pendientes.
             pending_proposals = list(
                 BookingChangeProposal.objects.select_for_update().filter(
@@ -2817,12 +2869,8 @@ def force_booking_cancellation(request, booking_id):
                     after=after_values.copy(),
                     c=cancellation,
                     req=request:
-                    send_forced_booking_cancellation_email(
-                        b,
-                        before,
-                        after,
-                        cancellation=c,
-                        request=req,
+                    notify_forced_cancellation(
+                        b, before, after, c, req
                     )
             )
 
@@ -2882,7 +2930,7 @@ def force_booking_cancellation(request, booking_id):
         },
         status=200,
     )
-    
+            
 def authorize_booking_change_proposal(request, booking, proposal, raw_token=""):
     """
     Autoriza al huésped mediante su sesión o mediante el token
@@ -3064,6 +3112,15 @@ def _respond_to_booking_cancellation(request, cancellation_request_id, accept):
                 )
                 cancellation.save(update_fields=["status"])
 
+                transaction.on_commit(
+                    lambda booking=booking, cancellation=cancellation:
+                        send_booking_cancellation_proposal_status_email(
+                            booking,
+                            cancellation,
+                            "expired",
+                        )
+                )
+
                 error = "La solicitud de cancelación ha caducado."
 
                 if is_html_form:
@@ -3101,7 +3158,7 @@ def _respond_to_booking_cancellation(request, cancellation_request_id, accept):
                     )
 
                 return JsonResponse({"error": error}, status=409)
-
+            
             if accept:
                 if not booking.cancel():
                     error = "No se ha podido cancelar la reserva."
@@ -3114,67 +3171,64 @@ def _respond_to_booking_cancellation(request, cancellation_request_id, accept):
 
                     return JsonResponse({"error": error}, status=409)
 
-                # Cancelar las propuestas de cambio pendientes.
-                BookingChangeProposal.objects.filter(
-                    booking=booking,
-                    status=BookingChangeProposal.Status.PENDING,
-                ).update(
-                    status=BookingChangeProposal.Status.CANCELLED
+                # Cancelar las propuestas de cambio pendientes y notificar.
+                pending_proposals = list(
+                    BookingChangeProposal.objects.select_for_update().filter(
+                        booking=booking,
+                        status=BookingChangeProposal.Status.PENDING,
+                    )
                 )
 
-                # Cerrar las demás solicitudes de cancelación pendientes.
-                BookingCancellationRequest.objects.filter(
-                    booking=booking,
-                    status=BookingCancellationRequest.Status.PENDING,
-                ).exclude(
-                    pk=cancellation.pk,
-                ).update(
-                    status=BookingCancellationRequest.Status.CANCELLED
+                for proposal in pending_proposals:
+                    proposal.status = BookingChangeProposal.Status.CANCELLED
+                    proposal.save(update_fields=["status"])
+
+                    transaction.on_commit(
+                        lambda b=booking, p=proposal:
+                            send_booking_change_proposal_status_email(
+                                b, p, "cancelled"
+                            )
+                    )
+
+                # Cerrar las demás solicitudes de cancelación pendientes y notificar.
+                pending_cancellations = list(
+                    BookingCancellationRequest.objects.select_for_update().filter(
+                        booking=booking,
+                        status=BookingCancellationRequest.Status.PENDING,
+                    ).exclude(
+                        pk=cancellation.pk,
+                    )
                 )
 
+                for other_cancellation in pending_cancellations:
+                    other_cancellation.status = (
+                        BookingCancellationRequest.Status.CANCELLED
+                    )
+                    other_cancellation.save(update_fields=["status"])
+
+                    transaction.on_commit(
+                        lambda b=booking, c=other_cancellation:
+                            send_booking_cancellation_proposal_status_email(
+                                b, c, "cancelled"
+                            )
+                    )
+
+                # Marcar como aceptada la solicitud actual.
                 cancellation.status = (
                     BookingCancellationRequest.Status.ACCEPTED
                 )
-                cancellation.response_reason = ""
                 cancellation.responded_at = now
                 cancellation.save(
-                    update_fields=[
-                        "status",
-                        "response_reason",
-                        "responded_at",
-                    ]
+                    update_fields=["status", "responded_at"]
                 )
 
             else:
-                response_reason = (
-                    request.POST.get("response_reason") or ""
-                ).strip()
-
-                if len(response_reason) > 1000:
-                    error = (
-                        "El motivo del rechazo no puede superar "
-                        "los 1000 caracteres."
-                    )
-
-                    if is_html_form:
-                        messages.error(request, error)
-                        return redirect_after_booking_cancellation(
-                            request, raw_token
-                        )
-
-                    return JsonResponse({"error": error}, status=400)
-
                 cancellation.status = (
                     BookingCancellationRequest.Status.REJECTED
                 )
-                cancellation.response_reason = response_reason
                 cancellation.responded_at = now
                 cancellation.save(
-                    update_fields=[
-                        "status",
-                        "response_reason",
-                        "responded_at",
-                    ]
+                    update_fields=["status", "responded_at"]
                 )
 
     except IntegrityError:
@@ -3187,6 +3241,19 @@ def _respond_to_booking_cancellation(request, cancellation_request_id, accept):
             )
 
         return JsonResponse({"error": error}, status=409)
+    
+    # Notificar al propietario únicamente después de confirmar la transacción en la base de datos.
+    email_status = "accepted" if accept else "rejected"
+
+    transaction.on_commit(
+        lambda booking=booking, cancellation=cancellation,
+               status=email_status:
+            send_booking_cancellation_proposal_status_email(
+                booking,
+                cancellation,
+                status,
+            )
+    )
     
     if accept:
         message = (
