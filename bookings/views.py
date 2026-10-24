@@ -844,6 +844,68 @@ def review_owner_request(request, profile_id, action):
     return redirect("manage_owner_requests")
 
 @staff_member_required(login_url="login")
+@require_POST
+@transaction.atomic
+def manage_owner_permissions(request, user_id, action):
+    if action not in {"grant", "revoke"}:
+        raise Http404
+
+    User = get_user_model()
+
+    target_user = get_object_or_404(
+        User.objects.select_for_update(),
+        pk=user_id,
+    )
+
+    owner_profile = (
+        OwnerProfile.objects
+        .select_for_update()
+        .filter(user=target_user)
+        .first()
+    )
+
+    if action == "grant":
+        if owner_profile is None:
+            OwnerProfile.objects.create(
+                user=target_user,
+                status="APPROVED",
+                reviewed_at=timezone.now(),
+            )
+        elif owner_profile.status != "APPROVED":
+            owner_profile.status = "APPROVED"
+            owner_profile.reviewed_at = timezone.now()
+            owner_profile.save(
+                update_fields=["status", "reviewed_at"]
+            )
+
+        messages.success(
+            request,
+            f"Se han concedido permisos de propietario a "
+            f"{target_user.username}.",
+        )
+
+    else:
+        if owner_profile is None or owner_profile.status != "APPROVED":
+            messages.warning(
+                request,
+                "El usuario no tiene permisos de propietario activos.",
+            )
+        else:
+            owner_profile.status = "REVOKED"
+            owner_profile.reviewed_at = timezone.now()
+            owner_profile.save(
+                update_fields=["status", "reviewed_at"]
+            )
+
+            messages.success(
+                request,
+                f"Se han revocado los permisos de propietario de "
+                f"{target_user.username}.",
+            )
+
+    return redirect("manage_users")
+
+@staff_member_required(login_url="login")
 def manage_users(request):
     User = get_user_model()
 

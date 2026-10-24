@@ -3998,6 +3998,122 @@ textarea.b-input {
     border-top: 1px solid #edf0ed;
 }
 
+
+/* Acciones de administración de usuarios */
+.manage-user-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.65rem;
+    margin-top: 1.25rem;
+    padding-top: 1rem;
+    border-top: 1px solid #edf0f3;
+}
+
+.manage-user-actions form {
+    display: flex;
+    margin: 0;
+}
+
+.user-action-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-height: 40px;
+    padding: 0.6rem 0.95rem;
+    border: 1px solid transparent;
+    border-radius: 9px;
+    font-family: inherit;
+    font-size: 0.875rem;
+    font-weight: 600;
+    line-height: 1.2;
+    text-decoration: none;
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+        background-color 160ms ease,
+        border-color 160ms ease,
+        color 160ms ease,
+        box-shadow 160ms ease,
+        transform 160ms ease;
+}
+
+.user-action-btn i {
+    font-size: 1rem;
+    line-height: 1;
+}
+
+.user-action-btn:hover {
+    transform: translateY(-1px);
+}
+
+.user-action-btn:focus-visible {
+    outline: 3px solid rgba(59, 130, 246, 0.3);
+    outline-offset: 2px;
+}
+
+/* Editar: acción neutra y discreta */
+.user-action-edit {
+    color: #344054;
+    background: #fff;
+    border-color: #dfe4ea;
+}
+
+.user-action-edit:hover {
+    color: #1d2939;
+    background: #f8fafc;
+    border-color: #cbd5e1;
+}
+
+/* Conceder: verde suave */
+.user-action-grant {
+    color: #18794e;
+    background: #f0fdf4;
+    border-color: #bbf7d0;
+}
+
+.user-action-grant:hover {
+    color: #166534;
+    background: #dcfce7;
+    border-color: #86efac;
+}
+
+/* Revocar: rojo suave, sin resultar agresivo */
+.user-action-revoke {
+    color: #b42318;
+    background: #fff7f6;
+    border-color: #fecdca;
+}
+
+.user-action-revoke:hover {
+    color: #912018;
+    background: #feeceb;
+    border-color: #fda29b;
+}
+
+@media (max-width: 576px) {
+    .manage-user-actions > a,
+    .manage-user-actions > form {
+        flex: 1 1 100%;
+    }
+
+    .manage-user-actions > a,
+    .manage-user-actions > form > button {
+        width: 100%;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .user-action-btn {
+        transition: none;
+    }
+
+    .user-action-btn:hover {
+        transform: none;
+    }
+}
+
 @media (max-width: 767px) {
     .manage-users-page {
         padding-top: 24px;
