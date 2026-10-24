@@ -44,6 +44,7 @@ class OwnerProfile(models.Model):
         ("PENDING", "Pendiente"),
         ("APPROVED", "Aprobado"),
         ("REJECTED", "Rechazado"),
+        ("REVOKED", "Permiso retirado"),
     ]
 
     user = models.OneToOneField(
