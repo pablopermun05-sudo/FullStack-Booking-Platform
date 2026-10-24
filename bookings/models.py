@@ -612,6 +612,16 @@ class Booking(models.Model):
             )
     
     def save(self, *args, **kwargs):
+        update_fields = kwargs.get("update_fields")
+
+        # Si solo se actualizan campos de estado o expiración,
+        # no es necesario validar de nuevo todos los datos de la reserva.
+        if update_fields is not None and set(update_fields).issubset(
+            {"status", "expires_at"}
+        ):
+            super().save(*args, **kwargs)
+            return
+
         self.full_clean()
         super().save(*args, **kwargs)
 
