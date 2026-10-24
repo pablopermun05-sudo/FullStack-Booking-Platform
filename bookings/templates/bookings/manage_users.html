@@ -116,6 +116,15 @@
                 </div>
             </div>
 
+            <div class="manage-user-actions">
+                <a
+                    href="{% url 'edit_user_profile' account.id %}"
+                    class="booking-btn booking-btn-primary"
+                >
+                    <i class="bi bi-pencil-square" aria-hidden="true"></i>
+                    Editar perfil
+                </a>
+            </div>
         </div>
     </article>
     {% endfor %}

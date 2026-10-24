@@ -4550,30 +4550,54 @@ class UserForm(ModelForm):
         # Delete help texts
         self.fields['username'].help_text = ""
 
-def manage_profile(request):
-    # If an authenticated user tries to access the registration URL, redirect them to edit profile
-    if request.user.is_authenticated and request.resolver_match.url_name == "register":
-        return HttpResponseRedirect(reverse("edit_profile"))
+def manage_profile(request, user_id=None):
+    User = get_user_model()
+    url_name = request.resolver_match.url_name
 
-    # If an unauthenticated user tries to access the edit profile URL, redirect them to login
-    if not request.user.is_authenticated and request.resolver_match.url_name == "edit_profile":
-        return HttpResponseRedirect(reverse("login"))
+    # Un usuario autenticado no debe acceder al registro.
+    if request.user.is_authenticated and url_name == "register":
+        return redirect("edit_profile")
 
-    if request.user.is_authenticated:
-        form = UserForm(instance=request.user)
+    # Solo usuarios autenticados pueden editar perfiles.
+    if not request.user.is_authenticated and url_name != "register":
+        return redirect("login")
+
+    is_registration = url_name == "register"
+    is_admin_edit = False
+
+    if is_registration:
+        form_class = RegisterForm
+        instance = None
+
     else:
-        form = RegisterForm()
+        # Si se proporciona un ID, se intenta editar ese usuario.
+        if user_id is not None:
+            target_user = get_object_or_404(User, pk=user_id)
+
+            # Cada usuario puede editar su propio perfil.
+            # Solo el personal puede editar perfiles ajenos.
+            if (
+                request.user.pk != target_user.pk
+                and not request.user.is_staff
+            ):
+                raise PermissionDenied
+
+            is_admin_edit = request.user.pk != target_user.pk
+            instance = target_user
+
+        else:
+            # Edición del perfil propio.
+            instance = request.user
+
+        form_class = UserForm
 
     if request.method == "POST":
-        if request.user.is_authenticated:
-            form = UserForm(request.POST, instance=request.user)
-        else:
-            form = RegisterForm(request.POST)
+        form = form_class(
+            request.POST,
+            instance=instance,
+        )
 
-        
         if form.is_valid():
-            is_registration = not request.user.is_authenticated
-
             with transaction.atomic():
                 user = form.save()
 
@@ -4593,33 +4617,39 @@ def manage_profile(request):
                     messages.success(
                         request,
                         "Tu cuenta se ha creado correctamente. "
-                        "Tu solicitud para ser propietario está pendiente "
-                        "de aprobación por parte del administrador. "
-                        "Hasta entonces, no podrás gestionar propiedades."
+                        "Tu solicitud de propietario está pendiente "
+                        "de aprobación."
                     )
                 else:
                     messages.success(
                         request,
-                        "Tu cuenta se ha creado correctamente. "
-                        "Ya puedes iniciar sesión y reservar alojamientos."
+                        "Tu cuenta se ha creado correctamente."
                     )
-            else:
-                messages.success(
-                    request,
-                    "Tu perfil se ha actualizado correctamente."
-                )
 
+                return redirect("index")
+
+            if is_admin_edit:
+                return redirect("manage_users")
+
+            messages.success(
+                request,
+                "Tu perfil se ha actualizado correctamente."
+            )
             return redirect("index")
 
-        else:
-            return render(request, "bookings/userForm.html", {
-                "form": form
-            })
     else:
-        return render(request, "bookings/userForm.html", {
-            "form": form
-        })
+        form = form_class(instance=instance)
 
+    return render(
+        request,
+        "bookings/userForm.html",
+        {
+            "form": form,
+            "editing_other_user": is_admin_edit,
+            "profile_user": instance,
+        },
+    )
+    
 @login_required
 @require_POST
 def request_owner_status_view(request):

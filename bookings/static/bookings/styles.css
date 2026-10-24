@@ -3990,6 +3990,14 @@ textarea.b-input {
     color: #6b7772;
 }
 
+.manage-user-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 18px;
+    padding-top: 16px;
+    border-top: 1px solid #edf0ed;
+}
+
 @media (max-width: 767px) {
     .manage-users-page {
         padding-top: 24px;
