@@ -21,7 +21,7 @@ import json
 from django.core.exceptions import ValidationError
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
-from .services import generate_proposal_access_token, hash_proposal_access_token
+from .services import generate_proposal_access_token, hash_proposal_access_token, OwnerRequestError, request_owner_status
 import logging
 from django.contrib import messages
 import secrets
@@ -4509,3 +4509,20 @@ def manage_profile(request):
         return render(request, "bookings/userForm.html", {
             "form": form
         })
+
+@login_required
+@require_POST
+def request_owner_status_view(request):
+    try:
+        request_owner_status(request.user)
+    except OwnerRequestError as exc:
+        messages.info(request, str(exc))
+    else:
+        messages.success(
+            request,
+            "Tu solicitud se ha enviado correctamente. "
+            "El administrador debe aprobarla antes de que puedas "
+            "gestionar propiedades."
+        )
+
+    return redirect("edit_profile")

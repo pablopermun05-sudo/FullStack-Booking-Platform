@@ -45,4 +45,5 @@ urlpatterns = [
     path("booking/<int:booking_id>/force-cancellation", views.force_booking_cancellation, name="force_booking_cancellation"),
     path("bookings/cancellation/<int:cancellation_request_id>/accept/", views.accept_booking_cancellation, name="accept_booking_cancellation"),
     path("bookings/cancellation/<int:cancellation_request_id>/reject/", views.reject_booking_cancellation, name="reject_booking_cancellation"),
+    path("profile/request-owner", views.request_owner_status_view, name="request_owner_status"),
 ]
