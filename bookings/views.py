@@ -789,6 +789,61 @@ def delete_booking(request, booking_id):
     return redirect('index')
 
 @staff_member_required(login_url="login")
+def manage_owner_requests(request):
+    owner_requests = (
+        OwnerProfile.objects
+        .filter(status="PENDING")
+        .select_related("user")
+        .order_by("created_at")
+    )
+
+    return render(
+        request,
+        "bookings/manage_owner_requests.html",
+        {
+            "owner_requests": owner_requests,
+        },
+    )
+
+@staff_member_required(login_url="login")
+@require_POST
+@transaction.atomic
+def review_owner_request(request, profile_id, action):
+    owner_profile = get_object_or_404(
+        OwnerProfile.objects.select_for_update(),
+        pk=profile_id,
+    )
+
+    if action not in {"approve", "reject"}:
+        raise Http404
+
+    if owner_profile.status != "PENDING":
+        messages.warning(
+            request,
+            "Esta solicitud ya no está pendiente de revisión.",
+        )
+        return redirect("manage_owner_requests")
+
+    if action == "approve":
+        owner_profile.status = "APPROVED"
+        message = (
+            f"Se han concedido permisos de propietario a "
+            f"{owner_profile.user.username}."
+        )
+    else:
+        owner_profile.status = "REJECTED"
+        message = (
+            f"Se ha rechazado la solicitud de "
+            f"{owner_profile.user.username}."
+        )
+
+    owner_profile.reviewed_at = timezone.now()
+    owner_profile.save(update_fields=["status", "reviewed_at"])
+
+    messages.success(request, message)
+    return redirect("manage_owner_requests")
+
+@staff_member_required(login_url="login")
 def manage_users(request):
     User = get_user_model()
 

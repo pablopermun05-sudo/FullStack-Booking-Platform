@@ -1,0 +1,198 @@
+{% extends "bookings/layout.html" %}
+
+{% block title %}Solicitudes de propietarios{% endblock %}
+
+{% block body %}
+<div class="container py-5">
+
+    <!-- Cabecera -->
+    <div class="d-flex flex-column flex-md-row
+                justify-content-between align-items-md-center gap-3 mb-5">
+
+        <h1 class="h2 fw-bold mb-2">Solicitudes de propietarios</h1>
+
+        <a href="{% url 'manage_users' %}" class="btn btn-outline-secondary rounded-3 px-3 py-2 align-self-md-center">
+            <i class="bi bi-arrow-left me-2" aria-hidden="true"></i>
+            Volver a usuarios
+        </a>
+    </div>
+
+    <!-- Resumen -->
+    <div class="card border-0 shadow-sm rounded-4 mb-4">
+        <div class="card-body p-4">
+            <div class="d-flex align-items-center gap-3">
+                <div class="d-flex align-items-center justify-content-center
+                            rounded-3 bg-primary bg-opacity-10 text-primary"
+                    style="width: 52px; height: 52px; flex-shrink: 0;">
+                    <i class="bi bi-person-lines-fill fs-4" aria-hidden="true"></i>
+                </div>
+
+                <div class="flex-grow-1">
+                    <p class="text-secondary small mb-1">
+                        Solicitudes pendientes
+                    </p>
+                    <div class="d-flex align-items-baseline gap-2">
+                        <span class="fs-3 fw-bold">
+                            {{ owner_requests|length }}
+                        </span>
+                        <span class="text-secondary small">
+                            por revisar
+                        </span>
+                    </div>
+                </div>
+
+                <span class="badge rounded-pill bg-warning-subtle text-warning-emphasis
+                             border border-warning-subtle px-3 py-2">
+                    Pendientes
+                </span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Listado -->
+    {% if owner_requests %}
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 class="h5 fw-semibold mb-0">Solicitudes recibidas</h2>
+        <span class="text-secondary small">
+            {{ owner_requests|length }}
+            {% if owner_requests|length == 1 %}
+            solicitud
+            {% else %}
+            solicitudes
+            {% endif %}
+        </span>
+    </div>
+
+    <div class="d-flex flex-column gap-3">
+        {% for owner_profile in owner_requests %}
+        <article class="card border-0 shadow-sm rounded-4">
+            <div class="card-body p-4">
+
+                <div class="d-flex flex-column flex-lg-row
+                                    align-items-lg-center gap-4">
+
+                    <!-- Información del usuario -->
+                    <div class="d-flex align-items-start gap-3 flex-grow-1">
+
+                        <div class="d-flex align-items-center justify-content-center
+                                            rounded-circle bg-light border text-secondary"
+                            style="width: 52px; height: 52px; flex-shrink: 0;">
+                            <i class="bi bi-person fs-3" aria-hidden="true"></i>
+                        </div>
+
+                        <div class="flex-grow-1 min-w-0">
+                            <div class="d-flex flex-wrap
+                                                align-items-center gap-2 mb-1">
+                                <h3 class="h5 fw-semibold mb-0">
+                                    {{ owner_profile.user.get_full_name|default:owner_profile.user.username }}
+                                </h3>
+
+                                <span class="badge rounded-pill
+                                                     bg-warning-subtle text-warning-emphasis
+                                                     border border-warning-subtle">
+                                    Pendiente
+                                </span>
+                            </div>
+
+                            <p class="text-secondary small mb-3">
+                                @{{ owner_profile.user.username }}
+                            </p>
+
+                            <div class="row g-3">
+                                <div class="col-12 col-md-6">
+                                    <div class="d-flex align-items-start gap-2">
+                                        <i class="bi bi-envelope text-secondary mt-1" aria-hidden="true"></i>
+                                        <div class="min-w-0">
+                                            <div class="text-secondary small">
+                                                Correo electrónico
+                                            </div>
+                                            <div class="text-break">
+                                                {{ owner_profile.user.email }}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="col-12 col-md-6">
+                                    <div class="d-flex align-items-start gap-2">
+                                        <i class="bi bi-telephone text-secondary mt-1" aria-hidden="true"></i>
+                                        <div>
+                                            <div class="text-secondary small">
+                                                Teléfono
+                                            </div>
+                                            <div>
+                                                {{ owner_profile.user.phone_number|default:"No indicado" }}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="text-secondary small mt-3">
+                                <i class="bi bi-calendar3 me-1" aria-hidden="true"></i>
+                                Solicitud enviada el
+                                {{ owner_profile.created_at|date:"d/m/Y" }}
+                                a las
+                                {{ owner_profile.created_at|date:"H:i" }}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Acciones -->
+                    <div class="d-flex flex-column flex-sm-row
+                                        gap-2 pt-3 pt-lg-0 border-top border-lg-0">
+
+                        <form method="post" action="{% url 'review_owner_request' owner_profile.id 'approve' %}"
+                            class="flex-fill">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-success rounded-3 px-3 py-2 w-100">
+                                <i class="bi bi-check-lg me-1" aria-hidden="true"></i>
+                                Aprobar
+                            </button>
+                        </form>
+
+                        <form method="post" action="{% url 'review_owner_request' owner_profile.id 'reject' %}"
+                            class="flex-fill">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-outline-danger rounded-3 px-3 py-2 w-100">
+                                <i class="bi bi-x-lg me-1" aria-hidden="true"></i>
+                                Rechazar
+                            </button>
+                        </form>
+                    </div>
+
+                </div>
+            </div>
+        </article>
+        {% endfor %}
+    </div>
+
+    {% else %}
+
+    <!-- Estado vacío -->
+    <div class="card border-0 shadow-sm rounded-4">
+        <div class="card-body text-center py-5 px-4">
+            <div class="d-flex align-items-center justify-content-center
+                            rounded-circle bg-success bg-opacity-10 text-success
+                            mx-auto mb-3" style="width: 72px; height: 72px;">
+                <i class="bi bi-check2-circle fs-1" aria-hidden="true"></i>
+            </div>
+
+            <h2 class="h5 fw-semibold mb-2">
+                Todo está al día
+            </h2>
+
+            <p class="text-secondary mb-4">
+                No hay solicitudes de propietarios pendientes de revisión.
+            </p>
+
+            <a href="{% url 'manage_users' %}" class="btn btn-outline-secondary rounded-3 px-4">
+                Ir a gestión de usuarios
+            </a>
+        </div>
+    </div>
+
+    {% endif %}
+
+</div>
+{% endblock %}
