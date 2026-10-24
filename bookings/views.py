@@ -34,7 +34,8 @@ from .emails import (
     send_forced_booking_change_email,
     send_booking_cancellation_request_email,
     send_forced_booking_cancellation_email,
-    send_booking_cancellation_proposal_status_email
+    send_booking_cancellation_proposal_status_email,
+    send_booking_confirmation_emails
 )
 
 # Create your views here.
@@ -4034,6 +4035,15 @@ def mock_payment(request, booking_id):
         else:
             # Simulación de pago: no se procesa ningún cobro.
             if booking.confirm():
+                transaction.on_commit(
+                    lambda booking_id=booking.pk: send_booking_confirmation_emails(
+                        Booking.objects.select_related(
+                            "property",
+                            "property__owner",
+                        ).get(pk=booking_id)
+                    )
+                )
+
                 if request.user.is_authenticated:
                     return redirect("my_bookings")
 

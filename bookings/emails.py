@@ -2297,3 +2297,260 @@ DATOS DE LA RESERVA CANCELADA
         return False
 
     return True
+
+def send_booking_confirmation_emails(booking):
+    """Notifica al huésped y al propietario la confirmación de una reserva."""
+
+    property_obj = booking.property
+    owner = property_obj.owner
+
+    guest_email = (booking.guest_email or "").strip()
+    owner_email = (getattr(owner, "email", None) or "").strip()
+
+    if not guest_email:
+        logger.error(
+            "La reserva %s no tiene email de huésped.",
+            booking.pk,
+        )
+
+    if not owner_email:
+        logger.error(
+            "El propietario de la reserva %s no tiene email.",
+            booking.pk,
+        )
+
+    if not guest_email and not owner_email:
+        return False
+
+    guest_name = (
+        f"{booking.guest_first_name} {booking.guest_last_name}".strip()
+        or "huésped"
+    )
+    owner_name = (
+        owner.get_full_name().strip()
+        or getattr(owner, "username", "propietario")
+    )
+
+    property_title = property_obj.title
+    total_nights = (booking.final_date - booking.initial_date).days
+
+    try:
+        total_price = f"{booking.total_price:.2f} €"
+    except (TypeError, ValueError, ArithmeticError):
+        total_price = "No disponible"
+
+    reservation_fields = [
+        ("Alojamiento", str(property_title)),
+        ("Estado", "Confirmada correctamente"),
+        ("Entrada", booking.initial_date.strftime("%d/%m/%Y")),
+        ("Salida", booking.final_date.strftime("%d/%m/%Y")),
+        ("Número de noches", str(total_nights)),
+        ("Huéspedes", str(booking.guest_count)),
+        ("Hora de llegada", booking.arrival_time.strftime("%H:%M")),
+        ("Precio total", total_price),
+    ]
+
+    guest_fields = [
+        ("Nombre", guest_name),
+        ("Email", guest_email or "No disponible"),
+        ("Teléfono", str(booking.guest_phone_number or "No disponible")),
+        ("País", str(booking.guest_country or "No disponible")),
+        ("Ciudad", str(booking.guest_city or "No disponible")),
+    ]
+
+    def build_table(title, fields, highlighted=False):
+        background = "#edf6f1" if highlighted else "#f7f9f8"
+        border_color = "#cfe3d8" if highlighted else "#e3e9e6"
+        title_color = "#173f35" if highlighted else "#263a33"
+
+        rows = "".join(
+            f"""
+            <tr>
+              <td style="padding:10px 16px;color:#52615d;
+                         border-bottom:1px solid {border_color};
+                         font-size:14px;">
+                {escape(str(label))}
+              </td>
+              <td align="right"
+                  style="padding:10px 16px;color:{title_color};
+                         border-bottom:1px solid {border_color};
+                         font-size:14px;font-weight:bold;">
+                {escape(str(value))}
+              </td>
+            </tr>
+            """
+            for label, value in fields
+        )
+
+        return f"""
+        <tr>
+          <td style="padding:0 32px 20px;">
+            <table role="presentation" width="100%" cellspacing="0"
+                   cellpadding="0"
+                   style="border:1px solid {border_color};border-radius:8px;">
+              <tr>
+                <td colspan="2"
+                    style="padding:16px;background:{background};
+                           color:{title_color};font-weight:bold;">
+                  {escape(title)}
+                </td>
+              </tr>
+              {rows}
+            </table>
+          </td>
+        </tr>
+        """
+
+    def build_email(recipient, recipient_name, is_owner):
+        safe_name = escape(recipient_name)
+        safe_property = escape(str(property_title))
+
+        if is_owner:
+            subject = f"Reserva confirmada | {property_title}"
+            heading = "Nueva reserva confirmada"
+            intro = (
+                f"La reserva de <strong>{escape(guest_name)}</strong> "
+                "se ha confirmado correctamente en tu alojamiento."
+            )
+            fields = reservation_fields + guest_fields
+            closing = (
+                "Puedes consultar los detalles de la reserva "
+                "desde la plataforma."
+            )
+        else:
+            subject = f"Tu reserva está confirmada | {property_title}"
+            heading = "¡Tu reserva está confirmada!"
+            intro = (
+                f"Tu reserva en <strong>{safe_property}</strong> "
+                "se ha confirmado correctamente. "
+                "A continuación encontrarás todos los detalles."
+            )
+            fields = reservation_fields
+            closing = (
+                "Gracias por confiar en nosotros. "
+                "¡Esperamos que disfrutes de tu estancia!"
+            )
+
+        text_message = (
+            f"Hola {recipient_name},\n\n"
+            f"{heading}\n\n"
+            "La reserva se ha confirmado correctamente.\n\n"
+            + "\n".join(
+                f"{label}: {value}"
+                for label, value in fields
+            )
+            + f"\n\n{closing}\n"
+        )
+
+        reservation_html = build_table(
+            "Datos de la reserva",
+            reservation_fields,
+            highlighted=True,
+        )
+
+        guest_html = (
+            build_table("Datos del huésped", guest_fields)
+            if is_owner
+            else ""
+        )
+
+        html_message = f"""
+        <!DOCTYPE html>
+        <html lang="es">
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>{escape(heading)}</title>
+        </head>
+        <body style="margin:0;padding:0;background:#f3f5f7;
+                     font-family:Arial,Helvetica,sans-serif;color:#263238;">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0"
+                 style="background:#f3f5f7;padding:32px 12px;">
+            <tr>
+              <td align="center">
+                <table role="presentation" width="600" cellspacing="0"
+                       cellpadding="0"
+                       style="width:100%;max-width:600px;background:#ffffff;
+                              border-radius:12px;overflow:hidden;">
+                  <tr>
+                    <td style="background:#173f35;padding:28px 32px;
+                               color:#ffffff;">
+                      <p style="margin:0;font-size:12px;letter-spacing:2px;
+                                text-transform:uppercase;color:#d5e8df;">
+                        Confirmación de reserva
+                      </p>
+                      <h1 style="margin:10px 0 0;font-size:25px;line-height:1.3;">
+                        {escape(heading)}
+                      </h1>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding:30px 32px 24px;">
+                      <p style="margin:0 0 12px;font-size:16px;">
+                        Hola {safe_name},
+                      </p>
+                      <p style="margin:0;color:#52615d;font-size:15px;
+                                line-height:1.7;">
+                        {intro}
+                      </p>
+                    </td>
+                  </tr>
+                  {reservation_html}
+                  {guest_html}
+                  <tr>
+                    <td style="padding:22px 32px;background:#f7f9f8;
+                               border-top:1px solid #e8eeeb;">
+                      <p style="margin:0;color:#65716c;font-size:12px;
+                                line-height:1.7;">
+                        {escape(closing)}
+                      </p>
+                      <p style="margin:10px 0 0;color:#65716c;font-size:12px;">
+                        Notificación automática de {safe_property}.
+                      </p>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          </table>
+        </body>
+        </html>
+        """
+
+        email = EmailMultiAlternatives(
+            subject=subject,
+            body=text_message,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            to=[recipient],
+        )
+        email.attach_alternative(html_message, "text/html")
+
+        try:
+            result = email.send(fail_silently=False)
+        except Exception:
+            logger.exception(
+                "Error al enviar confirmación de la reserva %s a %s.",
+                booking.pk,
+                recipient,
+            )
+            return False
+
+        if result != 1:
+            logger.error(
+                "No se confirmó el envío de la reserva %s a %s.",
+                booking.pk,
+                recipient,
+            )
+            return False
+
+        return True
+
+    results = []
+
+    if guest_email:
+        results.append(build_email(guest_email, guest_name, False))
+
+    if owner_email:
+        results.append(build_email(owner_email, owner_name, True))
+
+    return all(results)
