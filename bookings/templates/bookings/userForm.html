@@ -6,15 +6,15 @@
     <div class="card text-bg-light shadow-sm" style="width: 100%; max-width: 500px; margin-bottom: 30px;">
         <div class="card-header text-center py-3">
             {% if request.user.is_authenticated %}
-                <h2 class="mb-0">
-                    {% if editing_other_user %}
-                        Editar usuario
-                    {% else %}
-                        Editar perfil
-                    {% endif %}
-                </h2>
+            <h2 class="mb-0">
+                {% if editing_other_user %}
+                Editar usuario
+                {% else %}
+                Editar perfil
+                {% endif %}
+            </h2>
             {% else %}
-                <h2 class="mb-0">Registrarse</h2>
+            <h2 class="mb-0">Registrarse</h2>
             {% endif %}
         </div>
 
@@ -25,28 +25,74 @@
 
                 <div class="d-grid gap-2 mb-3">
                     {% if request.user.is_authenticated %}
-                        <button class="primary-button" type="submit">
-                            Confirmar
-                        </button>
+                    <button class="primary-button" type="submit">
+                        Confirmar
+                    </button>
                     {% else %}
-                        <button class="primary-button" type="submit">
-                            Registrarse
-                        </button>
+                    <button class="primary-button" type="submit">
+                        Registrarse
+                    </button>
                     {% endif %}
                 </div>
             </form>
 
+            {% if request.user.is_authenticated and not editing_other_user and not request.user.is_staff %}
+            <div class="border rounded p-3 mt-4">
+                <h3 class="h5">Cuenta de propietario</h3>
+
+                {% if owner_profile %}
+                {% if owner_profile.status == "PENDING" %}
+                <p class="mb-0">
+                    Tu solicitud está pendiente de revisión por el administrador.
+                </p>
+                {% elif owner_profile.status == "APPROVED" %}
+                <p class="mb-0">
+                    Tu cuenta tiene permisos de propietario.
+                </p>
+                {% elif owner_profile.status == "REJECTED" %}
+                <p>
+                    Tu solicitud anterior ha sido rechazada.
+                    Puedes volver a solicitar el acceso.
+                </p>
+                {% elif owner_profile.status == "REVOKED" %}
+                <p>
+                    Tus permisos de propietario han sido retirados.
+                    Puedes volver a solicitar el acceso.
+                </p>
+                {% endif %}
+                {% else %}
+                <p>
+                    Puedes solicitar permisos de propietario para gestionar
+                    tus propias viviendas.
+                </p>
+                {% endif %}
+
+                {% if not owner_profile or owner_profile.status == "REJECTED" or owner_profile.status == "REVOKED" %}
+                <form method="post" action="{% url 'request_owner_status' %}">
+                    {% csrf_token %}
+                    <button class="primary-button" type="submit">
+                        {% if owner_profile %}
+                        Volver a solicitar ser propietario
+                        {% else %}
+                        Solicitar ser propietario
+                        {% endif %}
+                    </button>
+                </form>
+                {% endif %}
+            </div>
+            {% endif %}
+
             {% if not request.user.is_authenticated %}
-                <p class="text-center mb-0">
-                    ¿Ya tienes cuenta?
-                    <a href="{% url 'login' %}">Inicia sesión aquí.</a>
-                </p>
+            <p class="text-center mb-0">
+                ¿Ya tienes cuenta?
+                <a href="{% url 'login' %}">Inicia sesión aquí.</a>
+            </p>
             {% elif editing_other_user %}
-                <p class="text-center mb-0">
-                    <a href="{% url 'manage_users' %}">
-                        Volver a gestión de usuarios
-                    </a>
-                </p>
+            <p class="text-center mb-0">
+                <a href="{% url 'manage_users' %}">
+                    Volver a gestión de usuarios
+                </a>
+            </p>
             {% endif %}
         </div>
     </div>

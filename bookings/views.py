@@ -4639,6 +4639,11 @@ def manage_profile(request, user_id=None):
 
     else:
         form = form_class(instance=instance)
+        
+    owner_profile = None
+
+    if request.user.is_authenticated and not is_admin_edit:
+        owner_profile = getattr(request.user, "owner_profile", None)
 
     return render(
         request,
@@ -4647,6 +4652,7 @@ def manage_profile(request, user_id=None):
             "form": form,
             "editing_other_user": is_admin_edit,
             "profile_user": instance,
+            "owner_profile": owner_profile,
         },
     )
     
