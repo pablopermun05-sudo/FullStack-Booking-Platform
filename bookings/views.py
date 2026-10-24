@@ -4440,7 +4440,7 @@ class RegisterForm(UserCreationForm):
     account_type = forms.ChoiceField(
         label="Tipo de cuenta",
         choices=[
-            ("customer", "Cliente"),
+            ("customer", "Huésped"),
             ("owner", "Propietario"),
         ],
         widget=forms.RadioSelect,
@@ -4488,19 +4488,47 @@ def manage_profile(request):
         else:
             form = RegisterForm(request.POST)
 
+        
         if form.is_valid():
-            user = form.save()
+            is_registration = not request.user.is_authenticated
 
-            if not request.user.is_authenticated:
-                if form.cleaned_data["account_type"] == "owner":
+            with transaction.atomic():
+                user = form.save()
+
+                if (
+                    is_registration
+                    and form.cleaned_data.get("account_type") == "owner"
+                ):
                     OwnerProfile.objects.create(
                         user=user,
                         status="PENDING",
                     )
 
+            if is_registration:
                 login(request, user)
 
-            return HttpResponseRedirect(reverse("index"))
+                if form.cleaned_data.get("account_type") == "owner":
+                    messages.success(
+                        request,
+                        "Tu cuenta se ha creado correctamente. "
+                        "Tu solicitud para ser propietario está pendiente "
+                        "de aprobación por parte del administrador. "
+                        "Hasta entonces, no podrás gestionar propiedades."
+                    )
+                else:
+                    messages.success(
+                        request,
+                        "Tu cuenta se ha creado correctamente. "
+                        "Ya puedes iniciar sesión y reservar alojamientos."
+                    )
+            else:
+                messages.success(
+                    request,
+                    "Tu perfil se ha actualizado correctamente."
+                )
+
+            return redirect("index")
+
         else:
             return render(request, "bookings/userForm.html", {
                 "form": form
