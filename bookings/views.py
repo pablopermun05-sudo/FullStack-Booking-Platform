@@ -28,6 +28,8 @@ import secrets
 import os
 from django.core import signing
 from django.views.decorators.http import require_POST
+from django.contrib.admin.views.decorators import staff_member_required
+from django.contrib.auth import get_user_model
 from .emails import (
     send_booking_change_proposal_email,
     send_booking_change_proposal_status_email,
@@ -785,6 +787,86 @@ def delete_booking(request, booking_id):
         booking.delete()
 
     return redirect('index')
+
+@staff_member_required(login_url="login")
+def manage_users(request):
+    User = get_user_model()
+
+    valid_filters = {
+        "ALL",
+        "GUESTS",
+        "PENDING",
+        "APPROVED",
+        "INACTIVE",
+    }
+
+    selected_status = request.GET.get("status", "ALL").upper()
+
+    if selected_status not in valid_filters:
+        selected_status = "ALL"
+
+    search_query = request.GET.get("q", "").strip()
+
+    all_users = User.objects.select_related(
+        "owner_profile"
+    ).order_by("-date_joined", "-id")
+
+    # Búsqueda por nombre, apellidos, usuario, correo o teléfono.
+    if search_query:
+        all_users = all_users.filter(
+            Q(username__icontains=search_query)
+            | Q(first_name__icontains=search_query)
+            | Q(last_name__icontains=search_query)
+            | Q(email__icontains=search_query)
+            | Q(phone_number__icontains=search_query)
+        )
+
+    # Recuento de usuarios por categoría.
+    filter_counts = {
+        "ALL": User.objects.count(),
+        "GUESTS": User.objects.filter(
+            owner_profile__isnull=True
+        ).count(),
+        "PENDING": User.objects.filter(
+            owner_profile__status="PENDING"
+        ).count(),
+        "APPROVED": User.objects.filter(
+            owner_profile__status="APPROVED"
+        ).count(),
+        "INACTIVE": User.objects.filter(
+            owner_profile__status__in=["REJECTED", "REVOKED"]
+        ).count(),
+    }
+
+    # Aplicar el filtro seleccionado.
+    if selected_status == "GUESTS":
+        users = all_users.filter(owner_profile__isnull=True)
+
+    elif selected_status == "INACTIVE":
+        users = all_users.filter(
+            owner_profile__status__in=["REJECTED", "REVOKED"]
+        )
+
+    elif selected_status in {"PENDING", "APPROVED"}:
+        users = all_users.filter(owner_profile__status=selected_status)
+
+    else:
+        users = all_users
+
+    paginator = Paginator(users, 6)
+    page_obj = paginator.get_page(request.GET.get("page"))
+
+    return render(
+        request,
+        "bookings/manage_users.html",
+        {
+            "users": page_obj.object_list,
+            "page_obj": page_obj,
+            "selected_status": selected_status,
+            "filter_counts": filter_counts,
+            "search_query": search_query,
+        },
+    )
 
 @login_required
 def manage_bookings(request):

@@ -1,3 +1,4 @@
+
 from django.contrib import admin
 from django.utils import timezone
 
@@ -22,6 +23,7 @@ class OwnerProfileAdmin(admin.ModelAdmin):
     actions = (
         "approve_owners",
         "reject_owners",
+        "revoke_owners",
     )
 
     @admin.action(description="Aprobar propietarios seleccionados")
@@ -31,10 +33,17 @@ class OwnerProfileAdmin(admin.ModelAdmin):
             reviewed_at=timezone.now(),
         )
 
-    @admin.action(description="Rechazar propietarios seleccionados")
+    @admin.action(description="Rechazar solicitudes seleccionadas")
     def reject_owners(self, request, queryset):
         queryset.update(
             status="REJECTED",
+            reviewed_at=timezone.now(),
+        )
+
+    @admin.action(description="Revocar permisos de propietarios seleccionados")
+    def revoke_owners(self, request, queryset):
+        queryset.update(
+            status="REVOKED",
             reviewed_at=timezone.now(),
         )
 

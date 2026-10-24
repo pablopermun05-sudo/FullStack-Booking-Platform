@@ -1,0 +1,162 @@
+{% extends "bookings/layout.html" %}
+
+{% block title %}Gestión de usuarios{% endblock %}
+
+{% block body %}
+
+<div class="bookings-page users-page">
+
+    <header class="bookings-header">
+        <div>
+            <h1>Gestión de usuarios</h1>
+        </div>
+
+        <nav class="booking-filters" aria-label="Filtrar usuarios por tipo">
+            <a href="?status=ALL&q={{ search_query|urlencode }}"
+                class="booking-filter {% if selected_status == 'ALL' %}active{% endif %}">
+                Todos
+            </a>
+
+            <a href="?status=GUESTS&q={{ search_query|urlencode }}"
+                class="booking-filter {% if selected_status == 'GUESTS' %}active{% endif %}">
+                Huéspedes
+            </a>
+
+            <a href="?status=APPROVED&q={{ search_query|urlencode }}"
+                class="booking-filter {% if selected_status == 'APPROVED' %}active{% endif %}">
+                Propietarios
+            </a>
+
+            <a href="?status=PENDING&q={{ search_query|urlencode }}"
+                class="booking-filter {% if selected_status == 'PENDING' %}active{% endif %}">
+                Pendientes
+            </a>
+
+            <a href="?status=INACTIVE&q={{ search_query|urlencode }}"
+                class="booking-filter {% if selected_status == 'INACTIVE' %}active{% endif %}">
+                Inactivos
+            </a>
+        </nav>
+
+        <div class="booking-count">
+            {{ page_obj.paginator.count }} usuarios
+        </div>
+    </header>
+
+    {% if users %}
+    {% for account in users %}
+    <article class="manage-user-card">
+
+        <div class="manage-user-avatar" aria-hidden="true">
+            <i class="bi bi-person-fill"></i>
+        </div>
+
+        <div class="manage-user-content">
+
+            <div class="manage-user-top">
+                <div class="manage-user-identity">
+                    <h2>
+                        {% if account.get_full_name %}
+                        {{ account.get_full_name }}
+                        {% else %}
+                        {{ account.username }}
+                        {% endif %}
+                    </h2>
+
+                    <p class="manage-user-username">
+                        @{{ account.username }}
+                    </p>
+                </div>
+
+                <div>
+                    {% if not account.owner_profile %}
+                    <span class="manage-user-status status-guest">
+                        Huésped
+                    </span>
+                    {% elif account.owner_profile.status == "PENDING" %}
+                    <span class="manage-user-status status-pending">
+                        Pendiente
+                    </span>
+                    {% elif account.owner_profile.status == "APPROVED" %}
+                    <span class="manage-user-status status-approved">
+                        Propietario activo
+                    </span>
+                    {% elif account.owner_profile.status == "REJECTED" %}
+                    <span class="manage-user-status status-rejected">
+                        Rechazado
+                    </span>
+                    {% elif account.owner_profile.status == "REVOKED" %}
+                    <span class="manage-user-status status-revoked">
+                        Revocado
+                    </span>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="manage-user-details">
+                <div>
+                    <span class="manage-user-detail-label">Correo electrónico</span>
+                    <span class="manage-user-detail-value">
+                        {{ account.email|default:"No indicado" }}
+                    </span>
+                </div>
+
+                <div>
+                    <span class="manage-user-detail-label">Teléfono</span>
+                    <span class="manage-user-detail-value">
+                        {{ account.phone_number|default:"No indicado" }}
+                    </span>
+                </div>
+
+                <div>
+                    <span class="manage-user-detail-label">Fecha de registro</span>
+                    <span class="manage-user-detail-value">
+                        {{ account.date_joined|date:"d/m/Y" }}
+                    </span>
+                </div>
+            </div>
+
+        </div>
+    </article>
+    {% endfor %}
+
+    {% if page_obj.has_other_pages %}
+    <nav class="booking-pagination" aria-label="Páginas de usuarios">
+
+        {% if page_obj.has_previous %}
+        <a href="?page={{ page_obj.previous_page_number }}&status={{ selected_status }}&q={{ search_query|urlencode }}">
+            Anterior
+        </a>
+        {% endif %}
+
+        {% for num in page_obj.paginator.page_range %}
+        {% if page_obj.number == num %}
+        <span class="current" aria-current="page">{{ num }}</span>
+        {% else %}
+        <a href="?page={{ num }}&status={{ selected_status }}&q={{ search_query|urlencode }}">
+            {{ num }}
+        </a>
+        {% endif %}
+        {% endfor %}
+
+        {% if page_obj.has_next %}
+        <a href="?page={{ page_obj.next_page_number }}&status={{ selected_status }}&q={{ search_query|urlencode }}">
+            Siguiente
+        </a>
+        {% endif %}
+
+    </nav>
+    {% endif %}
+
+    {% else %}
+    <section class="manage-users-empty">
+        <div class="manage-users-empty-icon">
+            <i class="bi bi-people" aria-hidden="true"></i>
+        </div>
+        <h2>No hay usuarios</h2>
+        <p>No se encontraron usuarios con los filtros seleccionados.</p>
+    </section>
+    {% endif %}
+
+</div>
+{% endblock %}

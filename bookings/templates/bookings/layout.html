@@ -56,6 +56,23 @@
 
                         {% if user.is_authenticated %}
 
+                        {% if user.is_staff %}
+                        <li class="nav-item dropdown">
+                            <button class="nav-link dropdown-toggle mx-lg-2" type="button" data-bs-toggle="dropdown"
+                                aria-expanded="false">
+                                Usuarios
+                            </button>
+
+                            <ul class="dropdown-menu">
+                                <li>
+                                    <a class="dropdown-item" href="{% url 'manage_users' %}">
+                                        Gestión de usuarios
+                                    </a>
+                                </li>
+                            </ul>
+                        </li>
+                        {% endif %}
+
                         {% if user.is_approved_owner or user.is_staff %}
                         <li class="nav-item dropdown">
                             <button class="nav-link dropdown-toggle mx-lg-2" data-bs-toggle="dropdown"
