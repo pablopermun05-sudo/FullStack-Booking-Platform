@@ -2554,3 +2554,402 @@ def send_booking_confirmation_emails(booking):
         results.append(build_email(owner_email, owner_name, True))
 
     return all(results)
+  
+def send_owner_request_notification_email(user):
+    """
+    Notifica a los administradores de una nueva solicitud
+    de permisos de propietario.
+    """
+    admin_emails = [
+        email
+        for name, email in getattr(settings, "ADMINS", [])
+        if email
+    ]
+
+    if not admin_emails:
+        logger.warning(
+            "No se ha enviado la notificación de solicitud de propietario: "
+            "no hay administradores configurados en settings.ADMINS."
+        )
+        return False
+
+    full_name = user.get_full_name().strip()
+    display_name = full_name or user.get_username()
+
+    # Escapar los datos antes de insertarlos en el HTML.
+    safe_name = escape(display_name)
+    safe_username = escape(user.get_username())
+    safe_email = escape(user.email or "No indicado")
+    safe_first_name = escape(user.first_name or "No indicado")
+    safe_last_name = escape(user.last_name or "No indicado")
+    safe_user_id = escape(str(user.pk))
+    safe_date_joined = escape(
+        user.date_joined.strftime("%d/%m/%Y a las %H:%M")
+        if getattr(user, "date_joined", None)
+        else "No disponible"
+    )
+
+    subject = f"Nueva solicitud de propietario: {display_name}"
+
+    text_content = (
+        "NUEVA SOLICITUD DE PERMISOS DE PROPIETARIO\n"
+        "==========================================\n\n"
+        "Un usuario ha solicitado permisos para gestionar propiedades.\n\n"
+        "DATOS DEL USUARIO\n"
+        f"Nombre completo: {display_name}\n"
+        f"Nombre de usuario: {user.get_username()}\n"
+        f"Correo electrónico: {user.email or 'No indicado'}\n"
+        f"Nombre: {user.first_name or 'No indicado'}\n"
+        f"Apellidos: {user.last_name or 'No indicados'}\n"
+        f"ID de usuario: {user.pk}\n"
+        f"Fecha de registro: {safe_date_joined}\n\n"
+        "ACCIÓN REQUERIDA\n"
+        "Accede al panel de administración para revisar la solicitud "
+        "y aprobarla o rechazarla.\n"
+    )
+
+    html_content = f"""
+    <!DOCTYPE html>
+    <html lang="es">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Nueva solicitud de propietario</title>
+      </head>
+      <body style="
+        margin: 0;
+        padding: 0;
+        background-color: #f1f5f9;
+        font-family: Arial, Helvetica, sans-serif;
+        color: #1e293b;
+      ">
+        <div style="
+          display: none;
+          max-height: 0;
+          overflow: hidden;
+          opacity: 0;
+        ">
+          Nueva solicitud de permisos de propietario de {safe_name}.
+        </div>
+
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0"
+          border="0" style="background-color: #f1f5f9;">
+          <tr>
+            <td align="center" style="padding: 36px 12px;">
+
+              <table role="presentation" width="600" cellspacing="0"
+                cellpadding="0" border="0"
+                style="
+                  width: 100%;
+                  max-width: 600px;
+                  background-color: #ffffff;
+                  border-radius: 12px;
+                  overflow: hidden;
+                ">
+
+                <!-- Cabecera -->
+                <tr>
+                  <td style="
+                    background-color: #172554;
+                    padding: 28px 32px;
+                  ">
+                    <p style="
+                      margin: 0 0 8px;
+                      color: #bfdbfe;
+                      font-size: 11px;
+                      font-weight: bold;
+                      letter-spacing: 2px;
+                      text-transform: uppercase;
+                    ">
+                      GESTIÓN DE PROPIETARIOS
+                    </p>
+                    <h1 style="
+                      margin: 0;
+                      color: #ffffff;
+                      font-size: 24px;
+                      line-height: 1.35;
+                    ">
+                      Nueva solicitud recibida
+                    </h1>
+                    <p style="
+                      margin: 10px 0 0;
+                      color: #dbeafe;
+                      font-size: 14px;
+                      line-height: 1.6;
+                    ">
+                      Se requiere una revisión por parte del administrador.
+                    </p>
+                  </td>
+                </tr>
+
+                <!-- Aviso -->
+                <tr>
+                  <td style="padding: 28px 32px 8px;">
+                    <table role="presentation" width="100%" cellspacing="0"
+                      cellpadding="0" border="0"
+                      style="
+                        background-color: #eff6ff;
+                        border: 1px solid #bfdbfe;
+                        border-radius: 8px;
+                      ">
+                      <tr>
+                        <td style="padding: 16px 18px;">
+                          <p style="
+                            margin: 0 0 5px;
+                            color: #1d4ed8;
+                            font-size: 13px;
+                            font-weight: bold;
+                          ">
+                            SOLICITUD PENDIENTE DE REVISIÓN
+                          </p>
+                          <p style="
+                            margin: 0;
+                            color: #334155;
+                            font-size: 14px;
+                            line-height: 1.6;
+                          ">
+                            <strong>{safe_name}</strong> quiere obtener
+                            permisos para gestionar propiedades en la
+                            plataforma.
+                          </p>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+
+                <!-- Datos del usuario -->
+                <tr>
+                  <td style="padding: 24px 32px 8px;">
+                    <h2 style="
+                      margin: 0 0 6px;
+                      color: #0f172a;
+                      font-size: 18px;
+                    ">
+                      Información del usuario
+                    </h2>
+                    <p style="
+                      margin: 0 0 18px;
+                      color: #64748b;
+                      font-size: 13px;
+                      line-height: 1.5;
+                    ">
+                      Datos de la cuenta que ha realizado la solicitud.
+                    </p>
+
+                    <table role="presentation" width="100%" cellspacing="0"
+                      cellpadding="0" border="0"
+                      style="
+                        border: 1px solid #e2e8f0;
+                        border-radius: 8px;
+                      ">
+                      <tr>
+                        <td style="
+                          padding: 14px 16px;
+                          border-bottom: 1px solid #e2e8f0;
+                          color: #64748b;
+                          font-size: 13px;
+                          width: 38%;
+                        ">
+                          Nombre completo
+                        </td>
+                        <td style="
+                          padding: 14px 16px;
+                          border-bottom: 1px solid #e2e8f0;
+                          color: #0f172a;
+                          font-size: 14px;
+                          font-weight: bold;
+                          overflow-wrap: anywhere;
+                        ">
+                          {safe_name}
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="
+                          padding: 14px 16px;
+                          border-bottom: 1px solid #e2e8f0;
+                          color: #64748b;
+                          font-size: 13px;
+                        ">
+                          Nombre de usuario
+                        </td>
+                        <td style="
+                          padding: 14px 16px;
+                          border-bottom: 1px solid #e2e8f0;
+                          color: #0f172a;
+                          font-size: 14px;
+                          overflow-wrap: anywhere;
+                        ">
+                          {safe_username}
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="
+                          padding: 14px 16px;
+                          border-bottom: 1px solid #e2e8f0;
+                          color: #64748b;
+                          font-size: 13px;
+                        ">
+                          Correo electrónico
+                        </td>
+                        <td style="
+                          padding: 14px 16px;
+                          border-bottom: 1px solid #e2e8f0;
+                          color: #2563eb;
+                          font-size: 14px;
+                          overflow-wrap: anywhere;
+                        ">
+                          {safe_email}
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="
+                          padding: 14px 16px;
+                          border-bottom: 1px solid #e2e8f0;
+                          color: #64748b;
+                          font-size: 13px;
+                        ">
+                          Nombre
+                        </td>
+                        <td style="
+                          padding: 14px 16px;
+                          border-bottom: 1px solid #e2e8f0;
+                          color: #0f172a;
+                          font-size: 14px;
+                        ">
+                          {safe_first_name}
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="
+                          padding: 14px 16px;
+                          border-bottom: 1px solid #e2e8f0;
+                          color: #64748b;
+                          font-size: 13px;
+                        ">
+                          Apellidos
+                        </td>
+                        <td style="
+                          padding: 14px 16px;
+                          border-bottom: 1px solid #e2e8f0;
+                          color: #0f172a;
+                          font-size: 14px;
+                        ">
+                          {safe_last_name}
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="
+                          padding: 14px 16px;
+                          border-bottom: 1px solid #e2e8f0;
+                          color: #64748b;
+                          font-size: 13px;
+                        ">
+                          ID de usuario
+                        </td>
+                        <td style="
+                          padding: 14px 16px;
+                          border-bottom: 1px solid #e2e8f0;
+                          color: #0f172a;
+                          font-size: 14px;
+                          font-family: monospace;
+                        ">
+                          #{safe_user_id}
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="
+                          padding: 14px 16px;
+                          color: #64748b;
+                          font-size: 13px;
+                        ">
+                          Fecha de registro
+                        </td>
+                        <td style="
+                          padding: 14px 16px;
+                          color: #0f172a;
+                          font-size: 14px;
+                        ">
+                          {safe_date_joined}
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+
+                <!-- Acción -->
+                <tr>
+                  <td style="padding: 24px 32px 32px;">
+                    <h2 style="
+                      margin: 0 0 8px;
+                      color: #0f172a;
+                      font-size: 17px;
+                    ">
+                      Próximo paso
+                    </h2>
+                    <p style="
+                      margin: 0;
+                      color: #475569;
+                      font-size: 14px;
+                      line-height: 1.7;
+                    ">
+                      Entra en el panel de administración de Django, localiza
+                      la solicitud de este usuario y revisa si procede aprobar
+                      o rechazar sus permisos de propietario.
+                    </p>
+                  </td>
+                </tr>
+
+                <!-- Pie -->
+                <tr>
+                  <td style="
+                    padding: 20px 32px;
+                    background-color: #f8fafc;
+                    border-top: 1px solid #e2e8f0;
+                  ">
+                    <p style="
+                      margin: 0 0 6px;
+                      color: #475569;
+                      font-size: 12px;
+                      font-weight: bold;
+                    ">
+                      Notificación automática
+                    </p>
+                    <p style="
+                      margin: 0;
+                      color: #94a3b8;
+                      font-size: 12px;
+                      line-height: 1.6;
+                    ">
+                      Este mensaje se ha generado automáticamente por la
+                      plataforma. No es necesario responder a este correo.
+                    </p>
+                  </td>
+                </tr>
+
+              </table>
+            </td>
+          </tr>
+        </table>
+      </body>
+    </html>
+    """
+
+    try:
+        email_message = EmailMultiAlternatives(
+            subject=subject,
+            body=text_content,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            to=admin_emails,
+        )
+        email_message.attach_alternative(html_content, "text/html")
+        email_message.send(fail_silently=False)
+        return True
+
+    except Exception:
+        logger.exception(
+            "Error al enviar la notificación de solicitud de propietario "
+            "para el usuario %s.",
+            user.pk,
+        )
+        return False

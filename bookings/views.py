@@ -37,7 +37,8 @@ from .emails import (
     send_booking_cancellation_request_email,
     send_forced_booking_cancellation_email,
     send_booking_cancellation_proposal_status_email,
-    send_booking_confirmation_emails
+    send_booking_confirmation_emails,
+    send_owner_request_notification_email,
 )
 
 # Create your views here.
@@ -4789,5 +4790,7 @@ def request_owner_status_view(request):
             "El administrador debe aprobarla antes de que puedas "
             "gestionar propiedades."
         )
+
+        send_owner_request_notification_email(request.user)
 
     return redirect("edit_profile")
