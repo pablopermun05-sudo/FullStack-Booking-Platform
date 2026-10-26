@@ -3159,14 +3159,16 @@ def authorize_booking_change_proposal(request, booking, proposal, raw_token=""):
         raise PermissionDenied
 
 def authorize_booking_cancellation(request, booking, cancellation, raw_token=""):
-    # Si el huésped ha iniciado sesión con la cuenta correcta,
-    # también puede responder desde su cuenta.
-    if (
-        request.user.is_authenticated
-        and booking.tenant_id == request.user.pk
-    ):
-        return
+    # Si ha iniciado sesión, solo el huésped propietario de la reserva
+    # puede responder desde su cuenta.
+    if request.user.is_authenticated:
+        if booking.tenant_id == request.user.pk:
+            return
 
+        # No revelar que existe una solicitud perteneciente a otro huésped.
+        raise Http404
+
+    # Para usuarios no autenticados, permitir el acceso mediante token.
     if not raw_token:
         raise PermissionDenied
 
