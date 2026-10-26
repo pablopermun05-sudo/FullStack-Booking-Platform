@@ -26,7 +26,7 @@ class User(AbstractUser):
     first_name = models.CharField("Nombre", max_length=150, blank=False)
     last_name = models.CharField("Apellidos", max_length=150, blank=False)
     email = models.EmailField(unique=True)
-    phone_number = PhoneNumberField(null=True, blank=True, unique=True)
+    phone_number = PhoneNumberField(unique=True)
 
     class Meta:
         verbose_name = "Usuario"

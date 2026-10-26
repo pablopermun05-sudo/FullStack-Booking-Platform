@@ -4690,6 +4690,8 @@ class RegisterForm(UserCreationForm):
         self.fields["username"].help_text = ""
         self.fields["password1"].help_text = ""
         self.fields["password2"].help_text = ""
+        
+        self.fields["phone_number"].required = True
 
 class UserForm(ModelForm):
     class Meta:
@@ -4714,6 +4716,8 @@ class UserForm(ModelForm):
 
         # Eliminar textos de ayuda
         self.fields["username"].help_text = ""
+        
+        self.fields["phone_number"].required = True
         
 def manage_profile(request, user_id=None):
     User = get_user_model()
