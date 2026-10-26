@@ -355,6 +355,183 @@ class RegistrationTestCase(TestCase):
         self.assertFalse(
             User.objects.filter(username="invalid").exists()
         )
+        
+
+class UserProfileViewTestCase(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="profile_user",
+            email="profile@example.com",
+            password="testpassword123",
+            first_name="Nombre",
+            last_name="Original",
+        )
+
+        self.other_user = User.objects.create_user(
+            username="other_user",
+            email="other@example.com",
+            password="testpassword123",
+            first_name="Otro",
+            last_name="Usuario",
+        )
+
+        self.staff_user = User.objects.create_user(
+            username="staff_user",
+            email="staff@example.com",
+            password="testpassword123",
+            first_name="Personal",
+            last_name="Administrador",
+            is_staff=True,
+        )
+    
+    def test_anonymous_user_is_redirected_to_login_when_editing_profile(self):
+        response = self.client.get(reverse("edit_profile"))
+
+        self.assertRedirects(
+            response,
+            reverse("login"),
+        )
+
+
+    def test_anonymous_user_is_redirected_to_login_when_editing_another_profile(self):
+        url = reverse("edit_user_profile", args=[self.other_user.pk])
+
+        response = self.client.get(url)
+
+        self.assertRedirects(
+            response,
+            reverse("login"),
+        )
+
+    def test_authenticated_user_is_redirected_from_register_to_edit_profile(self):
+        self.client.force_login(self.user)
+
+        response = self.client.get(reverse("register"))
+
+        self.assertRedirects(response, reverse("edit_profile"))
+
+    def test_user_can_access_own_profile_form(self):
+        self.client.force_login(self.user)
+
+        response = self.client.get(reverse("edit_profile"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["profile_user"], self.user)
+        self.assertFalse(response.context["editing_other_user"])
+        self.assertEqual(
+            response.context["form"].initial["username"],
+            self.user.username,
+        )
+
+    def test_user_can_update_own_profile(self):
+        self.client.force_login(self.user)
+
+        response = self.client.post(
+            reverse("edit_profile"),
+            {
+                "username": "updated_username",
+                "first_name": "NombreActualizado",
+                "last_name": "ApellidosActualizados",
+                "email": "updated@example.com",
+                "phone_number": "",
+            },
+        )
+
+        self.assertRedirects(response, reverse("index"))
+
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.username, "updated_username")
+        self.assertEqual(self.user.first_name, "NombreActualizado")
+        self.assertEqual(self.user.last_name, "ApellidosActualizados")
+        self.assertEqual(self.user.email, "updated@example.com")
+
+    def test_invalid_profile_form_does_not_update_user(self):
+        self.client.force_login(self.user)
+
+        response = self.client.post(
+            reverse("edit_profile"),
+            {
+                "username": "changed_username",
+                "first_name": "NombreNuevo",
+                "last_name": "ApellidosNuevos",
+                "email": "correo-no-valido",
+                "phone_number": "",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context["form"].errors)
+
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.username, "profile_user")
+        self.assertEqual(self.user.first_name, "Nombre")
+        self.assertEqual(self.user.last_name, "Original")
+        self.assertEqual(self.user.email, "profile@example.com")
+
+    def test_regular_user_cannot_edit_another_users_profile(self):
+        self.client.force_login(self.user)
+
+        response = self.client.get(
+            reverse("edit_user_profile", args=[self.other_user.pk])
+        )
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_staff_can_access_another_users_profile_form(self):
+        self.client.force_login(self.staff_user)
+
+        response = self.client.get(
+            reverse("edit_user_profile", args=[self.other_user.pk])
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["profile_user"], self.other_user)
+        self.assertTrue(response.context["editing_other_user"])
+
+    def test_staff_can_update_another_users_profile(self):
+        self.client.force_login(self.staff_user)
+
+        response = self.client.post(
+            reverse("edit_user_profile", args=[self.other_user.pk]),
+            {
+                "username": "updated_other_user",
+                "first_name": "NombreEditado",
+                "last_name": "ApellidosEditados",
+                "email": "edited@example.com",
+                "phone_number": "",
+            },
+        )
+
+        self.assertRedirects(response, reverse("manage_users"))
+
+        self.other_user.refresh_from_db()
+        self.assertEqual(self.other_user.username, "updated_other_user")
+        self.assertEqual(self.other_user.first_name, "NombreEditado")
+        self.assertEqual(self.other_user.last_name, "ApellidosEditados")
+        self.assertEqual(self.other_user.email, "edited@example.com")
+
+    def test_editing_profile_does_not_change_owner_permissions(self):
+        profile = OwnerProfile.objects.create(
+            user=self.user,
+            status="REJECTED",
+        )
+        self.client.force_login(self.user)
+
+        response = self.client.post(
+            reverse("edit_profile"),
+            {
+                "username": self.user.username,
+                "first_name": "NombreActualizado",
+                "last_name": self.user.last_name,
+                "email": self.user.email,
+                "phone_number": "",
+            },
+        )
+
+        self.assertRedirects(response, reverse("index"))
+
+        profile.refresh_from_db()
+        self.assertEqual(profile.status, "REJECTED")
 
 class PropertyManagementPermissionTestCase(TestCase):
     def create_user(self, username, email, **kwargs):
