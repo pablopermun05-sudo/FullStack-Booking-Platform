@@ -40,6 +40,7 @@ from .emails import (
     send_booking_confirmation_emails,
     send_owner_request_notification_email,
     send_owner_request_result_email,
+    send_owner_permissions_update_email
 )
 
 # Create your views here.
@@ -858,18 +859,18 @@ def manage_owner_permissions(request, user_id, action):
         raise Http404
 
     User = get_user_model()
-
     target_user = get_object_or_404(
         User.objects.select_for_update(),
         pk=user_id,
     )
 
     owner_profile = (
-        OwnerProfile.objects
-        .select_for_update()
+        OwnerProfile.objects.select_for_update()
         .filter(user=target_user)
         .first()
     )
+
+    permissions_changed = False
 
     if action == "grant":
         if owner_profile is None:
@@ -878,12 +879,15 @@ def manage_owner_permissions(request, user_id, action):
                 status="APPROVED",
                 reviewed_at=timezone.now(),
             )
+            permissions_changed = True
+
         elif owner_profile.status != "APPROVED":
             owner_profile.status = "APPROVED"
             owner_profile.reviewed_at = timezone.now()
             owner_profile.save(
-                update_fields=["status", "reviewed_at"]
+                update_fields=["status", "reviewed_at"],
             )
+            permissions_changed = True
 
         messages.success(
             request,
@@ -901,14 +905,21 @@ def manage_owner_permissions(request, user_id, action):
             owner_profile.status = "REVOKED"
             owner_profile.reviewed_at = timezone.now()
             owner_profile.save(
-                update_fields=["status", "reviewed_at"]
+                update_fields=["status", "reviewed_at"],
             )
+            permissions_changed = True
 
             messages.success(
                 request,
                 f"Se han revocado los permisos de propietario de "
                 f"{target_user.username}.",
             )
+
+    if permissions_changed:
+        transaction.on_commit(
+            lambda user=target_user, granted=(action == "grant"):
+                send_owner_permissions_update_email(user, granted)
+        )
 
     return redirect("manage_users")
 

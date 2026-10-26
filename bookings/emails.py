@@ -3178,4 +3178,193 @@ def send_owner_request_result_email(user, approved):
             "al usuario %s.",
             user.pk,
         )
+        return False   
+
+def send_owner_permissions_update_email(user, granted):
+    """Notifica al usuario de un cambio manual en sus permisos de propietario."""
+    if not user.email:
+        logger.warning(
+            "No se ha enviado la notificación de permisos de propietario: "
+            "el usuario %s no tiene correo electrónico.",
+            user.pk,
+        )
+        return False
+
+    if granted:
+        subject = "Se te han concedido permisos de propietario"
+        status_title = "Permisos de propietario concedidos"
+        status_message = (
+            "Un administrador te ha concedido permisos de propietario. "
+            "Ya puedes acceder a las funcionalidades destinadas a "
+            "gestionar tus propiedades."
+        )
+        status_color = "#15803d"
+        status_background = "#f0fdf4"
+        status_border = "#bbf7d0"
+        status_label = "PERMISOS CONCEDIDOS"
+    else:
+        subject = "Se han retirado tus permisos de propietario"
+        status_title = "Permisos de propietario retirados"
+        status_message = (
+            "Un administrador ha retirado tus permisos de propietario. "
+            "Ya no podrás acceder a las funcionalidades reservadas "
+            "a los usuarios con estos permisos."
+        )
+        status_color = "#b91c1c"
+        status_background = "#fef2f2"
+        status_border = "#fecaca"
+        status_label = "PERMISOS RETIRADOS"
+
+    display_name = user.get_full_name().strip() or user.get_username()
+    safe_name = escape(display_name)
+    safe_subject = escape(subject)
+    safe_title = escape(status_title)
+    safe_message = escape(status_message)
+
+    text_content = (
+        f"Hola, {display_name}.\n\n"
+        f"{status_title}\n\n"
+        f"{status_message}\n\n"
+        "Si tienes alguna duda sobre este cambio, ponte en contacto "
+        "con el equipo de administración.\n"
+    )
+
+    html_content = f"""\
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{safe_subject}</title>
+</head>
+<body style="
+  margin: 0;
+  padding: 0;
+  background-color: #f1f5f9;
+  font-family: Arial, Helvetica, sans-serif;
+  color: #1e293b;
+">
+  <table role="presentation" width="100%" cellspacing="0"
+    cellpadding="0" border="0" style="background-color: #f1f5f9;">
+    <tr>
+      <td align="center" style="padding: 36px 12px;">
+        <table role="presentation" width="600" cellspacing="0"
+          cellpadding="0" border="0" style="
+            width: 100%;
+            max-width: 600px;
+            background-color: #ffffff;
+            border-radius: 12px;
+            overflow: hidden;
+          ">
+          <tr>
+            <td style="background-color: #172554; padding: 28px 32px;">
+              <p style="
+                margin: 0 0 8px;
+                color: #bfdbfe;
+                font-size: 11px;
+                font-weight: bold;
+                letter-spacing: 2px;
+              ">GESTIÓN DE PROPIETARIOS</p>
+              <h1 style="
+                margin: 0;
+                color: #ffffff;
+                font-size: 24px;
+                line-height: 1.4;
+              ">Actualización de tus permisos</h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 32px;">
+              <p style="margin: 0 0 18px; font-size: 16px; line-height: 1.6;">
+                Hola, <strong>{safe_name}</strong>.
+              </p>
+              <table role="presentation" width="100%" cellspacing="0"
+                cellpadding="0" border="0" style="
+                  background-color: {status_background};
+                  border: 1px solid {status_border};
+                  border-radius: 8px;
+                ">
+                <tr>
+                  <td style="padding: 20px;">
+                    <p style="
+                      margin: 0 0 8px;
+                      color: {status_color};
+                      font-size: 12px;
+                      font-weight: bold;
+                      letter-spacing: 1px;
+                    ">{status_label}</p>
+                    <h2 style="
+                      margin: 0 0 12px;
+                      color: #0f172a;
+                      font-size: 21px;
+                      line-height: 1.4;
+                    ">{safe_title}</h2>
+                    <p style="
+                      margin: 0;
+                      color: #334155;
+                      font-size: 14px;
+                      line-height: 1.8;
+                    ">{safe_message}</p>
+                  </td>
+                </tr>
+              </table>
+              <p style="
+                margin: 24px 0 0;
+                color: #475569;
+                font-size: 14px;
+                line-height: 1.8;
+              ">
+                Si tienes alguna duda sobre este cambio, puedes ponerte
+                en contacto con el equipo de administración.
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="
+              padding: 20px 32px;
+              background-color: #f8fafc;
+              border-top: 1px solid #e2e8f0;
+            ">
+              <p style="
+                margin: 0 0 6px;
+                color: #475569;
+                font-size: 12px;
+                font-weight: bold;
+              ">Notificación automática</p>
+              <p style="
+                margin: 0;
+                color: #94a3b8;
+                font-size: 12px;
+                line-height: 1.6;
+              ">
+                Este correo se ha generado automáticamente.
+                Por favor, no respondas directamente a este mensaje.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+"""
+
+    try:
+        email_message = EmailMultiAlternatives(
+            subject=subject,
+            body=text_content,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            to=[user.email],
+        )
+        email_message.attach_alternative(html_content, "text/html")
+        email_message.send(fail_silently=False)
+        return True
+
+    except Exception:
+        logger.exception(
+            "Error al enviar la notificación de permisos de propietario "
+            "al usuario %s.",
+            user.pk,
+        )
         return False
