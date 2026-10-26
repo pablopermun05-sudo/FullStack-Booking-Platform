@@ -4358,6 +4358,16 @@ textarea.b-input {
     text-decoration: underline;
 }
 
+#user-profile-form .iti {
+    display: block;
+    width: 100%;
+}
+
+#user-profile-form .iti input[type="tel"] {
+    width: 100%;
+    box-sizing: border-box;
+}
+
 /* Ajustes para móviles */
 @media (max-width: 576px) {
     .user-page {

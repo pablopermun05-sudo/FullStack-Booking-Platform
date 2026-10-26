@@ -1,5 +1,6 @@
 {% extends "bookings/layout.html" %}
 {% load crispy_forms_tags %}
+{% load static %}
 
 {% block body %}
 
@@ -9,148 +10,177 @@
         <header class="user-card-header">
             <div class="user-header-icon" aria-hidden="true">
                 {% if not request.user.is_authenticated %}
-                    <i class="bi bi-person-plus"></i>
+                <i class="bi bi-person-plus"></i>
                 {% elif editing_other_user %}
-                    <i class="bi bi-person-gear"></i>
+                <i class="bi bi-person-gear"></i>
                 {% else %}
-                    <i class="bi bi-person-circle"></i>
+                <i class="bi bi-person-circle"></i>
                 {% endif %}
             </div>
 
             {% if not request.user.is_authenticated %}
-                <span class="user-eyebrow">BIENVENIDO/A</span>
-                <h1>Crear una cuenta</h1>
-                <p>Regístrate para empezar a disfrutar de la plataforma.</p>
+            <span class="user-eyebrow">BIENVENIDO/A</span>
+            <h1>Crear una cuenta</h1>
+            <p>Regístrate para empezar a disfrutar de la plataforma.</p>
 
             {% elif editing_other_user %}
-                <span class="user-eyebrow">ADMINISTRACIÓN</span>
-                <h1>Editar usuario</h1>
-                <p>Actualiza la información de la cuenta seleccionada.</p>
+            <span class="user-eyebrow">ADMINISTRACIÓN</span>
+            <h1>Editar usuario</h1>
+            <p>Actualiza la información de la cuenta seleccionada.</p>
 
             {% else %}
-                <span class="user-eyebrow">TU CUENTA</span>
-                <h1>Editar perfil</h1>
-                <p>Mantén tus datos personales actualizados.</p>
+            <span class="user-eyebrow">TU CUENTA</span>
+            <h1>Editar perfil</h1>
+            <p>Mantén tus datos personales actualizados.</p>
             {% endif %}
         </header>
 
         <div class="user-card-body">
 
-            <form method="post">
+            <form method="post" id="user-profile-form">
                 {% csrf_token %}
-                {{ form|crispy }}
+
+                {% for field in form %}
+                {% if field.name == "phone_number" %}
+                <div class="mb-3">
+                    <label for="guest-phone-local" class="form-label d-block">
+                        {{ field.label }}
+                        <span class="text-muted">*</span>
+                    </label>
+
+                    <input type="tel" id="guest-phone-local" class="form-control d-block w-100"
+                        placeholder="612 345 678" autocomplete="tel" inputmode="tel" required>
+
+                    <input type="hidden" id="guest-phone" name="{{ field.html_name }}"
+                        value="{{ field.value|default_if_none:'' }}">
+
+                    {% if field.errors %}
+                    <div class="text-danger small mt-1">
+                        {{ field.errors }}
+                    </div>
+                    {% endif %}
+                </div>
+                {% else %}
+                {{ field|as_crispy_field }}
+                {% endif %}
+                {% endfor %}
 
                 <div class="user-form-actions">
                     <button class="primary-button" type="submit">
                         {% if not request.user.is_authenticated %}
-                            <i class="bi bi-person-plus me-2"></i>
-                            Crear cuenta
+                        <i class="bi bi-person-plus me-2"></i>
+                        Crear cuenta
                         {% else %}
-                            <i class="bi bi-check-circle me-2"></i>
-                            Guardar cambios
+                        <i class="bi bi-check-circle me-2"></i>
+                        Guardar cambios
                         {% endif %}
                     </button>
                 </div>
             </form>
 
             {% if request.user.is_authenticated and not editing_other_user and not request.user.is_staff %}
-                <section class="owner-section">
-                    <div class="owner-section-heading">
-                        <div class="owner-icon" aria-hidden="true">
-                            <i class="bi bi-house-door"></i>
-                        </div>
-
-                        <div>
-                            <h2>Cuenta de propietario</h2>
-                            <p>Gestiona el acceso a las funcionalidades para propietarios.</p>
-                        </div>
+            <section class="owner-section">
+                <div class="owner-section-heading">
+                    <div class="owner-icon" aria-hidden="true">
+                        <i class="bi bi-house-door"></i>
                     </div>
 
-                    {% if owner_profile %}
-                        {% if owner_profile.status == "PENDING" %}
-                            <div class="owner-status status-pending">
-                                <i class="bi bi-clock-history"></i>
-                                <span>Solicitud pendiente</span>
-                            </div>
+                    <div>
+                        <h2>Cuenta de propietario</h2>
+                        <p>Gestiona el acceso a las funcionalidades para propietarios.</p>
+                    </div>
+                </div>
 
-                            <p class="owner-description">
-                                Tu solicitud está pendiente de revisión.
-                                Te notificaremos cuando el administrador tome una decisión.
-                            </p>
+                {% if owner_profile %}
+                {% if owner_profile.status == "PENDING" %}
+                <div class="owner-status status-pending">
+                    <i class="bi bi-clock-history"></i>
+                    <span>Solicitud pendiente</span>
+                </div>
 
-                        {% elif owner_profile.status == "APPROVED" %}
-                            <div class="owner-status status-approved">
-                                <i class="bi bi-check-circle"></i>
-                                <span>Propietario autorizado</span>
-                            </div>
+                <p class="owner-description">
+                    Tu solicitud está pendiente de revisión.
+                    Te notificaremos cuando el administrador tome una decisión.
+                </p>
 
-                            <p class="owner-description">
-                                Tienes permisos de propietario y puedes acceder
-                                a las funcionalidades correspondientes.
-                            </p>
+                {% elif owner_profile.status == "APPROVED" %}
+                <div class="owner-status status-approved">
+                    <i class="bi bi-check-circle"></i>
+                    <span>Propietario autorizado</span>
+                </div>
 
-                        {% elif owner_profile.status == "REJECTED" %}
-                            <div class="owner-status status-inactive">
-                                <i class="bi bi-info-circle"></i>
-                                <span>Solicitud no aprobada</span>
-                            </div>
+                <p class="owner-description">
+                    Tienes permisos de propietario y puedes acceder
+                    a las funcionalidades correspondientes.
+                </p>
 
-                            <p class="owner-description">
-                                Tu solicitud anterior no fue aprobada.
-                                Puedes enviar una nueva solicitud si lo deseas.
-                            </p>
+                {% elif owner_profile.status == "REJECTED" %}
+                <div class="owner-status status-inactive">
+                    <i class="bi bi-info-circle"></i>
+                    <span>Solicitud no aprobada</span>
+                </div>
 
-                        {% elif owner_profile.status == "REVOKED" %}
-                            <div class="owner-status status-inactive">
-                                <i class="bi bi-shield-exclamation"></i>
-                                <span>Permisos retirados</span>
-                            </div>
+                <p class="owner-description">
+                    Tu solicitud anterior no fue aprobada.
+                    Puedes enviar una nueva solicitud si lo deseas.
+                </p>
 
-                            <p class="owner-description">
-                                Tus permisos de propietario han sido retirados.
-                                Puedes volver a solicitar el acceso.
-                            </p>
+                {% elif owner_profile.status == "REVOKED" %}
+                <div class="owner-status status-inactive">
+                    <i class="bi bi-shield-exclamation"></i>
+                    <span>Permisos retirados</span>
+                </div>
+
+                <p class="owner-description">
+                    Tus permisos de propietario han sido retirados.
+                    Puedes volver a solicitar el acceso.
+                </p>
+                {% endif %}
+
+                {% else %}
+                <p class="owner-description">
+                    ¿Quieres gestionar tus propias viviendas?
+                    Solicita permisos de propietario para acceder a estas funcionalidades.
+                </p>
+                {% endif %}
+
+                {% if not owner_profile or owner_profile.status == "REJECTED" or owner_profile.status == "REVOKED" %}
+                <form method="post" action="{% url 'request_owner_status' %}">
+                    {% csrf_token %}
+
+                    <button class="primary-button owner-submit" type="submit">
+                        <i class="bi bi-arrow-right-circle me-2"></i>
+
+                        {% if owner_profile %}
+                        Volver a solicitar permisos
+                        {% else %}
+                        Solicitar permisos de propietario
                         {% endif %}
-
-                    {% else %}
-                        <p class="owner-description">
-                            ¿Quieres gestionar tus propias viviendas?
-                            Solicita permisos de propietario para acceder a estas funcionalidades.
-                        </p>
-                    {% endif %}
-
-                    {% if not owner_profile or owner_profile.status == "REJECTED" or owner_profile.status == "REVOKED" %}
-                        <form method="post" action="{% url 'request_owner_status' %}">
-                            {% csrf_token %}
-
-                            <button class="primary-button owner-submit" type="submit">
-                                <i class="bi bi-arrow-right-circle me-2"></i>
-
-                                {% if owner_profile %}
-                                    Volver a solicitar permisos
-                                {% else %}
-                                    Solicitar permisos de propietario
-                                {% endif %}
-                            </button>
-                        </form>
-                    {% endif %}
-                </section>
+                    </button>
+                </form>
+                {% endif %}
+            </section>
             {% endif %}
 
             <footer class="user-card-footer">
                 {% if not request.user.is_authenticated %}
-                    <span>¿Ya tienes una cuenta?</span>
-                    <a href="{% url 'login' %}">Inicia sesión</a>
+                <span>¿Ya tienes una cuenta?</span>
+                <a href="{% url 'login' %}">Inicia sesión</a>
 
                 {% elif editing_other_user %}
-                    <a href="{% url 'manage_users' %}">
-                        <i class="bi bi-arrow-left me-1"></i>
-                        Volver a gestión de usuarios
-                    </a>
+                <a href="{% url 'manage_users' %}">
+                    <i class="bi bi-arrow-left me-1"></i>
+                    Volver a gestión de usuarios
+                </a>
                 {% endif %}
             </footer>
 
         </div>
     </div>
 </div>
+{% endblock %}
+{% block script %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/intl-tel-input@25/build/css/intlTelInput.css">
+<script src="https://cdn.jsdelivr.net/npm/intl-tel-input@25/build/js/intlTelInput.min.js"></script>
+<script src="{% static 'bookings/booking_phone.js' %}"></script>
 {% endblock %}

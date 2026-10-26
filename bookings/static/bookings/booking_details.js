@@ -21,6 +21,7 @@
         let submissionInProgress = false;
         let releaseRequested = false;
         let releasePromise = null;
+        let bookingCreated = false;
 
         function getCookie(name) {
             const cookies = document.cookie
@@ -69,10 +70,10 @@
             if (releasePromise) return releasePromise;
             if (releaseRequested) return;
 
-            releaseRequested = true;
-
             const token = holdTokenInput?.value;
             if (!token) return;
+
+            releaseRequested = true;
 
             releasePromise = (async () => {
                 try {
@@ -137,19 +138,33 @@
             setSubmitText("Procesando reserva…");
 
             try {
-                // Espera a que se carguen las utilidades del teléfono.
-                if (window.bookingPhone?.ready) {
-                    try {
-                        await window.bookingPhone.ready;
-                    } catch (error) {
-                        // El servidor seguirá siendo responsable
-                        // de validar el teléfono.
-                    }
+                // Comprueba que el teléfono se ha inicializado correctamente.
+                if (
+                    !window.bookingPhone?.ready ||
+                    typeof window.bookingPhone.sync !== "function"
+                ) {
+                    throw new Error(
+                        "No se ha podido inicializar el teléfono. Recarga la página e inténtalo de nuevo."
+                    );
                 }
 
-                // Actualiza el campo oculto antes de leer FormData.
-                if (window.bookingPhone?.sync) {
-                    window.bookingPhone.sync();
+                try {
+                    await window.bookingPhone.ready;
+                } catch {
+                    throw new Error(
+                        "No se ha podido preparar el teléfono. Recarga la página e inténtalo de nuevo."
+                    );
+                }
+
+                // Sincroniza el número internacional antes de leer el formulario.
+                window.bookingPhone.sync();
+
+                const phoneHidden = document.getElementById("guest-phone");
+
+                if (!phoneHidden?.value.trim()) {
+                    throw new Error(
+                        "No se ha podido obtener el teléfono. Comprueba el número e inténtalo de nuevo."
+                    );
                 }
 
                 const formData = new FormData(form);
@@ -209,9 +224,11 @@
                     throw new Error(message);
                 }
 
+                bookingCreated = true;
+
                 if (typeof data.payment_url !== "string" || !data.payment_url) {
                     throw new Error(
-                        "La reserva se ha procesado, pero no se recibió la dirección de pago."
+                        "La reserva se ha creado, pero no se recibió la dirección de pago. Contacta con el alojamiento antes de volver a intentarlo."
                     );
                 }
 
@@ -220,6 +237,22 @@
 
                 window.location.assign(data.payment_url);
             } catch (error) {
+                setError(
+                    error instanceof Error
+                        ? error.message
+                        : "Error al procesar la reserva. Inténtalo de nuevo."
+                );
+
+                // Si el servidor ya creó la reserva, no permitimos
+                // otro envío que pudiera crear una reserva duplicada.
+                if (bookingCreated) {
+                    setSubmitText("Reserva procesada");
+                    setError(
+                        "La reserva se ha creado, pero no se ha podido completar la redirección al pago. No vuelvas a enviar el formulario; contacta con el alojamiento."
+                    );
+                    return;
+                }
+
                 submissionInProgress = false;
 
                 cancelButton.disabled = false;
@@ -227,12 +260,6 @@
 
                 setCancelText("Cancelar y volver");
                 setSubmitText("Siguiente paso");
-
-                setError(
-                    error instanceof Error
-                        ? error.message
-                        : "Error al procesar la reserva. Inténtalo de nuevo."
-                );
             }
         });
 
