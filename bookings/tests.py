@@ -3,6 +3,7 @@ from django.urls import reverse
 
 from bookings.views import PENDING_BOOKING_MINUTES
 from .models import User, OwnerProfile, Property, Booking, BookingChangeProposal, BookingChangeAudit, BookingNight, BookingHold, BookingCancellationRequest, BookingAttachment, PropertyAvailability, can_manage_properties
+from bookings.services import OwnerRequestError, request_owner_status
 from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import ValidationError
 from django.utils import timezone
@@ -532,6 +533,164 @@ class UserProfileViewTestCase(TestCase):
 
         profile.refresh_from_db()
         self.assertEqual(profile.status, "REJECTED")
+
+class OwnerRequestServiceTestCase(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="owner_request_user",
+            email="owner_request@example.com",
+            password="testpassword123",
+            first_name="Nombre",
+            last_name="Apellidos",
+        )
+
+    def test_creates_pending_owner_request_when_profile_does_not_exist(self):
+        profile = request_owner_status(self.user)
+
+        self.assertEqual(profile.user, self.user)
+        self.assertEqual(profile.status, "PENDING")
+        self.assertIsNone(profile.reviewed_at)
+        self.assertEqual(
+            OwnerProfile.objects.filter(user=self.user).count(),
+            1,
+        )
+
+    def test_rejects_duplicate_pending_owner_request(self):
+        existing_profile = OwnerProfile.objects.create(
+            user=self.user,
+            status="PENDING",
+        )
+
+        with self.assertRaisesMessage(
+            OwnerRequestError,
+            "Ya tienes una solicitud pendiente de revisión.",
+        ):
+            request_owner_status(self.user)
+
+        self.assertEqual(
+            OwnerProfile.objects.filter(user=self.user).count(),
+            1,
+        )
+        existing_profile.refresh_from_db()
+        self.assertEqual(existing_profile.status, "PENDING")
+
+    def test_rejects_request_when_user_is_already_approved(self):
+        profile = OwnerProfile.objects.create(
+            user=self.user,
+            status="APPROVED",
+        )
+
+        with self.assertRaisesMessage(
+            OwnerRequestError,
+            "Tu cuenta ya tiene permisos de propietario.",
+        ):
+            request_owner_status(self.user)
+
+        profile.refresh_from_db()
+        self.assertEqual(profile.status, "APPROVED")
+        self.assertEqual(
+            OwnerProfile.objects.filter(user=self.user).count(),
+            1,
+        )
+
+    def test_can_resubmit_request_after_rejection(self):
+        reviewed_at = timezone.now()
+        profile = OwnerProfile.objects.create(
+            user=self.user,
+            status="REJECTED",
+            reviewed_at=reviewed_at,
+        )
+
+        updated_profile = request_owner_status(self.user)
+
+        self.assertEqual(updated_profile.pk, profile.pk)
+        self.assertEqual(updated_profile.status, "PENDING")
+        self.assertIsNone(updated_profile.reviewed_at)
+        self.assertEqual(
+            OwnerProfile.objects.filter(user=self.user).count(),
+            1,
+        )
+
+    def test_can_resubmit_request_after_permission_revocation(self):
+        reviewed_at = timezone.now()
+        profile = OwnerProfile.objects.create(
+            user=self.user,
+            status="REVOKED",
+            reviewed_at=reviewed_at,
+        )
+
+        updated_profile = request_owner_status(self.user)
+
+        self.assertEqual(updated_profile.pk, profile.pk)
+        self.assertEqual(updated_profile.status, "PENDING")
+        self.assertIsNone(updated_profile.reviewed_at)
+        self.assertEqual(
+            OwnerProfile.objects.filter(user=self.user).count(),
+            1,
+        )
+
+    def test_rejects_request_when_user_is_not_authenticated(self):
+        from django.contrib.auth.models import AnonymousUser
+
+        with self.assertRaisesMessage(
+            OwnerRequestError,
+            "Debes iniciar sesión para solicitar ser propietario.",
+        ):
+            request_owner_status(AnonymousUser())
+
+class OwnerRequestViewTestCase(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="owner_view_user",
+            email="owner_view@example.com",
+            password="testpassword123",
+            first_name="Nombre",
+            last_name="Apellidos",
+        )
+        self.url = reverse("request_owner_status")
+
+    def test_anonymous_user_cannot_submit_owner_request(self):
+        response = self.client.post(self.url)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(
+            OwnerProfile.objects.filter(user=self.user).exists()
+        )
+
+    def test_authenticated_user_cannot_submit_request_with_get(self):
+        self.client.force_login(self.user)
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 405)
+        self.assertFalse(
+            OwnerProfile.objects.filter(user=self.user).exists()
+        )
+
+    def test_authenticated_user_can_submit_owner_request(self):
+        self.client.force_login(self.user)
+
+        response = self.client.post(self.url)
+
+        self.assertEqual(response.status_code, 302)
+
+        profile = OwnerProfile.objects.get(user=self.user)
+        self.assertEqual(profile.status, "PENDING")
+
+    def test_duplicate_request_does_not_create_another_profile(self):
+        OwnerProfile.objects.create(
+            user=self.user,
+            status="PENDING",
+        )
+        self.client.force_login(self.user)
+
+        response = self.client.post(self.url)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(
+            OwnerProfile.objects.filter(user=self.user).count(),
+            1,
+        )
 
 class PropertyManagementPermissionTestCase(TestCase):
     def create_user(self, username, email, **kwargs):
