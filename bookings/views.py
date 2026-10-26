@@ -4664,6 +4664,10 @@ class RegisterForm(UserCreationForm):
         ],
         widget=forms.RadioSelect,
         initial="customer",
+        error_messages={
+            "required": "Selecciona un tipo de cuenta.",
+            "invalid_choice": "Selecciona un tipo de cuenta válida.",
+        },
     )
 
     class Meta(UserCreationForm.Meta):
@@ -4675,12 +4679,45 @@ class RegisterForm(UserCreationForm):
             "email",
             "phone_number",
         )
+
         labels = {
             "first_name": "Nombre",
             "last_name": "Apellidos",
             "username": "Nombre de usuario",
             "email": "Correo electrónico",
             "phone_number": "Número de teléfono",
+        }
+
+        error_messages = {
+            "first_name": {
+                "required": "Introduce tu nombre.",
+                "blank": "El nombre no puede estar vacío.",
+            },
+            "last_name": {
+                "required": "Introduce tus apellidos.",
+                "blank": "Los apellidos no pueden estar vacíos.",
+            },
+            "username": {
+                "required": "Introduce un nombre de usuario.",
+                "blank": "El nombre de usuario no puede estar vacío.",
+                "unique": "Este nombre de usuario ya está en uso. Elige otro.",
+                "invalid": "El nombre de usuario contiene caracteres no permitidos.",
+            },
+            "email": {
+                "required": "Introduce tu correo electrónico.",
+                "blank": "El correo electrónico no puede estar vacío.",
+                "invalid": "Introduce una dirección de correo electrónico válida.",
+                "unique": "Ya existe una cuenta con este correo electrónico.",
+            },
+            "phone_number": {
+                "required": "Introduce tu número de teléfono.",
+                "blank": "El número de teléfono no puede estar vacío.",
+                "unique": "Ya existe una cuenta con este número de teléfono.",
+                "invalid": "Introduce un número de teléfono válido.",
+            },
+            "password2": {
+                "password_mismatch": "Las contraseñas no coinciden.",
+            },
         }
 
     def __init__(self, *args, **kwargs):
@@ -4690,8 +4727,34 @@ class RegisterForm(UserCreationForm):
         self.fields["username"].help_text = ""
         self.fields["password1"].help_text = ""
         self.fields["password2"].help_text = ""
-        
+
         self.fields["phone_number"].required = True
+
+        # Mensajes de validación de los campos del formulario
+        self.fields["username"].error_messages.update({
+            "required": "Introduce un nombre de usuario.",
+            "unique": "Este nombre de usuario ya está en uso. Elige otro.",
+            "invalid": "El nombre de usuario contiene caracteres no permitidos.",
+        })
+
+        self.fields["email"].error_messages.update({
+            "required": "Introduce tu correo electrónico.",
+            "invalid": "Introduce una dirección de correo electrónico válida.",
+        })
+
+        self.fields["phone_number"].error_messages.update({
+            "required": "Introduce tu número de teléfono.",
+            "invalid": "Introduce un número de teléfono válido.",
+        })
+
+        self.fields["password1"].error_messages.update({
+            "required": "Introduce una contraseña.",
+        })
+
+        self.fields["password2"].error_messages.update({
+            "required": "Confirma tu contraseña.",
+            "password_mismatch": "Las contraseñas no coinciden.",
+        })
 
 class UserForm(ModelForm):
     class Meta:

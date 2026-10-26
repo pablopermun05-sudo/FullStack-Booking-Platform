@@ -39,84 +39,96 @@
 
             <form method="post" id="user-profile-form">
                 {% csrf_token %}
-
+                
                 {% for field in form %}
-                {% if field.name == "phone_number" %}
-                <div class="mb-3">
-                    <label for="guest-phone-local" class="form-label d-block">
-                        {{ field.label }}
-                        <span class="text-muted">*</span>
-                    </label>
+                    {% if field.name == "phone_number" %}
+                        <div class="mb-3">
+                            <label for="guest-phone-local" class="form-label">
+                                {{ field.label }}
+                                <span class="text-dark-emphasis">*</span>
+                            </label>
 
-                    <input type="tel" id="guest-phone-local" class="form-control d-block w-100"
-                        placeholder="612 345 678" autocomplete="tel" inputmode="tel" required>
+                            <input
+                                type="tel"
+                                id="guest-phone-local"
+                                class="form-control{% if field.errors %} is-invalid{% endif %}"
+                                placeholder="612 345 678"
+                                autocomplete="tel"
+                                inputmode="tel"
+                                required
+                                aria-invalid="{% if field.errors %}true{% else %}false{% endif %}"
+                                {% if field.errors %}aria-describedby="phone-number-errors"{% endif %}
+                            >
 
-                    <input type="hidden" id="guest-phone" name="{{ field.html_name }}"
-                        value="{{ field.value|default_if_none:'' }}">
+                            <input
+                                type="hidden"
+                                id="guest-phone"
+                                name="{{ field.html_name }}"
+                                value="{{ field.value|default_if_none:'' }}"
+                            >
 
-                    {% if field.errors %}
-                    <div class="text-danger small mt-1">
-                        {{ field.errors }}
-                    </div>
-                    {% endif %}
-                </div>
+                            {% if field.errors %}
+                                <div id="phone-number-errors" class="invalid-feedback d-block fw-bold">
+                                    {% for error in field.errors %}
+                                        {{ error }}
+                                        {% if not forloop.last %}<br>{% endif %}
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
 
-                {% elif field.name == "account_type" %}
-                <fieldset class="account-type-field mb-4">
-                    <legend class="account-type-label">
-                        {{ field.label }}
-                        {% if field.field.required %}
-                        <span class="text-danger">*</span>
-                        {% endif %}
-                    </legend>
-
-                    <p class="account-type-help">
-                        Elige el tipo de cuenta que mejor se adapte a ti.
-                    </p>
-
-                    <div class="account-type-options">
-                        {% for choice in field %}
-                        <label class="account-type-option" for="{{ choice.id_for_label }}">
-                            {{ choice.tag }}
-                            <span class="account-type-option-content">
-                                {% if choice.data.value == "customer" %}
-                                <i class="bi bi-person-circle account-type-icon" aria-hidden="true"></i>
-                                <span class="account-type-option-title">
-                                    Huésped
-                                </span>
-                                <span class="account-type-option-description">
-                                    Busca alojamientos y gestiona tus reservas.
-                                </span>
-                                {% elif choice.data.value == "owner" %}
-                                <i class="bi bi-house-door account-type-icon" aria-hidden="true"></i>
-                                <span class="account-type-option-title">
-                                    Propietario
-                                </span>
-                                <span class="account-type-option-description">
-                                    Gestiona tus alojamientos y disfruta también de las funcionalidades de huésped.
-                                </span>
-                                {% else %}
-                                <span class="account-type-option-title">
-                                    {{ choice.choice_label }}
-                                </span>
+                    {% elif field.name == "account_type" %}
+                        <fieldset class="account-type-field mb-4">
+                            <legend class="account-type-label">
+                                {{ field.label }}
+                                {% if field.field.required %}
+                                    <span class="text-dark-emphasis">*</span>
                                 {% endif %}
-                            </span>
-                        </label>
-                        {% endfor %}
-                    </div>
+                            </legend>
 
-                    {% if field.errors %}
-                    <div class="text-danger small mt-2">
-                        {{ field.errors }}
-                    </div>
+                            <p class="account-type-help">
+                                Elige el tipo de cuenta que mejor se adapte a ti.
+                            </p>
+
+                            <div class="account-type-options">
+                                {% for choice in field %}
+                                    <label class="account-type-option" for="{{ choice.id_for_label }}">
+                                        {{ choice.tag }}
+
+                                        <span class="account-type-option-content">
+                                            {% if choice.data.value == "customer" %}
+                                                <i class="bi bi-person-circle account-type-icon" aria-hidden="true"></i>
+                                                <span class="account-type-option-title">Huésped</span>
+                                                <span class="account-type-option-description">
+                                                    Busca alojamientos y gestiona tus reservas.
+                                                </span>
+                                            {% elif choice.data.value == "owner" %}
+                                                <i class="bi bi-house-door account-type-icon" aria-hidden="true"></i>
+                                                <span class="account-type-option-title">Propietario</span>
+                                                <span class="account-type-option-description">
+                                                    Gestiona tus alojamientos y disfruta también de las funcionalidades de huésped.
+                                                </span>
+                                            {% else %}
+                                                <span class="account-type-option-title">
+                                                    {{ choice.choice_label }}
+                                                </span>
+                                            {% endif %}
+                                        </span>
+                                    </label>
+                                {% endfor %}
+                            </div>
+
+                            {% if field.errors %}
+                                {% for error in field.errors %}
+                                    <p class="field-error">{{ error }}</p>
+                                {% endfor %}
+                            {% endif %}
+                        </fieldset>
+
+                    {% else %}
+                        {{ field|as_crispy_field }}
                     {% endif %}
-                </fieldset>
-
-                {% else %}
-                {{ field|as_crispy_field }}
-                {% endif %}
                 {% endfor %}
-
                 <div class="user-form-actions">
                     <button class="primary-button" type="submit">
                         {% if not request.user.is_authenticated %}
@@ -236,24 +248,24 @@
 <script src="https://cdn.jsdelivr.net/npm/intl-tel-input@25/build/js/intlTelInput.min.js"></script>
 <script src="{% static 'bookings/booking_phone.js' %}"></script>
 <script>
-document.addEventListener("DOMContentLoaded", () => {
-    const form = document.getElementById("user-profile-form");
+    document.addEventListener("DOMContentLoaded", () => {
+        const form = document.getElementById("user-profile-form");
 
-    if (form) {
-        form.addEventListener("submit", () => {
-            console.log("El formulario de registro intenta enviarse.");
-        });
-    }
+        if (form) {
+            form.addEventListener("submit", () => {
+                console.log("El formulario de registro intenta enviarse.");
+            });
+        }
 
-    const button = document.querySelector(
-        '#user-profile-form button[type="submit"]'
-    );
+        const button = document.querySelector(
+            '#user-profile-form button[type="submit"]'
+        );
 
-    if (button) {
-        button.addEventListener("click", () => {
-            console.log("Se ha pulsado Crear cuenta.");
-        });
-    }
-});
+        if (button) {
+            button.addEventListener("click", () => {
+                console.log("Se ha pulsado Crear cuenta.");
+            });
+        }
+    });
 </script>
 {% endblock %}
