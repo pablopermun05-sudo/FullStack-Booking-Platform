@@ -2,23 +2,39 @@
 {% load crispy_forms_tags %}
 
 {% block body %}
-<div class="d-flex justify-content-center mt-5">
-    <div class="card text-bg-light shadow-sm" style="width: 100%; max-width: 500px; margin-bottom: 30px;">
-        <div class="card-header text-center py-3">
-            <h2 class="mb-0">Iniciar Sesión</h2>
-        </div>
-        <div class="card-body p-4">
+<div class="user-page">
+    <div class="user-card">
+
+        <header class="user-card-header">
+            <div class="user-header-icon" aria-hidden="true">
+                <i class="bi bi-box-arrow-in-right"></i>
+            </div>
+
+            <span class="user-eyebrow">BIENVENIDO/A</span>
+            <h1>Iniciar sesión</h1>
+            <p>Accede a tu cuenta para gestionar tus reservas.</p>
+        </header>
+
+        <div class="user-card-body">
             <form action="{% url 'login' %}" method="post">
                 {% csrf_token %}
+
                 {{ form|crispy }}
-                <div class="d-grid gap-2 mb-3">
-                    <button class="primary-button" type="submit" value="Login">Iniciar Sesión</button>
+
+                <div class="user-form-actions">
+                    <button class="primary-button" type="submit">
+                        <i class="bi bi-box-arrow-in-right me-2" aria-hidden="true"></i>
+                        Iniciar sesión
+                    </button>
                 </div>
             </form>
-            <p class="text-center mb-0">
-                ¿No tienes cuenta? <a href="{% url 'register' %}">Regístrate aquí.</a>
-            </p>
+
+            <footer class="user-card-footer">
+                <span>¿No tienes cuenta?</span>
+                <a href="{% url 'register' %}">Regístrate aquí</a>
+            </footer>
         </div>
+
     </div>
 </div>
 {% endblock %}
