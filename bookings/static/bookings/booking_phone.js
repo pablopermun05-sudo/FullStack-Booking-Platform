@@ -88,11 +88,11 @@
         // En el perfil esperamos a que se carguen las utilidades
         // antes de enviar el formulario.
         if (form.id === "user-profile-form") {
-            let resubmitting = false;
+            let submitting = false;
 
             form.addEventListener("submit", async event => {
-                if (resubmitting) {
-                    resubmitting = false;
+                // Si ya hemos validado el teléfono, dejar continuar el envío.
+                if (submitting) {
                     return;
                 }
 
@@ -110,8 +110,6 @@
                         return;
                     }
 
-                    phoneInput.setCustomValidity("");
-
                     if (!iti.isValidNumber()) {
                         phoneInput.setCustomValidity(
                             "Introduce un número de teléfono válido para el país seleccionado."
@@ -120,7 +118,7 @@
                         return;
                     }
 
-                    if (!phoneHidden.value) {
+                    if (!phoneHidden.value.trim()) {
                         phoneInput.setCustomValidity(
                             "No se ha podido obtener el número internacional."
                         );
@@ -128,14 +126,14 @@
                         return;
                     }
 
-                    resubmitting = true;
-                    form.requestSubmit();
-                    resubmitting = false;
+                    phoneInput.setCustomValidity("");
+
+                    // Marcar el formulario como validado y enviarlo directamente.
+                    submitting = true;
+                    HTMLFormElement.prototype.submit.call(form);
+
                 } catch (error) {
-                    console.error(
-                        "No se pudieron preparar los datos del teléfono:",
-                        error
-                    );
+                    console.error("Error al validar el teléfono:", error);
 
                     phoneInput.setCustomValidity(
                         "No se ha podido validar el teléfono. Inténtalo de nuevo."
@@ -150,6 +148,7 @@
 
             phoneInput.addEventListener("countrychange", () => {
                 phoneInput.setCustomValidity("");
+                syncPhoneValue();
             });
         }
     });
