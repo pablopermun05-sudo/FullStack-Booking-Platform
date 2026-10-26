@@ -1565,6 +1565,96 @@ class NavigationTestCase(TestCase):
         self.assertContains(response, "Mis Viviendas")
         self.assertContains(response, "Mis Reservas")
 
+class UserPermissionConsistencyTestCase(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="consistency_user",
+            email="consistency@example.com",
+            password="testpassword123",
+            first_name="Nombre",
+            last_name="Apellidos",
+        )
+
+    def test_user_without_owner_profile_is_not_approved_owner(self):
+        self.assertFalse(self.user.is_approved_owner)
+        self.assertFalse(can_manage_properties(self.user))
+
+    def test_pending_owner_is_not_approved_and_cannot_manage_properties(self):
+        OwnerProfile.objects.create(
+            user=self.user,
+            status="PENDING",
+        )
+
+        self.user.refresh_from_db()
+
+        self.assertFalse(self.user.is_approved_owner)
+        self.assertFalse(can_manage_properties(self.user))
+
+    def test_rejected_owner_is_not_approved_and_cannot_manage_properties(self):
+        OwnerProfile.objects.create(
+            user=self.user,
+            status="REJECTED",
+        )
+
+        self.user.refresh_from_db()
+
+        self.assertFalse(self.user.is_approved_owner)
+        self.assertFalse(can_manage_properties(self.user))
+
+    def test_revoked_owner_is_not_approved_and_cannot_manage_properties(self):
+        OwnerProfile.objects.create(
+            user=self.user,
+            status="REVOKED",
+        )
+
+        self.user.refresh_from_db()
+
+        self.assertFalse(self.user.is_approved_owner)
+        self.assertFalse(can_manage_properties(self.user))
+
+    def test_approved_owner_can_manage_properties(self):
+        OwnerProfile.objects.create(
+            user=self.user,
+            status="APPROVED",
+        )
+
+        self.user.refresh_from_db()
+
+        self.assertTrue(self.user.is_approved_owner)
+        self.assertTrue(can_manage_properties(self.user))
+
+    def test_staff_can_manage_properties_without_owner_profile(self):
+        self.user.is_staff = True
+        self.user.save(update_fields=["is_staff"])
+
+        self.assertFalse(self.user.is_approved_owner)
+        self.assertTrue(can_manage_properties(self.user))
+
+    def test_owner_profile_is_unique_per_user(self):
+        from django.db import IntegrityError, transaction
+
+        OwnerProfile.objects.create(
+            user=self.user,
+            status="PENDING",
+        )
+
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                OwnerProfile.objects.create(
+                    user=self.user,
+                    status="APPROVED",
+                )
+
+        self.assertEqual(
+            OwnerProfile.objects.filter(user=self.user).count(),
+            1,
+        )
+
+    def test_anonymous_user_cannot_manage_properties(self):
+        from django.contrib.auth.models import AnonymousUser
+
+        self.assertFalse(can_manage_properties(AnonymousUser()))
+
 class PropertyTestCase(TestCase):
 
     def setUp(self):
