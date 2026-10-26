@@ -357,7 +357,6 @@ class RegistrationTestCase(TestCase):
             User.objects.filter(username="invalid").exists()
         )
         
-
 class UserProfileViewTestCase(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(
@@ -849,6 +848,140 @@ class OwnerAdminViewsTestCase(TestCase):
 
         profile.refresh_from_db()
         self.assertEqual(profile.status, "PENDING")
+
+class UserAuthorizationTestCase(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="regular_user",
+            email="regular@example.com",
+            password="testpassword123",
+            first_name="Usuario",
+            last_name="Normal",
+        )
+
+        self.staff_user = User.objects.create_user(
+            username="authorization_staff",
+            email="authorization_staff@example.com",
+            password="testpassword123",
+            first_name="Personal",
+            last_name="Admin",
+            is_staff=True,
+        )
+
+        self.profile = OwnerProfile.objects.create(
+            user=self.user,
+            status="PENDING",
+        )
+
+        self.owner_requests_url = reverse("manage_owner_requests")
+        self.review_url = reverse(
+            "review_owner_request",
+            args=[self.profile.pk, "approve"],
+        )
+        self.permissions_url = reverse(
+            "manage_owner_permissions",
+            args=[self.user.pk, "grant"],
+        )
+
+    def test_anonymous_user_cannot_access_owner_requests(self):
+        response = self.client.get(self.owner_requests_url)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(
+            reverse("login"),
+            response.url,
+        )
+
+    def test_regular_user_cannot_access_owner_requests(self):
+        self.client.force_login(self.user)
+
+        response = self.client.get(self.owner_requests_url)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(
+            reverse("login"),
+            response.url,
+        )
+
+    def test_regular_user_cannot_review_owner_request(self):
+        self.client.force_login(self.user)
+
+        response = self.client.post(self.review_url)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(
+            reverse("login"),
+            response.url,
+        )
+
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.status, "PENDING")
+
+    def test_regular_user_cannot_manage_owner_permissions(self):
+        self.client.force_login(self.user)
+
+        response = self.client.post(self.permissions_url)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(
+            reverse("login"),
+            response.url,
+        )
+
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.status, "PENDING")
+
+    def test_get_cannot_review_owner_request(self):
+        self.client.force_login(self.staff_user)
+
+        response = self.client.get(self.review_url)
+
+        self.assertEqual(response.status_code, 405)
+
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.status, "PENDING")
+
+    def test_get_cannot_grant_owner_permissions(self):
+        self.client.force_login(self.staff_user)
+
+        response = self.client.get(self.permissions_url)
+
+        self.assertEqual(response.status_code, 405)
+
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.status, "PENDING")
+
+    def test_get_cannot_submit_owner_request(self):
+        self.client.force_login(self.user)
+
+        response = self.client.get(
+            reverse("request_owner_status")
+        )
+
+        self.assertEqual(response.status_code, 405)
+    
+    def test_owner_request_post_requires_csrf_token(self):
+
+        csrf_client = Client(enforce_csrf_checks=True)
+        csrf_client.force_login(self.user)
+
+        self.profile.refresh_from_db()
+        original_status = self.profile.status
+        original_reviewed_at = self.profile.reviewed_at
+
+        response = csrf_client.post(
+            reverse("request_owner_status")
+        )
+
+        self.assertEqual(response.status_code, 403)
+
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.status, original_status)
+        self.assertEqual(self.profile.reviewed_at, original_reviewed_at)
+        self.assertEqual(
+            OwnerProfile.objects.filter(user=self.user).count(),
+            1,
+        )
 
 class PropertyManagementPermissionTestCase(TestCase):
     def create_user(self, username, email, **kwargs):
