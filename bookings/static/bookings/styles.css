@@ -4092,14 +4092,312 @@ textarea.b-input {
     border-color: #fda29b;
 }
 
+/* Contenedor exterior: mantiene visible la imagen de fondo de layout.html */
+.user-page {
+    display: flex;
+    justify-content: center;
+    padding: 40px 15px;
+    background: transparent;
+}
+
+/* Tarjeta del formulario */
+.user-card {
+    width: 100%;
+    max-width: 520px;
+    align-self: flex-start;
+    margin-bottom: 30px;
+    background: rgba(255, 253, 249, 0.97);
+    border: 1px solid rgba(255, 255, 255, 0.55);
+    border-radius: 16px;
+    box-shadow: 0 12px 35px rgba(0, 0, 0, 0.18);
+    overflow: hidden;
+}
+
+/* Cabecera */
+.user-card-header {
+    padding: 30px 28px 24px;
+    text-align: center;
+    background: transparent;
+    border-bottom: 1px solid #e8e9e1;
+}
+
+.user-header-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 64px;
+    height: 64px;
+    margin: 0 auto 16px;
+    border-radius: 50%;
+    background: #e8eee5;
+    color: #627d60;
+    font-size: 29px;
+}
+
+.user-eyebrow {
+    display: block;
+    margin-bottom: 7px;
+    color: #718b70;
+    font-size: 0.76rem;
+    font-weight: 700;
+    letter-spacing: 1.8px;
+}
+
+.user-card-header h1 {
+    margin: 0 0 9px;
+    color: #303830;
+    font-size: 1.75rem;
+    font-weight: 700;
+}
+
+.user-card-header p {
+    margin: 0;
+    color: #747a72;
+    font-size: 0.95rem;
+    line-height: 1.6;
+}
+
+/* Cuerpo de la tarjeta */
+.user-card-body {
+    padding: 26px 28px;
+    color: #343a35;
+}
+
+/* Etiquetas del formulario */
+.user-card-body .form-label {
+    margin-bottom: 7px;
+    color: #41483f;
+    font-size: 0.92rem;
+    font-weight: 600;
+}
+
+.user-card-body .form-control,
+.user-card-body .form-select {
+    min-height: 44px;
+    border: 1px solid #d9ded5;
+    border-radius: 8px;
+    background-color: #fff;
+    color: #343a35;
+    box-shadow: none;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.user-card-body .form-control:focus,
+.user-card-body .form-select:focus {
+    border-color: #8da58b;
+    box-shadow: 0 0 0 3px rgba(141, 165, 139, 0.18);
+}
+
+.user-card-body .form-check-input {
+    border-color: #bdc8b9;
+}
+
+.user-card-body .form-check-input:checked {
+    background-color: #718b70;
+    border-color: #718b70;
+}
+
+.user-card-body .form-check-input:focus {
+    border-color: #8da58b;
+    box-shadow: 0 0 0 3px rgba(141, 165, 139, 0.18);
+}
+
+.user-card-body .form-text,
+.user-card-body .helptext {
+    color: #777e75;
+    font-size: 0.82rem;
+}
+
+.user-card-body .invalid-feedback,
+.user-card-body .errorlist {
+    color: #b54747;
+    font-size: 0.85rem;
+}
+
+.user-card-body .errorlist {
+    padding-left: 18px;
+    margin-top: 5px;
+}
+
+/* Botones */
+.user-card .primary-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    padding: 12px 18px;
+    border: 1px solid #718b70;
+    border-radius: 8px;
+    background-color: #718b70;
+    color: #fff;
+    font-size: 0.95rem;
+    font-weight: 600;
+    text-align: center;
+    text-decoration: none;
+    cursor: pointer;
+    transition: background-color 0.2s ease, border-color 0.2s ease,
+        transform 0.2s ease;
+}
+
+.user-card .primary-button:hover {
+    background-color: #5c755b;
+    border-color: #5c755b;
+    color: #fff;
+}
+
+.user-card .primary-button:focus-visible {
+    outline: 3px solid rgba(113, 139, 112, 0.3);
+    outline-offset: 3px;
+}
+
+.user-form-actions {
+    margin-top: 22px;
+}
+
+/* Sección de propietario */
+.owner-section {
+    margin-top: 28px;
+    padding-top: 24px;
+    border-top: 1px solid #e5e8df;
+}
+
+.owner-section-heading {
+    display: flex;
+    align-items: flex-start;
+    gap: 13px;
+    margin-bottom: 20px;
+}
+
+.owner-icon {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 43px;
+    height: 43px;
+    border-radius: 10px;
+    background: #e8eee5;
+    color: #627d60;
+    font-size: 21px;
+}
+
+.owner-section-heading h2 {
+    margin: 0 0 5px;
+    color: #343a35;
+    font-size: 1.12rem;
+    font-weight: 700;
+}
+
+.owner-section-heading p {
+    margin: 0;
+    color: #777e75;
+    font-size: 0.86rem;
+    line-height: 1.5;
+}
+
+.owner-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+    padding: 8px 12px;
+    border-radius: 7px;
+    font-size: 0.87rem;
+    font-weight: 600;
+}
+
+.status-pending {
+    background: #fff3d9;
+    color: #8a641d;
+}
+
+.status-approved {
+    background: #e3f1e4;
+    color: #386b40;
+}
+
+.status-inactive {
+    background: #eceeea;
+    color: #626960;
+}
+
+.owner-description {
+    margin: 0 0 18px;
+    color: #656c63;
+    font-size: 0.9rem;
+    line-height: 1.65;
+}
+
+.owner-submit {
+    margin-top: 3px;
+}
+
+/* Pie de la tarjeta */
+.user-card-footer {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 6px;
+    margin-top: 25px;
+    padding-top: 19px;
+    border-top: 1px solid #e8e9e1;
+    color: #777e75;
+    font-size: 0.9rem;
+    text-align: center;
+}
+
+.user-card-footer a {
+    color: #5c755b;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.user-card-footer a:hover {
+    color: #405840;
+    text-decoration: underline;
+}
+
+/* Ajustes para móviles */
 @media (max-width: 576px) {
-    .manage-user-actions > a,
-    .manage-user-actions > form {
+    .user-page {
+        padding: 24px 10px;
+    }
+
+    .user-card {
+        border-radius: 12px;
+    }
+
+    .user-card-header {
+        padding: 25px 19px 20px;
+    }
+
+    .user-card-header h1 {
+        font-size: 1.5rem;
+    }
+
+    .user-card-body {
+        padding: 22px 19px;
+    }
+
+    .owner-section-heading {
+        gap: 10px;
+    }
+
+    .owner-section-heading h2 {
+        font-size: 1.05rem;
+    }
+}
+
+@media (max-width: 576px) {
+
+    .manage-user-actions>a,
+    .manage-user-actions>form {
         flex: 1 1 100%;
     }
 
-    .manage-user-actions > a,
-    .manage-user-actions > form > button {
+    .manage-user-actions>a,
+    .manage-user-actions>form>button {
         width: 100%;
     }
 }
