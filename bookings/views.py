@@ -4665,28 +4665,56 @@ class RegisterForm(UserCreationForm):
         widget=forms.RadioSelect,
         initial="customer",
     )
-    
+
     class Meta(UserCreationForm.Meta):
         model = User
-        fields = ("first_name","last_name","username", "email", "phone_number")
-    
+        fields = (
+            "first_name",
+            "last_name",
+            "username",
+            "email",
+            "phone_number",
+        )
+        labels = {
+            "first_name": "Nombre",
+            "last_name": "Apellidos",
+            "username": "Nombre de usuario",
+            "email": "Correo electrónico",
+            "phone_number": "Número de teléfono",
+        }
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Delete help texts
-        self.fields['username'].help_text = ""
-        self.fields['password1'].help_text = ""
-        self.fields['password2'].help_text = ""
+
+        # Eliminar textos de ayuda
+        self.fields["username"].help_text = ""
+        self.fields["password1"].help_text = ""
+        self.fields["password2"].help_text = ""
 
 class UserForm(ModelForm):
     class Meta:
         model = User
-        fields = ("first_name", "last_name", "username", "email", "phone_number")
+        fields = (
+            "first_name",
+            "last_name",
+            "username",
+            "email",
+            "phone_number",
+        )
+        labels = {
+            "first_name": "Nombre",
+            "last_name": "Apellidos",
+            "username": "Nombre de usuario",
+            "email": "Correo electrónico",
+            "phone_number": "Número de teléfono",
+        }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Delete help texts
-        self.fields['username'].help_text = ""
 
+        # Eliminar textos de ayuda
+        self.fields["username"].help_text = ""
+        
 def manage_profile(request, user_id=None):
     User = get_user_model()
     url_name = request.resolver_match.url_name
