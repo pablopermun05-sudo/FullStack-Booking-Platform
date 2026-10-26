@@ -2953,3 +2953,229 @@ def send_owner_request_notification_email(user):
             user.pk,
         )
         return False
+      
+def send_owner_request_result_email(user, approved):
+    """
+    Notifica al usuario si su solicitud de propietario ha sido
+    aprobada o rechazada.
+    """
+    if not user.email:
+        logger.warning(
+            "No se ha enviado el resultado de la solicitud de propietario: "
+            "el usuario %s no tiene correo electrónico.",
+            user.pk,
+        )
+        return False
+
+    if approved:
+        subject = "Tu solicitud de propietario ha sido aprobada"
+        status_title = "¡Solicitud aprobada!"
+        status_message = (
+            "Tu solicitud para obtener permisos de propietario ha sido "
+            "aprobada. Ya puedes acceder a las funcionalidades destinadas "
+            "a gestionar tus propiedades."
+        )
+        status_color = "#15803d"
+        status_background = "#f0fdf4"
+        status_border = "#bbf7d0"
+        status_label = "SOLICITUD APROBADA"
+    else:
+        subject = "Actualización de tu solicitud de propietario"
+        status_title = "Solicitud no aprobada"
+        status_message = (
+            "Tu solicitud para obtener permisos de propietario ha sido "
+            "rechazada por el administrador. Si necesitas más información, "
+            "ponte en contacto con el equipo de administración."
+        )
+        status_color = "#b91c1c"
+        status_background = "#fef2f2"
+        status_border = "#fecaca"
+        status_label = "SOLICITUD RECHAZADA"
+
+    display_name = user.get_full_name().strip() or user.get_username()
+    safe_name = escape(display_name)
+
+    text_content = (
+        f"Hola, {display_name}.\n\n"
+        f"{status_title}\n\n"
+        f"{status_message}\n\n"
+        "Gracias por utilizar nuestra plataforma.\n"
+    )
+
+    html_content = f"""
+    <!DOCTYPE html>
+    <html lang="es">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>{escape(subject)}</title>
+      </head>
+      <body style="
+        margin: 0;
+        padding: 0;
+        background-color: #f1f5f9;
+        font-family: Arial, Helvetica, sans-serif;
+        color: #1e293b;
+      ">
+        <div style="
+          display: none;
+          max-height: 0;
+          overflow: hidden;
+          opacity: 0;
+        ">
+          {escape(status_title)}
+        </div>
+
+        <table role="presentation" width="100%" cellspacing="0"
+          cellpadding="0" border="0"
+          style="background-color: #f1f5f9;">
+          <tr>
+            <td align="center" style="padding: 36px 12px;">
+              <table role="presentation" width="600" cellspacing="0"
+                cellpadding="0" border="0"
+                style="
+                  width: 100%;
+                  max-width: 600px;
+                  background-color: #ffffff;
+                  border-radius: 12px;
+                  overflow: hidden;
+                ">
+
+                <tr>
+                  <td style="
+                    background-color: #172554;
+                    padding: 28px 32px;
+                  ">
+                    <p style="
+                      margin: 0 0 8px;
+                      color: #bfdbfe;
+                      font-size: 11px;
+                      font-weight: bold;
+                      letter-spacing: 2px;
+                    ">
+                      GESTIÓN DE PROPIETARIOS
+                    </p>
+                    <h1 style="
+                      margin: 0;
+                      color: #ffffff;
+                      font-size: 24px;
+                      line-height: 1.4;
+                    ">
+                      Actualización de tu solicitud
+                    </h1>
+                  </td>
+                </tr>
+
+                <tr>
+                  <td style="padding: 32px;">
+                    <p style="
+                      margin: 0 0 18px;
+                      font-size: 16px;
+                      line-height: 1.6;
+                    ">
+                      Hola, <strong>{safe_name}</strong>.
+                    </p>
+
+                    <table role="presentation" width="100%" cellspacing="0"
+                      cellpadding="0" border="0"
+                      style="
+                        background-color: {status_background};
+                        border: 1px solid {status_border};
+                        border-radius: 8px;
+                      ">
+                      <tr>
+                        <td style="padding: 20px;">
+                          <p style="
+                            margin: 0 0 8px;
+                            color: {status_color};
+                            font-size: 12px;
+                            font-weight: bold;
+                            letter-spacing: 1px;
+                          ">
+                            {status_label}
+                          </p>
+                          <h2 style="
+                            margin: 0 0 12px;
+                            color: #0f172a;
+                            font-size: 21px;
+                            line-height: 1.4;
+                          ">
+                            {escape(status_title)}
+                          </h2>
+                          <p style="
+                            margin: 0;
+                            color: #334155;
+                            font-size: 14px;
+                            line-height: 1.8;
+                          ">
+                            {escape(status_message)}
+                          </p>
+                        </td>
+                      </tr>
+                    </table>
+
+                    <p style="
+                      margin: 24px 0 0;
+                      color: #475569;
+                      font-size: 14px;
+                      line-height: 1.8;
+                    ">
+                      Gracias por utilizar nuestra plataforma. Si tienes
+                      alguna duda sobre esta decisión, puedes ponerte en
+                      contacto con el equipo de administración.
+                    </p>
+                  </td>
+                </tr>
+
+                <tr>
+                  <td style="
+                    padding: 20px 32px;
+                    background-color: #f8fafc;
+                    border-top: 1px solid #e2e8f0;
+                  ">
+                    <p style="
+                      margin: 0 0 6px;
+                      color: #475569;
+                      font-size: 12px;
+                      font-weight: bold;
+                    ">
+                      Notificación automática
+                    </p>
+                    <p style="
+                      margin: 0;
+                      color: #94a3b8;
+                      font-size: 12px;
+                      line-height: 1.6;
+                    ">
+                      Este correo se ha generado automáticamente.
+                      Por favor, no respondas directamente a este mensaje.
+                    </p>
+                  </td>
+                </tr>
+
+              </table>
+            </td>
+          </tr>
+        </table>
+      </body>
+    </html>
+    """
+
+    try:
+        email_message = EmailMultiAlternatives(
+            subject=subject,
+            body=text_content,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            to=[user.email],
+        )
+        email_message.attach_alternative(html_content, "text/html")
+        email_message.send(fail_silently=False)
+        return True
+
+    except Exception:
+        logger.exception(
+            "Error al enviar el resultado de la solicitud de propietario "
+            "al usuario %s.",
+            user.pk,
+        )
+        return False

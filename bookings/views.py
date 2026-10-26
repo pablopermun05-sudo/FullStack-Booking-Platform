@@ -39,6 +39,7 @@ from .emails import (
     send_booking_cancellation_proposal_status_email,
     send_booking_confirmation_emails,
     send_owner_request_notification_email,
+    send_owner_request_result_email,
 )
 
 # Create your views here.
@@ -840,6 +841,11 @@ def review_owner_request(request, profile_id, action):
 
     owner_profile.reviewed_at = timezone.now()
     owner_profile.save(update_fields=["status", "reviewed_at"])
+    
+    transaction.on_commit(
+        lambda user=owner_profile.user, approved=(action == "approve"):
+            send_owner_request_result_email(user, approved)
+    )
 
     messages.success(request, message)
     return redirect("manage_owner_requests")
