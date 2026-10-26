@@ -692,6 +692,164 @@ class OwnerRequestViewTestCase(TestCase):
             1,
         )
 
+class OwnerAdminViewsTestCase(TestCase):
+    def setUp(self):
+        self.staff_user = User.objects.create_user(
+            username="owner_admin",
+            email="owner_admin@example.com",
+            password="testpassword123",
+            first_name="Admin",
+            last_name="Staff",
+            is_staff=True,
+        )
+
+        self.user = User.objects.create_user(
+            username="owner_target",
+            email="owner_target@example.com",
+            password="testpassword123",
+            first_name="Nombre",
+            last_name="Apellidos",
+        )
+
+        self.client.force_login(self.staff_user)
+
+    def test_staff_can_access_pending_owner_requests(self):
+        OwnerProfile.objects.create(
+            user=self.user,
+            status="PENDING",
+        )
+
+        response = self.client.get(reverse("manage_owner_requests"))
+
+        self.assertEqual(response.status_code, 200)
+
+    def test_staff_can_approve_pending_owner_request(self):
+        profile = OwnerProfile.objects.create(
+            user=self.user,
+            status="PENDING",
+        )
+
+        response = self.client.post(
+            reverse(
+                "review_owner_request",
+                args=[profile.pk, "approve"],
+            )
+        )
+
+        self.assertRedirects(response, reverse("manage_owner_requests"))
+
+        profile.refresh_from_db()
+        self.assertEqual(profile.status, "APPROVED")
+        self.assertIsNotNone(profile.reviewed_at)
+
+    def test_staff_can_reject_pending_owner_request(self):
+        profile = OwnerProfile.objects.create(
+            user=self.user,
+            status="PENDING",
+        )
+
+        response = self.client.post(
+            reverse(
+                "review_owner_request",
+                args=[profile.pk, "reject"],
+            )
+        )
+
+        self.assertRedirects(response, reverse("manage_owner_requests"))
+
+        profile.refresh_from_db()
+        self.assertEqual(profile.status, "REJECTED")
+        self.assertIsNotNone(profile.reviewed_at)
+
+    def test_reviewing_non_pending_request_does_not_change_it(self):
+        profile = OwnerProfile.objects.create(
+            user=self.user,
+            status="APPROVED",
+        )
+
+        response = self.client.post(
+            reverse(
+                "review_owner_request",
+                args=[profile.pk, "reject"],
+            )
+        )
+
+        self.assertRedirects(response, reverse("manage_owner_requests"))
+
+        profile.refresh_from_db()
+        self.assertEqual(profile.status, "APPROVED")
+
+    def test_staff_can_grant_owner_permissions_without_existing_profile(self):
+        response = self.client.post(
+            reverse(
+                "manage_owner_permissions",
+                args=[self.user.pk, "grant"],
+            )
+        )
+
+        self.assertRedirects(response, reverse("manage_users"))
+
+        profile = OwnerProfile.objects.get(user=self.user)
+        self.assertEqual(profile.status, "APPROVED")
+
+    def test_granting_permissions_does_not_create_duplicate_profile(self):
+        profile = OwnerProfile.objects.create(
+            user=self.user,
+            status="REJECTED",
+        )
+
+        response = self.client.post(
+            reverse(
+                "manage_owner_permissions",
+                args=[self.user.pk, "grant"],
+            )
+        )
+
+        self.assertRedirects(response, reverse("manage_users"))
+
+        profile.refresh_from_db()
+        self.assertEqual(profile.status, "APPROVED")
+        self.assertEqual(
+            OwnerProfile.objects.filter(user=self.user).count(),
+            1,
+        )
+
+    def test_staff_can_revoke_approved_owner_permissions(self):
+        profile = OwnerProfile.objects.create(
+            user=self.user,
+            status="APPROVED",
+        )
+
+        response = self.client.post(
+            reverse(
+                "manage_owner_permissions",
+                args=[self.user.pk, "revoke"],
+            )
+        )
+
+        self.assertRedirects(response, reverse("manage_users"))
+
+        profile.refresh_from_db()
+        self.assertEqual(profile.status, "REVOKED")
+
+    def test_revoking_permissions_from_non_approved_user_does_not_change_status(self):
+        profile = OwnerProfile.objects.create(
+            user=self.user,
+            status="PENDING",
+        )
+
+        response = self.client.post(
+            reverse(
+                "manage_owner_permissions",
+                args=[self.user.pk, "revoke"],
+            )
+        )
+
+        self.assertRedirects(response, reverse("manage_users"))
+
+        profile.refresh_from_db()
+        self.assertEqual(profile.status, "PENDING")
+
 class PropertyManagementPermissionTestCase(TestCase):
     def create_user(self, username, email, **kwargs):
         return User.objects.create_user(
