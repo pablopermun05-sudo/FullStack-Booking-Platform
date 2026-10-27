@@ -104,6 +104,9 @@ class Property(models.Model):
             raise ValidationError("El número de habitaciones no puede ser 0")
 
     def save(self, *args, **kwargs):
+        if self.location:
+            self.location = " ".join(self.location.split())
+
         self.full_clean()
         super().save(*args, **kwargs)
 

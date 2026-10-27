@@ -1196,7 +1196,13 @@ def properties(request):
         properties = properties.exclude(owner=request.user)
 
     if location:
-        properties = properties.filter(location=location)
+        normalized_location = " ".join(location.split()).lower()
+
+        properties = (
+            properties
+            .annotate(normalized_location=Lower(Trim("location")))
+            .filter(normalized_location=normalized_location)
+        )
     
     if adults:
         try:
