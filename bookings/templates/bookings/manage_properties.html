@@ -1,0 +1,179 @@
+{% extends "bookings/layout.html" %}
+
+{% block title %}Gestionar viviendas{% endblock %}
+
+{% block body %}
+<div class="bookings-page properties-page">
+
+    <header class="bookings-header">
+        <div>
+            <h1>Gestionar viviendas</h1>
+        </div>
+
+        <div class="properties-header-actions">
+            <span class="booking-count">
+                {{ page_obj.paginator.count }}
+                {% if page_obj.paginator.count == 1 %}
+                    vivienda
+                {% else %}
+                    viviendas
+                {% endif %}
+            </span>
+        </div>
+    </header>
+
+    {% if page_obj.object_list %}
+        <div class="properties-list">
+            {% for property in page_obj %}
+                <article class="booking-card property-card">
+                    <div class="property-image-wrapper">
+                        {% if property.image %}
+                            <img
+                                class="booking-photo"
+                                src="{{ property.image.url }}"
+                                alt="{{ property.title }}"
+                                loading="lazy"
+                            >
+                        {% else %}
+                            <div class="booking-photo-placeholder">
+                                <i class="bi bi-house-door" aria-hidden="true"></i>
+                                <span>Foto no disponible</span>
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    <div class="booking-content">
+                        <div class="booking-top">
+                            <div>
+                                <h2 class="booking-property-name">
+                                    {{ property.title }}
+                                </h2>
+
+                                <p class="property-location">
+                                    <i class="bi bi-geo-alt-fill" aria-hidden="true"></i>
+                                    <span>{{ property.location }}</span>
+                                </p>
+
+                                <p class="property-owner">
+                                    <strong>Propietario:</strong>
+                                    {{ property.owner }}
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="property-description">
+                            {{ property.description|truncatechars:200 }}
+                        </div>
+
+                        <div class="property-actions">
+                            <a
+                                href="{% url 'edit_property' property.id %}"
+                                class="booking-btn booking-btn-primary"
+                            >
+                                <i class="bi bi-pencil-square" aria-hidden="true"></i>
+                                Editar
+                            </a>
+
+                            <a
+                                href="{% url 'property_availability' property.id %}"
+                                class="booking-btn booking-btn-secondary"
+                            >
+                                <i class="bi bi-calendar3" aria-hidden="true"></i>
+                                Disponibilidad
+                            </a>
+
+                            <a
+                                href="{% url 'property_bookings' property.id %}"
+                                class="booking-btn booking-btn-secondary"
+                            >
+                                <i class="bi bi-journal-check" aria-hidden="true"></i>
+                                Ver reservas
+                            </a>
+
+                            <a
+                                href="{% url 'property' property.id %}"
+                                class="booking-btn booking-btn-secondary"
+                            >
+                                Ver detalles
+                                <i class="bi bi-arrow-up-right" aria-hidden="true"></i>
+                            </a>
+
+                            <form
+                                action="{% url 'edit_property' property.id %}"
+                                method="post"
+                                onsubmit="return confirm('¿Seguro que quieres borrar esta vivienda? Esta acción no se puede deshacer.');"
+                            >
+                                {% csrf_token %}
+
+                                <button
+                                    type="submit"
+                                    name="delete"
+                                    value="1"
+                                    class="booking-btn property-delete-btn"
+                                >
+                                    <i class="bi bi-trash3" aria-hidden="true"></i>
+                                    Borrar
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </article>
+            {% endfor %}
+        </div>
+
+        {% if page_obj.has_other_pages %}
+            <nav class="booking-pagination" aria-label="Páginas de viviendas">
+                {% if page_obj.has_previous %}
+                    <a
+                        href="?page={{ page_obj.previous_page_number }}"
+                        aria-label="Página anterior"
+                    >
+                        <i class="bi bi-chevron-left" aria-hidden="true"></i>
+                        Anterior
+                    </a>
+                {% endif %}
+
+                {% for num in page_obj.paginator.page_range %}
+                    {% if page_obj.number == num %}
+                        <span
+                            class="current"
+                            aria-current="page"
+                            aria-label="Página {{ num }}"
+                        >
+                            {{ num }}
+                        </span>
+                    {% else %}
+                        <a href="?page={{ num }}" aria-label="Página {{ num }}">
+                            {{ num }}
+                        </a>
+                    {% endif %}
+                {% endfor %}
+
+                {% if page_obj.has_next %}
+                    <a
+                        href="?page={{ page_obj.next_page_number }}"
+                        aria-label="Página siguiente"
+                    >
+                        Siguiente
+                        <i class="bi bi-chevron-right" aria-hidden="true"></i>
+                    </a>
+                {% endif %}
+            </nav>
+        {% endif %}
+
+    {% else %}
+        <section class="booking-empty">
+            <div class="booking-empty-icon">
+                <i class="bi bi-house-door" aria-hidden="true"></i>
+            </div>
+
+            <h2>No hay viviendas registradas</h2>
+
+            <p>
+                Cuando se registren viviendas en la plataforma,
+                podrás administrarlas desde esta página.
+            </p>
+        </section>
+    {% endif %}
+</div>
+{% endblock %}

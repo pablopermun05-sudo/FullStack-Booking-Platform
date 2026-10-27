@@ -1004,6 +1004,22 @@ def manage_users(request):
     )
 
 @login_required
+def manage_properties(request):
+    if not request.user.is_staff:
+        raise PermissionDenied
+
+    properties = Property.objects.all().order_by("id")
+
+    paginator = Paginator(properties, 6)
+    page_number = request.GET.get("page")
+    page_obj = paginator.get_page(page_number)
+
+    return render(request, "bookings/manage_properties.html", {
+        "properties": properties,
+        "page_obj": page_obj,
+    })
+
+@login_required
 def manage_bookings(request):
     
     if not request.user.is_staff:

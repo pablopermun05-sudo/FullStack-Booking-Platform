@@ -51,4 +51,5 @@ urlpatterns = [
     path("manage-owner-requests/", views.manage_owner_requests, name="manage_owner_requests"),
     path("manage-owner-requests/<int:profile_id>/<str:action>/", views.review_owner_request, name="review_owner_request"),
     path("manage-users/<int:user_id>/owner/<str:action>/", views.manage_owner_permissions, name="manage_owner_permissions"),
+    path("manage-properties/", views.manage_properties, name="manage_properties"),
 ]

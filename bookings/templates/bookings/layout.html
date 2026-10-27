@@ -67,7 +67,7 @@
                             <ul class="dropdown-menu">
                                 <li>
                                     <a class="dropdown-item" href="{% url 'manage_users' %}">
-                                        Gestión de usuarios
+                                        Gestionar Usuarios
                                     </a>
                                 </li>
                                 <li>
@@ -85,10 +85,26 @@
                                 aria-expanded="false">
                                 Viviendas
                             </button>
+
                             <ul class="dropdown-menu">
-                                <li><a class="dropdown-item" href="{% url 'create_property' %}">Registrar Vivienda</a>
+
+                                {% if user.is_staff %}
+                                <li>
+                                    <a class="dropdown-item" href="{% url 'manage_properties' %}">
+                                        Gestionar Viviendas
+                                    </a>
                                 </li>
-                                <li><a class="dropdown-item" href="{% url 'my_properties' %}">Mis Viviendas</a></li>
+                                {% endif %}
+                                <li>
+                                    <a class="dropdown-item" href="{% url 'my_properties' %}">
+                                        Mis Viviendas
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item" href="{% url 'create_property' %}">
+                                        Registrar Vivienda
+                                    </a>
+                                </li>
                             </ul>
                         </li>
                         {% endif %}
@@ -101,13 +117,13 @@
                             </button>
                             <ul class="dropdown-menu">
                                 <li>
-                                    <a class="dropdown-item" href="{% url 'my_bookings' %}">
-                                        Mis Reservas
+                                    <a class="dropdown-item" href="{% url 'manage_bookings' %}">
+                                        Gestionar Reservas
                                     </a>
                                 </li>
                                 <li>
-                                    <a class="dropdown-item" href="{% url 'manage_bookings' %}">
-                                        Gestionar Reservas
+                                    <a class="dropdown-item" href="{% url 'my_bookings' %}">
+                                        Mis Reservas
                                     </a>
                                 </li>
                             </ul>
