@@ -1017,8 +1017,12 @@ class PropertyManagementPermissionTestCase(TestCase):
             **kwargs,
         )
 
-    def create_owner(self, username, email, status):
-        user = self.create_user(username, email, phone_number="+34600000026")
+    def create_owner(self, username, email, status, phone_number):
+        user = self.create_user(
+            username,
+            email,
+            phone_number=phone_number,
+        )
 
         OwnerProfile.objects.create(
             user=user,
@@ -1061,6 +1065,7 @@ class PropertyManagementPermissionTestCase(TestCase):
             "pending",
             "pending@example.com",
             "PENDING",
+            "+34600000300"
         )
 
         self.client.force_login(owner)
@@ -1074,6 +1079,7 @@ class PropertyManagementPermissionTestCase(TestCase):
             "rejected",
             "rejected@example.com",
             "REJECTED",
+            "+34600000301"
         )
 
         self.client.force_login(owner)
@@ -1087,6 +1093,7 @@ class PropertyManagementPermissionTestCase(TestCase):
             "approved",
             "approved@example.com",
             "APPROVED",
+            "+34600000302"
         )
 
         self.client.force_login(owner)
@@ -1109,11 +1116,12 @@ class PropertyManagementPermissionTestCase(TestCase):
 
         self.assertEqual(response.status_code, 200)
 
-    def test_anonymous_user_can_access_property_availability_data(self):
+    def test_anonymous_user_cannot_access_property_availability_data(self):
         owner = self.create_owner(
             "owner",
             "owner@example.com",
             "APPROVED",
+            "+34600000303",
         )
 
         property = self.create_property(owner=owner)
@@ -1129,13 +1137,14 @@ class PropertyManagementPermissionTestCase(TestCase):
             },
         )
 
-        self.assertEqual(response.status_code, 200)
-
+        self.assertEqual(response.status_code, 302)
+        
     def test_owner_can_access_own_property(self):
         owner = self.create_owner(
             "owner",
             "owner@example.com",
             "APPROVED",
+            "+34600000304"
         )
 
         property = self.create_property(owner=owner)
@@ -1156,12 +1165,14 @@ class PropertyManagementPermissionTestCase(TestCase):
             "owner",
             "owner@example.com",
             "APPROVED",
+            "+34600000305"
         )
 
         other_owner = self.create_owner(
             "other",
             "other@example.com",
             "APPROVED",
+            "+34600000306"
         )
 
         property = self.create_property(owner=other_owner)
@@ -1189,6 +1200,7 @@ class PropertyManagementPermissionTestCase(TestCase):
             "owner",
             "owner@example.com",
             "APPROVED",
+            "+34600000307"
         )
 
         property = self.create_property(owner=owner)
@@ -1216,6 +1228,7 @@ class PropertyManagementPermissionTestCase(TestCase):
             "owner",
             "owner@example.com",
             "APPROVED",
+            "+34600000308"
         )
 
         property = self.create_property(owner=owner)
@@ -1267,6 +1280,7 @@ class PropertyManagementPermissionTestCase(TestCase):
             "owner",
             "owner@example.com",
             "APPROVED",
+            "+34600000309"
         )
 
         self.client.force_login(owner)
@@ -1280,12 +1294,14 @@ class PropertyManagementPermissionTestCase(TestCase):
             "owner",
             "owner@example.com",
             "APPROVED",
+            "+34600000310"
         )
 
         other_owner = self.create_owner(
             "other",
             "other@example.com",
             "APPROVED",
+            "+34600000311"
         )
 
         property = self.create_property(owner=other_owner)
@@ -1306,6 +1322,7 @@ class PropertyManagementPermissionTestCase(TestCase):
             "owner",
             "owner@example.com",
             "APPROVED",
+            "+34600000312"
         )
 
         property = self.create_property(owner=owner)
@@ -1333,6 +1350,7 @@ class PropertyManagementPermissionTestCase(TestCase):
             "owner",
             "owner@example.com",
             "APPROVED",
+            "+34600000313"
         )
 
         property = self.create_property(owner=owner)
@@ -1353,12 +1371,14 @@ class PropertyManagementPermissionTestCase(TestCase):
             "owner",
             "owner@example.com",
             "APPROVED",
+            "+34600000314"
         )
 
         other_owner = self.create_owner(
             "other",
             "other@example.com",
             "APPROVED",
+            "+34600000315"
         )
 
         property = self.create_property(owner=other_owner)
@@ -1386,12 +1406,14 @@ class PropertyManagementPermissionTestCase(TestCase):
             "owner",
             "owner@example.com",
             "APPROVED",
+            "+34600000316"
         )
 
         other_owner = self.create_owner(
             "other",
             "other@example.com",
             "APPROVED",
+            "+34600000317"
         )
 
         property = self.create_property(owner=other_owner)
@@ -1505,8 +1527,12 @@ class NavigationTestCase(TestCase):
             **kwargs,
         )
 
-    def create_owner(self, username, email, status):
-        user = self.create_user(username, email, phone_number="+34600000037")
+    def create_owner(self, username, email, status, phone_number):
+        user = self.create_user(
+            username,
+            email,
+            phone_number=phone_number,
+        )
 
         OwnerProfile.objects.create(
             user=user,
@@ -1542,6 +1568,7 @@ class NavigationTestCase(TestCase):
             "pending",
             "pending@example.com",
             "PENDING",
+            "+34600000318"
         )
 
         self.client.force_login(owner)
@@ -1557,6 +1584,7 @@ class NavigationTestCase(TestCase):
             "rejected",
             "rejected@example.com",
             "REJECTED",
+            "+34600000319"
         )
 
         self.client.force_login(owner)
@@ -1572,6 +1600,7 @@ class NavigationTestCase(TestCase):
             "approved",
             "approved@example.com",
             "APPROVED",
+            "+34600000320"
         )
 
         self.client.force_login(owner)
