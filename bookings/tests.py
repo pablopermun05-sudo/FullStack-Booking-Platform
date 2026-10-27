@@ -38,6 +38,7 @@ class OwnerProfileTestCase(TestCase):
             email="owner@example.com",
             first_name="Owner",
             last_name="User",
+            phone_number="+34600000003"
         )
 
         owner_profile = OwnerProfile.objects.create(user=user)
@@ -54,6 +55,7 @@ class OwnerProfileTestCase(TestCase):
             email="owner@example.com",
             first_name="Owner",
             last_name="User",
+            phone_number="+34600000004"
         )
 
         owner_profile = OwnerProfile.objects.create(user=user)
@@ -67,6 +69,7 @@ class OwnerProfileTestCase(TestCase):
             email="owner@example.com",
             first_name="Owner",
             last_name="User",
+            phone_number="+34600000005"
         )
 
         owner_profile = OwnerProfile.objects.create(user=user)
@@ -87,6 +90,7 @@ class OwnerProfileTestCase(TestCase):
             email="owner@example.com",
             first_name="Owner",
             last_name="User",
+            phone_number="+34600000006"
         )
 
         owner_profile = OwnerProfile.objects.create(user=user)
@@ -108,6 +112,7 @@ class OwnerPermissionTestCase(TestCase):
             email="customer@example.com",
             first_name="Customer",
             last_name="User",
+            phone_number="+34600000007"
         )
 
         self.assertFalse(user.is_approved_owner)
@@ -119,6 +124,7 @@ class OwnerPermissionTestCase(TestCase):
             email="owner@example.com",
             first_name="Owner",
             last_name="User",
+            phone_number="+34600000008"
         )
 
         OwnerProfile.objects.create(
@@ -135,6 +141,7 @@ class OwnerPermissionTestCase(TestCase):
             email="owner@example.com",
             first_name="Owner",
             last_name="User",
+            phone_number="+34600000009"
         )
 
         OwnerProfile.objects.create(
@@ -151,6 +158,7 @@ class OwnerPermissionTestCase(TestCase):
             email="owner@example.com",
             first_name="Owner",
             last_name="User",
+            phone_number="+34600000010"
         )
 
         OwnerProfile.objects.create(
@@ -167,6 +175,7 @@ class OwnerPermissionTestCase(TestCase):
             email="customer@example.com",
             first_name="Customer",
             last_name="User",
+            phone_number="+34600000011"
         )
 
         self.assertFalse(can_manage_properties(user))
@@ -178,6 +187,7 @@ class OwnerPermissionTestCase(TestCase):
             email="owner@example.com",
             first_name="Owner",
             last_name="User",
+            phone_number="+34600000012"
         )
 
         OwnerProfile.objects.create(
@@ -194,6 +204,7 @@ class OwnerPermissionTestCase(TestCase):
             email="owner@example.com",
             first_name="Owner",
             last_name="User",
+            phone_number="+34600000013"
         )
 
         OwnerProfile.objects.create(
@@ -210,6 +221,7 @@ class OwnerPermissionTestCase(TestCase):
             email="owner@example.com",
             first_name="Owner",
             last_name="User",
+            phone_number="+34600000014"
         )
 
         OwnerProfile.objects.create(
@@ -227,6 +239,7 @@ class OwnerPermissionTestCase(TestCase):
             first_name="Staff",
             last_name="User",
             is_staff=True,
+            phone_number="+34600000015"
         )
 
         self.assertTrue(can_manage_properties(user))
@@ -365,6 +378,7 @@ class UserProfileViewTestCase(TestCase):
             password="testpassword123",
             first_name="Nombre",
             last_name="Original",
+            phone_number="+34600000016"
         )
 
         self.other_user = User.objects.create_user(
@@ -373,6 +387,7 @@ class UserProfileViewTestCase(TestCase):
             password="testpassword123",
             first_name="Otro",
             last_name="Usuario",
+            phone_number="+34600000017"
         )
 
         self.staff_user = User.objects.create_user(
@@ -382,6 +397,7 @@ class UserProfileViewTestCase(TestCase):
             first_name="Personal",
             last_name="Administrador",
             is_staff=True,
+            phone_number="+34600000018"
         )
     
     def test_anonymous_user_is_redirected_to_login_when_editing_profile(self):
@@ -541,6 +557,7 @@ class OwnerRequestServiceTestCase(TestCase):
             password="testpassword123",
             first_name="Nombre",
             last_name="Apellidos",
+            phone_number="+34600000019"
         )
 
     def test_creates_pending_owner_request_when_profile_does_not_exist(self):
@@ -645,6 +662,7 @@ class OwnerRequestViewTestCase(TestCase):
             password="testpassword123",
             first_name="Nombre",
             last_name="Apellidos",
+            phone_number="+34600000020"
         )
         self.url = reverse("request_owner_status")
 
@@ -700,6 +718,7 @@ class OwnerAdminViewsTestCase(TestCase):
             first_name="Admin",
             last_name="Staff",
             is_staff=True,
+            phone_number="+34600000021"
         )
 
         self.user = User.objects.create_user(
@@ -708,6 +727,7 @@ class OwnerAdminViewsTestCase(TestCase):
             password="testpassword123",
             first_name="Nombre",
             last_name="Apellidos",
+            phone_number="+34600000022"
         )
 
         self.client.force_login(self.staff_user)
@@ -857,6 +877,7 @@ class UserAuthorizationTestCase(TestCase):
             password="testpassword123",
             first_name="Usuario",
             last_name="Normal",
+            phone_number="+34600000023"
         )
 
         self.staff_user = User.objects.create_user(
@@ -866,6 +887,7 @@ class UserAuthorizationTestCase(TestCase):
             first_name="Personal",
             last_name="Admin",
             is_staff=True,
+            phone_number="+34600000024"
         )
 
         self.profile = OwnerProfile.objects.create(
@@ -984,18 +1006,19 @@ class UserAuthorizationTestCase(TestCase):
         )
 
 class PropertyManagementPermissionTestCase(TestCase):
-    def create_user(self, username, email, **kwargs):
+    def create_user(self, username, email, phone_number, **kwargs):
         return User.objects.create_user(
             username=username,
             password="Password123!",
             email=email,
             first_name="Test",
             last_name="User",
+            phone_number=phone_number,
             **kwargs,
         )
 
     def create_owner(self, username, email, status):
-        user = self.create_user(username, email)
+        user = self.create_user(username, email, phone_number="+34600000026")
 
         OwnerProfile.objects.create(
             user=user,
@@ -1024,6 +1047,7 @@ class PropertyManagementPermissionTestCase(TestCase):
         customer = self.create_user(
             "customer",
             "customer@example.com",
+            phone_number="+34600000027"
         )
 
         self.client.force_login(customer)
@@ -1076,6 +1100,7 @@ class PropertyManagementPermissionTestCase(TestCase):
             "staff",
             "staff@example.com",
             is_staff=True,
+            phone_number="+34600000028"
         )
 
         self.client.force_login(staff)
@@ -1157,6 +1182,7 @@ class PropertyManagementPermissionTestCase(TestCase):
             "staff",
             "staff@example.com",
             is_staff=True,
+            phone_number="+34600000029"
         )
 
         owner = self.create_owner(
@@ -1183,6 +1209,7 @@ class PropertyManagementPermissionTestCase(TestCase):
             "staff",
             "staff@example.com",
             is_staff=True,
+            phone_number="+34600000030"
         )
 
         owner = self.create_owner(
@@ -1226,6 +1253,7 @@ class PropertyManagementPermissionTestCase(TestCase):
         customer = self.create_user(
             "customer",
             "customer@example.com",
+            phone_number="+34600000031"
         )
 
         self.client.force_login(customer)
@@ -1298,6 +1326,7 @@ class PropertyManagementPermissionTestCase(TestCase):
             "staff",
             "staff@example.com",
             is_staff=True,
+            phone_number="+34600000032"
         )
 
         owner = self.create_owner(
@@ -1403,6 +1432,7 @@ class OwnerProfileAdminTestCase(TestCase):
             email="owner@example.com",
             first_name="Owner",
             last_name="User",
+            phone_number="+34600000033"
         )
 
         self.owner_profile = OwnerProfile.objects.create(
@@ -1464,18 +1494,19 @@ class OwnerProfileAdminTestCase(TestCase):
         )
 
 class NavigationTestCase(TestCase):
-    def create_user(self, username, email, **kwargs):
+    def create_user(self, username, email, phone_number, **kwargs):
         return User.objects.create_user(
             username=username,
             password="Password123!",
             email=email,
             first_name="Test",
             last_name="User",
+            phone_number=phone_number,
             **kwargs,
         )
 
     def create_owner(self, username, email, status):
-        user = self.create_user(username, email)
+        user = self.create_user(username, email, phone_number="+34600000037")
 
         OwnerProfile.objects.create(
             user=user,
@@ -1495,6 +1526,7 @@ class NavigationTestCase(TestCase):
         customer = self.create_user(
             "customer",
             "customer@example.com",
+            phone_number="+34600000038"
         )
 
         self.client.force_login(customer)
@@ -1555,6 +1587,7 @@ class NavigationTestCase(TestCase):
             "staff",
             "staff@example.com",
             is_staff=True,
+            phone_number="+34600000039"
         )
 
         self.client.force_login(staff)
@@ -1573,6 +1606,7 @@ class UserPermissionConsistencyTestCase(TestCase):
             password="testpassword123",
             first_name="Nombre",
             last_name="Apellidos",
+            phone_number="+34600000040"
         )
 
     def test_user_without_owner_profile_is_not_approved_owner(self):
@@ -1661,12 +1695,14 @@ class PropertyTestCase(TestCase):
         self.u1 = User.objects.create_user(
             username="owner1",
             email="o1@test.com",
-            password="123"
+            password="123",
+            phone_number="+34600000041"
         )
         self.u2 = User.objects.create_user(
             username="tenant1",
             email="t1@test.com",
-            password="123"
+            password="123",
+            phone_number="+34600000042"
         )
 
         self.p1 = Property(
@@ -1796,6 +1832,7 @@ class AuthenticationTestCase(TestCase):
             username="logout_user",
             email="logout@test.com",
             password="testpassword123",
+            phone_number="+34600000043"
         )
 
     def test_logout_rejects_non_post_request(self):
@@ -1821,13 +1858,15 @@ class BookingTestBase(TestCase):
         self.owner = User.objects.create_user(
             username="owner",
             email="owner@test.com",
-            password="123"
+            password="123",
+            phone_number="+34600000044"
         )
 
         self.tenant = User.objects.create_user(
             username="tenant",
             email="tenant@test.com",
-            password="123"
+            password="123",
+            phone_number="+34600000000",
         )
 
         self.property = Property.objects.create(
@@ -4344,6 +4383,7 @@ class BookingModCreateBookingViewTestCase(BookingTestBase):
             username="other-user",
             email="other@example.com",
             password="testpass123",
+            phone_number="+34600000045"
         )
 
         arrival_date = (
@@ -4485,6 +4525,7 @@ class BookingCancellationViewTestCase(BookingTestBase):
             username="other-tenant",
             email="other-tenant@test.com",
             password="123",
+            phone_number="+34600000046"
         )
 
         booking = Booking.objects.create(
@@ -4517,13 +4558,15 @@ class BookingConcurrencyTestCase(TransactionTestCase):
         self.owner = User.objects.create_user(
             username="owner",
             email="owner@test.com",
-            password="123"
+            password="123",
+            phone_number="+34600000047"
         )
 
         self.tenant = User.objects.create_user(
             username="tenant",
             email="tenant@test.com",
-            password="123"
+            password="123",
+            phone_number="+34600000001",
         )
 
         self.property = Property.objects.create(
@@ -5507,12 +5550,14 @@ class ExpirePendingBookingsCommandTestCase(TestCase):
                 username="command_tenant",
                 password="password123",
                 email="command_tenant@example.com",
+                phone_number="+34600000048"
             ),
             property=Property.objects.create(
                 owner=User.objects.create_user(
                     username="command_owner",
                     password="password123",
                     email="command_owner@example.com",
+                    phone_number="+34600000049"
                 ),
                 title="Command test property",
                 description="Property for expiration command test",
@@ -7231,18 +7276,21 @@ class PropertySearchTestCase(TestCase):
             username="owner",
             email="owner@test.com",
             password="123",
+            phone_number="+34600000050"
         )
 
         self.tenant = User.objects.create_user(
             username="tenant",
             email="tenant@test.com",
             password="123",
+            phone_number="+34600000002",
         )
 
         self.other_owner = User.objects.create_user(
             username="other-owner",
             email="other-owner@test.com",
             password="123",
+            phone_number="+34600000051"
         )
 
         self.property = Property.objects.create(
@@ -7437,6 +7485,7 @@ class PropertyAvailabilityTestCase(TestCase):
             username="availability_owner",
             email="availability_owner@test.com",
             password="123",
+            phone_number="+34600000052"
         )
 
         OwnerProfile.objects.create(
@@ -7668,6 +7717,7 @@ class PropertyAvailabilityTestCase(TestCase):
             username="availability_tenant",
             email="availability_tenant@test.com",
             password="123",
+            phone_number="+34600000053"
         )
 
         booking_start = date.today() + timedelta(days=5)
@@ -7724,6 +7774,7 @@ class PropertyAvailabilityTestCase(TestCase):
             username="availability_user",
             email="availability_user@test.com",
             password="123",
+            phone_number="+34600000054"
         )
 
         self.client.force_login(user)
@@ -7810,6 +7861,7 @@ class PropertyAvailabilityTestCase(TestCase):
             email="availability_staff@test.com",
             password="123",
             is_staff=True,
+            phone_number="+34600000055"
         )
 
         self.client.force_login(staff_user)
@@ -8098,6 +8150,7 @@ class BookingCancellationResponseTests(TestCase):
             password="test-password",
             first_name="Propietario",
             last_name="Prueba",
+            phone_number="+34600000056"
         )
 
         # Huésped titular de la reserva.
@@ -8107,6 +8160,7 @@ class BookingCancellationResponseTests(TestCase):
             password="test-password",
             first_name="Huesped",
             last_name="Prueba",
+            phone_number="+34600000057"
         )
 
         # Segundo huésped: no debe poder responder a la reserva ajena.
@@ -8116,6 +8170,7 @@ class BookingCancellationResponseTests(TestCase):
             password="test-password",
             first_name="Otro",
             last_name="Huesped",
+            phone_number="+34600000058"
         )
 
         # Propiedad válida según las reglas de tu modelo.
