@@ -74,9 +74,20 @@ def index(request):
         "form": SearchForm()
     })
 
+def get_available_property(property_id):
+    return get_object_or_404(
+        Property.objects.filter(owner__owner_profile__status="APPROVED"),
+        id=property_id,
+    )
+    
+def get_available_properties():
+    return Property.objects.filter(
+        owner__owner_profile__status="APPROVED"
+    )
+    
 def property(request, property_id):
 
-    property = get_object_or_404(Property, pk=property_id)
+    property = get_available_property(property_id)
 
     today = date.today()
 
@@ -426,12 +437,19 @@ def property_availability_reset(request, property_id):
         "deleted_count": deleted_count,
     })
 
+@login_required
 def property_availability_data(request, property_id):
     
-    property = get_object_or_404(Property, pk=property_id)
+    if not can_manage_properties(request.user):
+        raise PermissionDenied
 
+    property = get_object_or_404(Property, pk=property_id)
+    
     start_date = request.GET.get("start_date")
     end_date = request.GET.get("end_date")
+    
+    if property.owner != request.user and not request.user.is_staff:
+        raise PermissionDenied
 
     if not start_date or not end_date:
         return JsonResponse(
@@ -1120,7 +1138,7 @@ def properties(request):
     rooms = request.GET.get('rooms')
     pets = request.GET.get('pets')
 
-    properties = Property.objects.all()
+    properties = get_available_properties()
 
     if request.user.is_authenticated:
         properties = properties.exclude(owner=request.user)
@@ -1270,7 +1288,7 @@ def properties(request):
     return JsonResponse(properties, safe=False)
 
 def booking(request, property_id):
-    property = get_object_or_404(Property, pk=property_id)
+    property = get_available_property(property_id)
 
     initial_date = request.GET.get('start')
     final_date = request.GET.get('end')
@@ -4074,8 +4092,11 @@ def create_booking_hold(request, property_id):
 
     try:
         with transaction.atomic():
-            property_obj = Property.objects.select_for_update().get(
-                pk=property_id
+            property_obj = get_object_or_404(
+                Property.objects.select_for_update().filter(
+                    owner__owner_profile__status="APPROVED"
+                ),
+                pk=property_id,
             )
 
             now = timezone.now()
@@ -4316,7 +4337,7 @@ def mock_payment(request, booking_id):
     )
 
 def booking_details(request, property_id):
-    property_obj = get_object_or_404(Property, pk=property_id)
+    property_obj = get_available_property(property_id)
 
     initial_date = request.GET.get("initial_date", "").strip()
     final_date = request.GET.get("final_date", "").strip()
@@ -4411,10 +4432,7 @@ def create_booking(request, property_id):
             status=400,
         )
 
-    property = get_object_or_404(
-        Property,
-        pk=property_id,
-    )
+    property = get_available_property(property_id)
     
     hold_token = data.get("hold_token")
     
