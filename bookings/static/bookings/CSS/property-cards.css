@@ -1,0 +1,472 @@
+.properties-page {
+    --property-primary: #2563eb;
+    --property-primary-hover: #1d4ed8;
+    --property-text: #172033;
+    --property-muted: #64748b;
+    --property-border: #e2e8f0;
+    --property-surface: #ffffff;
+    --property-background: #f8fafc;
+    --property-danger: #b42318;
+
+    color: var(--property-text);
+}
+
+/* Encabezado */
+.properties-page .bookings-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 1.25rem;
+    margin-bottom: 2rem;
+}
+
+.properties-page .bookings-header h1 {
+    margin: 0;
+    font-size: clamp(1.7rem, 3vw, 2.15rem);
+    font-weight: 750;
+    line-height: 1.2;
+    letter-spacing: -0.045em;
+    color: var(--property-text);
+}
+
+.properties-subtitle {
+    margin: 0.65rem 0 0;
+    color: var(--property-muted);
+    font-size: 0.95rem;
+    line-height: 1.6;
+}
+
+.properties-header-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+
+.properties-page .booking-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 40px;
+    padding: 0.5rem 0.9rem;
+    border: 1px solid var(--property-border);
+    border-radius: 999px;
+    background: var(--property-background);
+    color: #475569;
+    font-size: 0.85rem;
+    font-weight: 650;
+    white-space: nowrap;
+}
+
+/* Listado */
+.properties-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+/* Tarjetas */
+.properties-page .property-card {
+    display: grid;
+    grid-template-columns: minmax(220px, 30%) minmax(0, 1fr);
+    overflow: hidden;
+    border: 1px solid #e8edf3;
+    border-radius: 16px;
+    background: var(--property-surface);
+    box-shadow: 0 3px 12px rgb(15 23 42 / 4%);
+    transition:
+        box-shadow 180ms ease,
+        border-color 180ms ease,
+        transform 180ms ease;
+}
+
+.properties-page .property-card:hover {
+    border-color: #d5dfeb;
+    box-shadow: 0 9px 28px rgb(15 23 42 / 7%);
+    transform: translateY(-2px);
+}
+
+.property-image-wrapper {
+    position: relative;
+    min-width: 0;
+    min-height: 100%;
+    overflow: hidden;
+    background: #f1f5f9;
+}
+
+.properties-page .booking-photo,
+.properties-page .booking-photo-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    min-height: 250px;
+    margin: 0;
+    object-fit: cover;
+}
+
+.properties-page .booking-photo {
+    display: block;
+    transition: transform 350ms ease;
+}
+
+.properties-page .property-card:hover .booking-photo {
+    transform: scale(1.035);
+}
+
+.properties-page .booking-photo-placeholder {
+    flex-direction: column;
+    gap: 0.5rem;
+    color: #94a3b8;
+    font-size: 0.85rem;
+    background: linear-gradient(145deg, #f8fafc, #e9eff6);
+}
+
+.booking-photo-placeholder i {
+    font-size: 2.5rem;
+}
+
+/* Contenido */
+.properties-page .booking-content {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    padding: 1.5rem;
+}
+
+.properties-page .booking-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.properties-page .booking-property-name {
+    margin: 0;
+    color: var(--property-text);
+    font-size: 1.2rem;
+    font-weight: 750;
+    line-height: 1.4;
+    letter-spacing: -0.025em;
+    overflow-wrap: anywhere;
+}
+
+.properties-page .property-location {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.45rem;
+    margin: 0.6rem 0 0;
+    color: var(--property-muted);
+    font-size: 0.88rem;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+
+.properties-page .property-location i {
+    flex-shrink: 0;
+    margin-top: 0.15rem;
+    color: #64748b;
+}
+
+.properties-page .property-description {
+    margin: 1.15rem 0 1.35rem;
+    color: #526174;
+    font-size: 0.93rem;
+    line-height: 1.75;
+    overflow-wrap: anywhere;
+}
+
+/* Acciones */
+.properties-page .property-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    margin-top: auto;
+    padding-top: 1rem;
+    border-top: 1px solid #edf0f4;
+}
+
+.properties-page .property-actions form {
+    display: flex;
+    margin: 0;
+}
+
+.properties-page .property-actions .booking-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    min-height: 42px;
+    padding: 0.65rem 0.9rem;
+    border: 1px solid transparent;
+    border-radius: 9px;
+    font-family: inherit;
+    font-size: 0.86rem;
+    font-weight: 650;
+    line-height: 1.2;
+    text-align: center;
+    text-decoration: none;
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+        background-color 160ms ease,
+        border-color 160ms ease,
+        color 160ms ease,
+        box-shadow 160ms ease;
+}
+
+/* Botón principal */
+.properties-page .booking-btn-primary {
+    color: #fff;
+    background: var(--property-primary);
+    border-color: var(--property-primary);
+}
+
+.properties-page .booking-btn-primary:hover {
+    color: #fff;
+    background: var(--property-primary-hover);
+    border-color: var(--property-primary-hover);
+    box-shadow: 0 3px 8px rgb(37 99 235 / 18%);
+}
+
+/* Botones secundarios */
+.properties-page .booking-btn-secondary {
+    color: #334155;
+    background: #fff;
+    border-color: #dbe3ed;
+}
+
+.properties-page .booking-btn-secondary:hover {
+    color: #172033;
+    background: #f1f5f9;
+    border-color: #cbd5e1;
+}
+
+/* Botón de borrar */
+.properties-page .property-delete-btn {
+    color: var(--property-danger);
+    background: #fff;
+    border-color: #f0c7c4;
+}
+
+.properties-page .property-delete-btn:hover {
+    color: #991b1b;
+    background: #fef2f2;
+    border-color: #e7a6a1;
+}
+
+/* Estados de foco accesibles */
+.properties-page a:focus-visible,
+.properties-page button:focus-visible {
+    outline: 3px solid rgb(37 99 235 / 30%);
+    outline-offset: 3px;
+}
+
+/* Paginación */
+.properties-page .booking-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-top: 2rem;
+}
+
+.properties-page .booking-pagination a,
+.properties-page .booking-pagination .current {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 40px;
+    min-height: 40px;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--property-border);
+    border-radius: 9px;
+    color: #475569;
+    background: #fff;
+    font-size: 0.9rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition:
+        background-color 160ms ease,
+        border-color 160ms ease,
+        color 160ms ease;
+}
+
+.properties-page .booking-pagination a:hover {
+    background: #f1f5f9;
+    border-color: #cbd5e1;
+    color: var(--property-text);
+}
+
+.properties-page .booking-pagination .current {
+    color: #fff;
+    background: var(--property-primary);
+    border-color: var(--property-primary);
+}
+
+/* Estado vacío */
+.properties-page .booking-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 340px;
+    padding: 3rem 1.5rem;
+    border: 1px dashed #cbd5e1;
+    border-radius: 18px;
+    background: linear-gradient(180deg, #fff, #f8fafc);
+    text-align: center;
+}
+
+.properties-page .booking-empty-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 76px;
+    height: 76px;
+    margin-bottom: 1.25rem;
+    border-radius: 22px;
+    color: var(--property-primary);
+    background: #eff6ff;
+    font-size: 2rem;
+}
+
+.properties-page .booking-empty h2 {
+    margin: 0;
+    color: var(--property-text);
+    font-size: 1.3rem;
+    font-weight: 750;
+    letter-spacing: -0.025em;
+}
+
+.properties-page .booking-empty p {
+    max-width: 430px;
+    margin: 0.75rem 0 1.5rem;
+    color: var(--property-muted);
+    font-size: 0.95rem;
+    line-height: 1.7;
+}
+
+/* Adaptación a tabletas */
+@media (max-width: 900px) {
+    .properties-page .property-card {
+        grid-template-columns: minmax(180px, 32%) minmax(0, 1fr);
+    }
+
+    .properties-page .booking-content {
+        padding: 1.25rem;
+    }
+
+    .properties-page .property-actions {
+        justify-content: flex-start;
+    }
+
+    .properties-page .property-actions .booking-btn {
+        white-space: normal;
+    }
+}
+
+/* Adaptación a móviles */
+@media (max-width: 650px) {
+    .properties-page .bookings-header {
+        align-items: flex-start;
+        flex-direction: column;
+        margin-bottom: 1.5rem;
+        gap: 1rem;
+    }
+
+    .properties-header-actions {
+        justify-content: space-between;
+        width: 100%;
+    }
+
+    .properties-page .property-card {
+        grid-template-columns: minmax(0, 1fr);
+        border-radius: 14px;
+    }
+
+    .properties-page .property-image-wrapper {
+        height: 220px;
+        min-height: 0;
+    }
+
+    .properties-page .booking-photo,
+    .properties-page .booking-photo-placeholder {
+        height: 220px;
+        min-height: 220px;
+    }
+
+    .properties-page .booking-content {
+        padding: 1.15rem;
+    }
+
+    .properties-page .booking-property-name {
+        font-size: 1.12rem;
+    }
+
+    .properties-page .property-description {
+        margin: 1rem 0 1.15rem;
+    }
+
+    .properties-page .property-actions {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.6rem;
+    }
+
+    .properties-page .property-actions>a,
+    .properties-page .property-actions>form {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .properties-page .property-actions>form button {
+        width: 100%;
+    }
+
+    .properties-page .property-actions .booking-btn {
+        min-height: 44px;
+        padding: 0.65rem 0.5rem;
+        font-size: 0.82rem;
+    }
+
+    .properties-page .booking-empty {
+        min-height: 300px;
+        padding: 2.25rem 1.25rem;
+    }
+}
+
+/* Móviles estrechos */
+@media (max-width: 360px) {
+    .properties-page .property-actions {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .properties-page .property-actions .booking-btn {
+        width: 100%;
+    }
+}
+
+/* Reducir animaciones si el usuario lo prefiere */
+@media (prefers-reduced-motion: reduce) {
+
+    .properties-page .property-card,
+    .properties-page .booking-photo,
+    .properties-page .property-actions .booking-btn {
+        transition: none;
+    }
+
+    .properties-page .property-card:hover {
+        transform: none;
+    }
+
+    .properties-page .property-card:hover .booking-photo {
+        transform: none;
+    }
+}
