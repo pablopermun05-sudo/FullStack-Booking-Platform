@@ -449,7 +449,7 @@ class UserProfileViewTestCase(TestCase):
                 "first_name": "NombreActualizado",
                 "last_name": "ApellidosActualizados",
                 "email": "updated@example.com",
-                "phone_number": "",
+                "phone_number": "+34600070001",
             },
         )
 
@@ -471,7 +471,7 @@ class UserProfileViewTestCase(TestCase):
                 "first_name": "NombreNuevo",
                 "last_name": "ApellidosNuevos",
                 "email": "correo-no-valido",
-                "phone_number": "",
+                "phone_number": "+34600070002",
             },
         )
 
@@ -514,7 +514,7 @@ class UserProfileViewTestCase(TestCase):
                 "first_name": "NombreEditado",
                 "last_name": "ApellidosEditados",
                 "email": "edited@example.com",
-                "phone_number": "",
+                "phone_number": "+34600070003",
             },
         )
 
@@ -540,7 +540,7 @@ class UserProfileViewTestCase(TestCase):
                 "first_name": "NombreActualizado",
                 "last_name": self.user.last_name,
                 "email": self.user.email,
-                "phone_number": "",
+                "phone_number": "+34600070007",
             },
         )
 
@@ -5887,11 +5887,6 @@ class BookingChangeProposalModelTestCase(BookingTestBase):
 class BookingChangeProposalViewTestCase(BookingTestBase):
     def setUp(self):
         super().setUp()
-
-        OwnerProfile.objects.create(
-            user=self.owner,
-            status="APPROVED",
-        )
 
         self.booking1.initial_date = date.today() + timedelta(days=30)
         self.booking1.final_date = date.today() + timedelta(days=33)
