@@ -1890,6 +1890,11 @@ class BookingTestBase(TestCase):
             password="123",
             phone_number="+34600000044"
         )
+        
+        OwnerProfile.objects.create(
+            user=self.owner,
+            status="APPROVED",
+        )
 
         self.tenant = User.objects.create_user(
             username="tenant",
@@ -4589,6 +4594,11 @@ class BookingConcurrencyTestCase(TransactionTestCase):
             email="owner@test.com",
             password="123",
             phone_number="+34600000047"
+        )
+        
+        OwnerProfile.objects.create(
+            user=self.owner,
+            status="APPROVED",
         )
 
         self.tenant = User.objects.create_user(
@@ -7307,6 +7317,11 @@ class PropertySearchTestCase(TestCase):
             password="123",
             phone_number="+34600000050"
         )
+        
+        OwnerProfile.objects.create(
+            user=self.owner,
+            status="APPROVED",
+        )
 
         self.tenant = User.objects.create_user(
             username="tenant",
@@ -7320,6 +7335,11 @@ class PropertySearchTestCase(TestCase):
             email="other-owner@test.com",
             password="123",
             phone_number="+34600000051"
+        )
+        
+        OwnerProfile.objects.create(
+            user=self.other_owner,
+            status="APPROVED",
         )
 
         self.property = Property.objects.create(
@@ -7516,7 +7536,7 @@ class PropertyAvailabilityTestCase(TestCase):
             password="123",
             phone_number="+34600000052"
         )
-
+        
         OwnerProfile.objects.create(
             user=self.owner,
             status="APPROVED",
