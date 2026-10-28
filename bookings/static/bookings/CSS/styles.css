@@ -4604,6 +4604,815 @@ textarea.b-input {
     }
 }
 
+/* ==============================
+   FORMULARIOS COMPARTIDOS
+   Usuarios y viviendas
+   ============================== */
+
+/* Contenedor exterior */
+.form-page {
+    display: flex;
+    justify-content: center;
+    padding: 40px 15px;
+    background: transparent;
+}
+
+/* Tarjeta */
+.form-card {
+    width: 100%;
+    max-width: 520px;
+    align-self: flex-start;
+    margin-bottom: 30px;
+    overflow: hidden;
+    background: rgba(255, 253, 249, 0.97);
+    border: 1px solid rgba(255, 255, 255, 0.55);
+    border-radius: 16px;
+    box-shadow: 0 12px 35px rgba(0, 0, 0, 0.18);
+}
+
+/* Cabecera */
+.form-card-header {
+    padding: 30px 28px 24px;
+    text-align: center;
+    background: transparent;
+    border-bottom: 1px solid #e8e9e1;
+}
+
+.form-header-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 64px;
+    height: 64px;
+    margin: 0 auto 16px;
+    border-radius: 50%;
+    background: #e8eee5;
+    color: #627d60;
+    font-size: 29px;
+}
+
+.form-eyebrow {
+    display: block;
+    margin-bottom: 7px;
+    color: #718b70;
+    font-size: 0.76rem;
+    font-weight: 700;
+    letter-spacing: 1.8px;
+}
+
+.form-card-header h1 {
+    margin: 0 0 9px;
+    color: #303830;
+    font-size: 1.75rem;
+    font-weight: 700;
+}
+
+.form-card-header p {
+    margin: 0;
+    color: #747a72;
+    font-size: 0.95rem;
+    line-height: 1.6;
+}
+
+/* Cuerpo */
+.form-card-body {
+    padding: 26px 28px;
+    color: #343a35;
+}
+
+/* Etiquetas y campos */
+.form-card-body .form-label {
+    margin-bottom: 7px;
+    color: #41483f;
+    font-size: 0.92rem;
+    font-weight: 600;
+}
+
+.form-card-body .form-control,
+.form-card-body .form-select {
+    min-height: 44px;
+    border: 1px solid #d9ded5;
+    border-radius: 8px;
+    background-color: #fff;
+    color: #343a35;
+    box-shadow: none;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.form-card-body textarea.form-control {
+    min-height: 120px;
+    resize: vertical;
+}
+
+.form-card-body input[type="file"].form-control {
+    height: auto;
+    padding: 10px 12px;
+}
+
+.form-card-body .form-control:focus,
+.form-card-body .form-select:focus {
+    border-color: #8da58b;
+    box-shadow: 0 0 0 3px rgba(141, 165, 139, 0.18);
+}
+
+.form-card-body .form-check-input {
+    border-color: #bdc8b9;
+}
+
+.form-card-body .form-check-input:checked {
+    background-color: #718b70;
+    border-color: #718b70;
+}
+
+.form-card-body .form-check-input:focus {
+    border-color: #8da58b;
+    box-shadow: 0 0 0 3px rgba(141, 165, 139, 0.18);
+}
+
+.form-card-body .form-text,
+.form-card-body .helptext {
+    color: #777e75;
+    font-size: 0.82rem;
+}
+
+.form-card-body .invalid-feedback,
+.form-card-body .errorlist {
+    color: #b54747;
+    font-size: 0.85rem;
+}
+
+.form-card-body .errorlist {
+    padding-left: 18px;
+    margin-top: 5px;
+}
+
+/* Botón principal compartido */
+.form-card .primary-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    padding: 12px 18px;
+    border: 1px solid #718b70;
+    border-radius: 8px;
+    background-color: #718b70;
+    color: #fff;
+    font-size: 0.95rem;
+    font-weight: 600;
+    text-align: center;
+    text-decoration: none;
+    cursor: pointer;
+    transition:
+        background-color 0.2s ease,
+        border-color 0.2s ease,
+        transform 0.2s ease;
+}
+
+.form-card .primary-button:hover {
+    background-color: #5c755b;
+    border-color: #5c755b;
+    color: #fff;
+}
+
+.form-card .primary-button:focus-visible {
+    outline: 3px solid rgba(113, 139, 112, 0.3);
+    outline-offset: 3px;
+}
+
+/* Acciones compartidas */
+.form-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 12px;
+    margin-top: 22px;
+}
+
+.form-actions .primary-button {
+    width: auto;
+}
+
+/* Teléfono: específico del formulario de usuario */
+#user-profile-form .iti {
+    display: block;
+    width: 100%;
+}
+
+#user-profile-form .iti input[type="tel"] {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* ==============================
+   FORMULARIO DE USUARIOS
+   Estilos exclusivos
+   ============================== */
+
+/* Contenedor de opciones de cuenta */
+#user-profile-form .account-type-field {
+    min-width: 0;
+    margin: 0 0 1.5rem;
+    padding: 1.1rem;
+    border: 1px solid #dee2e6;
+    border-radius: 10px;
+    background: #fff;
+}
+
+#user-profile-form .account-type-label {
+    display: block;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    color: #212529;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+#user-profile-form .account-type-help {
+    margin: 0.35rem 0 1rem;
+    color: #6c757d;
+    font-size: 0.875rem;
+    line-height: 1.5;
+}
+
+#user-profile-form .account-type-options {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+}
+
+#user-profile-form .account-type-option {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.7rem;
+    min-width: 0;
+    padding: 1rem;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    background: #fff;
+    cursor: pointer;
+    transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+#user-profile-form .account-type-option:hover {
+    border-color: #adb5bd;
+    background: #f8f9fa;
+}
+
+#user-profile-form .account-type-option input[type="radio"] {
+    flex: 0 0 auto;
+    margin: 0.25rem 0 0;
+    accent-color: var(--bs-primary, #0d6efd);
+}
+
+#user-profile-form .account-type-option:has(input[type="radio"]:checked) {
+    border-color: var(--bs-primary, #0d6efd);
+    background: #f8f9fa;
+}
+
+#user-profile-form .account-type-option:has(input[type="radio"]:focus-visible) {
+    outline: 2px solid var(--bs-primary, #0d6efd);
+    outline-offset: 2px;
+}
+
+#user-profile-form .account-type-option-content {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    min-width: 0;
+}
+
+#user-profile-form .account-type-icon {
+    margin-bottom: 0.2rem;
+    color: #495057;
+    font-size: 1.25rem;
+}
+
+#user-profile-form .account-type-option-title {
+    color: #212529;
+    font-size: 0.95rem;
+    font-weight: 600;
+}
+
+#user-profile-form .account-type-option-description {
+    color: #6c757d;
+    font-size: 0.8rem;
+    line-height: 1.45;
+}
+
+/* Sección exclusiva de propietario */
+.owner-section {
+    margin-top: 28px;
+    padding-top: 24px;
+    border-top: 1px solid #e5e8df;
+}
+
+.owner-section-heading {
+    display: flex;
+    align-items: flex-start;
+    gap: 13px;
+    margin-bottom: 20px;
+}
+
+.owner-icon {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 43px;
+    height: 43px;
+    border-radius: 10px;
+    background: #e8eee5;
+    color: #627d60;
+    font-size: 21px;
+}
+
+.owner-section-heading h2 {
+    margin: 0 0 5px;
+    color: #343a35;
+    font-size: 1.12rem;
+    font-weight: 700;
+}
+
+.owner-section-heading p {
+    margin: 0;
+    color: #777e75;
+    font-size: 0.86rem;
+    line-height: 1.5;
+}
+
+.owner-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+    padding: 8px 12px;
+    border-radius: 7px;
+    font-size: 0.87rem;
+    font-weight: 600;
+}
+
+.status-pending {
+    background: #fff3d9;
+    color: #8a641d;
+}
+
+.status-approved {
+    background: #e3f1e4;
+    color: #386b40;
+}
+
+.status-inactive {
+    background: #eceeea;
+    color: #626960;
+}
+
+.owner-description {
+    margin: 0 0 18px;
+    color: #656c63;
+    font-size: 0.9rem;
+    line-height: 1.65;
+}
+
+.owner-submit {
+    margin-top: 3px;
+}
+
+/* Pie exclusivo del formulario de usuarios */
+.user-card-footer {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 6px;
+    margin-top: 25px;
+    padding-top: 19px;
+    border-top: 1px solid #e8e9e1;
+    color: #777e75;
+    font-size: 0.9rem;
+    text-align: center;
+}
+
+.user-card-footer a {
+    color: #5c755b;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.user-card-footer a:hover {
+    color: #405840;
+    text-decoration: underline;
+}
+
+/* ==============================
+   FORMULARIO DE VIVIENDAS
+   Ajustes exclusivos
+   ============================== */
+
+.property-page .form-card {
+    max-width: 560px;
+}
+
+.property-page .form-card-body > form > .mb-3,
+.property-page .form-card-body > form > .form-group {
+    margin-bottom: 1.25rem;
+}
+
+.property-page .form-actions {
+    margin-top: 28px;
+    padding-top: 22px;
+    border-top: 1px solid var(--bs-border-color);
+}
+
+.property-page .form-actions .primary-button,
+.property-page .form-actions .b-btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 46px;
+    padding: 12px 20px;
+    border-radius: 9px;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.property-page .form-actions .b-btn-secondary {
+    border: 1px solid #d9ded5;
+    background: #fff;
+    color: #43534a;
+}
+
+.property-page .form-actions .b-btn-secondary:hover {
+    background: #f5f8f5;
+}
+
+
+/* Filas personalizadas del formulario de vivienda */
+.property-page .property-fields-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0 20px;
+    align-items: start;
+}
+
+.property-page .property-fields-row > * {
+    min-width: 0;
+}
+
+.property-page .property-fields-row .mb-3,
+.property-page .property-fields-row .form-group {
+    margin-bottom: 1rem;
+}
+
+/* Precio por noche ocupa toda la fila */
+.property-page .property-fields-row.single-column {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+/* En móviles, las filas dobles pasan a una columna */
+@media (max-width: 600px) {
+    .property-page .property-fields-row {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 0;
+    }
+}
+
+/* ==============================
+   IMAGEN DE VIVIENDA
+   Diseño compacto + drag & drop
+   ============================== */
+
+.property-page .property-image-field {
+    margin-bottom: 1.5rem !important;
+}
+
+.property-page .property-image-upload {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+    margin-bottom: 1.25rem;
+}
+
+/* Vista previa compacta */
+.property-page .property-image-preview {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 10px 12px;
+    border: 1px solid #dfe6da;
+    border-radius: 10px;
+    background: #f8faf6;
+}
+
+.property-page .property-image-preview[hidden],
+.property-page .property-image-preview.d-none {
+    display: none !important;
+}
+
+.property-page .property-image-preview img {
+    display: block;
+    flex: 0 0 88px;
+    width: 88px;
+    height: 68px;
+    margin: 0;
+    border: 1px solid #e1e6dc;
+    border-radius: 7px;
+    object-fit: cover;
+}
+
+.property-page .property-image-preview-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.property-page .property-image-preview-title {
+    color: #343a35;
+    font-size: 0.88rem;
+    font-weight: 650;
+}
+
+.property-page .property-image-preview-help {
+    color: #777e75;
+    font-size: 0.8rem;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+}
+
+/* Selector de archivo compacto */
+.property-page .property-image-picker {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 13px 14px;
+    border: 1.5px dashed #b8c9b3;
+    border-radius: 10px;
+    background: #fbfcf9;
+    cursor: pointer;
+    transition: border-color 0.2s ease,
+                background-color 0.2s ease;
+}
+
+.property-page .property-image-picker:hover,
+.property-page .property-image-picker.is-dragover {
+    border-color: #718b70;
+    background: #f2f6ef;
+}
+
+.property-page .property-image-picker.is-dragover {
+    outline: 3px solid rgba(113, 139, 112, 0.14);
+    outline-offset: 2px;
+}
+
+.property-page .property-image-picker-icon {
+    display: flex;
+    flex: 0 0 38px;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    border-radius: 9px;
+    background: #e8eee5;
+    color: #627d60;
+    font-size: 1.25rem;
+}
+
+.property-page .property-image-picker-text {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+
+.property-page .property-image-picker-text strong {
+    color: #343a35;
+    font-size: 0.88rem;
+    font-weight: 650;
+}
+
+.property-page .property-image-picker-text > span {
+    color: #777e75;
+    font-size: 0.78rem;
+    line-height: 1.4;
+}
+
+.property-page .property-image-picker-button {
+    flex-shrink: 0;
+    padding: 7px 10px;
+    border: 1px solid #718b70;
+    border-radius: 7px;
+    background: #718b70;
+    color: #fff;
+    font-size: 0.8rem;
+    font-weight: 600;
+    transition: background-color 0.2s ease;
+}
+
+.property-page .property-image-picker:hover
+.property-image-picker-button {
+    background: #5c755b;
+}
+
+/* Input accesible, sin ocupar espacio visual */
+.property-page .property-image-input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+}
+
+.property-page .property-image-picker:focus-within {
+    outline: 3px solid rgba(113, 139, 112, 0.3);
+    outline-offset: 3px;
+}
+
+/* Errores de validación */
+.property-page .property-image-error {
+    margin: 5px 0 0;
+    color: #b42318;
+    font-size: 0.82rem;
+}
+
+@media (max-width: 576px) {
+    .property-page .property-image-picker {
+        flex-wrap: wrap;
+        padding: 14px;
+        gap: 10px;
+    }
+
+    .property-page .property-image-picker-button {
+        margin-left: 54px;
+    }
+
+    .property-page .property-image-preview img {
+        flex-basis: 88px;
+        width: 88px;
+        height: 76px;
+    }
+}
+
+/* ALLOW PETS */
+.property-page .form-card-body .form-check:has(
+    input[name="allow_pets"]
+) {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin: 0 0 20px;
+    padding: 12px 18px;
+    border: 1px solid #d9ded5;
+    border-radius: 10px;
+    background: #fff;
+    transition: border-color 0.2s ease,
+                background-color 0.2s ease;
+}
+
+.property-page .form-card-body .form-check:has(
+    input[name="allow_pets"]:checked
+) {
+    border-color: #8da58b;
+    background: #f5f8f3;
+}
+
+.property-page .form-card-body .form-check:has(
+    input[name="allow_pets"]
+) .form-check-label {
+    flex: 1;
+    margin: 0;
+    color: #41483f;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.property-page .form-card-body .form-check input[name="allow_pets"] {
+    float: none;
+    flex-shrink: 0;
+    width: 1.2rem;
+    height: 1.2rem;
+    margin: 0;
+    cursor: pointer;
+    accent-color: #718b70;
+}
+
+.property-page .form-card-body .form-check:has(
+    input[name="allow_pets"]:focus-visible
+) {
+    outline: 2px solid #8da58b;
+    outline-offset: 2px;
+}
+
+/* Alinear Pets con Rooms en pantallas grandes */
+.property-page .property-fields-row #div_id_allow_pets {
+    display: flex;
+    align-items: center;
+    margin-top: 29px;
+    margin-bottom: 0;
+}
+
+/* En tabletas y móviles, quitar el margen */
+@media (max-width: 600px) {
+    .property-page .property-fields-row #div_id_allow_pets {
+        margin-top: 0;
+    }
+}
+
+.property-page .property-fields-row #div_id_allow_pets .form-check {
+    display: flex;
+    align-items: center;
+    margin: 0;
+    min-height: auto;
+}
+
+.property-page .property-fields-row #div_id_allow_pets .form-check-input {
+    margin-top: 0;
+}
+
+/* Animación suave del icono de la nube */
+.property-page .booking-attachments-upload-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.25s ease;
+}
+
+.property-page .property-image-picker:hover
+.booking-attachments-upload-icon {
+    transform: translateY(-4px);
+}
+
+/* También funciona al arrastrar una imagen sobre la zona */
+.property-page .property-image-picker.is-dragover
+.booking-attachments-upload-icon {
+    transform: translateY(-4px);
+}
+
+/* Accesibilidad: respeta la preferencia de movimiento reducido */
+@media (prefers-reduced-motion: reduce) {
+    .property-page .booking-attachments-upload-icon {
+        transition: none;
+    }
+}
+
+/* ==============================
+   ADAPTACIÓN A MÓVILES
+   ============================== */
+
+@media (max-width: 576px) {
+    .form-page {
+        padding: 24px 10px;
+    }
+
+    .form-card {
+        border-radius: 12px;
+    }
+
+    .form-card-header {
+        padding: 25px 19px 20px;
+    }
+
+    .form-card-header h1 {
+        font-size: 1.5rem;
+    }
+
+    .form-card-body {
+        padding: 22px 19px;
+    }
+
+    #user-profile-form .account-type-options {
+        grid-template-columns: 1fr;
+    }
+
+    .owner-section-heading {
+        gap: 10px;
+    }
+
+    .owner-section-heading h2 {
+        font-size: 1.05rem;
+    }
+
+    .property-page .form-actions {
+        flex-direction: column-reverse;
+        align-items: stretch;
+    }
+
+    .property-page .form-actions .primary-button,
+    .property-page .form-actions .b-btn-secondary {
+        width: 100%;
+    }
+}
+
 @media (max-width: 760px) {
     .bookings-page {
         padding: 28px 14px 45px;
