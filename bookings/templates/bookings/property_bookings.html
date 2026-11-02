@@ -1,0 +1,272 @@
+{% extends "bookings/layout.html" %}
+
+{% block body %}
+
+<div class="container mt-4 mb-5 owner-bookings-page">
+
+    <div class="mt-3">
+        <h2 class="h2Views">Reservas de tu vivienda</h2>
+    </div>
+
+    <!-- Tarjeta de la vivienda -->
+    <div class="d-flex justify-content-center mt-4">
+        <div class="card owner-property-card w-100 mb-3">
+            <div class="row g-0">
+
+                <!-- Imagen a la izquierda -->
+                <div class="col-md-4 owner-property-image-column">
+                    {% if property.image %}
+                    <img src="{{ property.image.url }}" class="owner-property-image" alt="{{ property.title }}">
+                    {% else %}
+                    <div class="owner-property-no-image">
+                        <i class="bi bi-house-door"></i>
+                        <span>Foto no disponible</span>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <!-- Información de la vivienda -->
+                <div class="col-md-8">
+                    <div class="card-body owner-property-card-body">
+
+                        <h4 class="card-title fw-bold">
+                            {{ property.title|truncatechars:50 }}
+                        </h4>
+
+                        <p class="card-text owner-property-location">
+                            <i class="bi bi-geo-alt-fill text-danger"></i>
+                            <small>{{ property.location }}</small>
+                        </p>
+
+                        <p class="card-text owner-property-description">
+                            {{ property.description|truncatechars:160 }}
+                        </p>
+
+                        <hr>
+
+                        <!-- Filtros -->
+                        <div class="owner-booking-filter-area">
+
+                            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+                                <h5 class="fw-bold mb-0">Gestionar reservas</h5>
+
+                                <span class="owner-booking-total">
+                                    {{ filter_counts.ALL }} reserva(s)
+                                </span>
+                            </div>
+
+                            <nav class="owner-booking-filters" aria-label="Filtrar reservas">
+
+                                <a href="?status=ACTIVE"
+                                    class="owner-filter-chip {% if selected_status == 'ACTIVE' %}is-active{% endif %}"
+                                    {% if selected_status == 'ACTIVE' %}aria-current="page"{% endif %}>
+                                    Activas
+                                    <span>{{ filter_counts.ACTIVE }}</span>
+                                </a>
+
+                                <a href="?status=ALL"
+                                    class="owner-filter-chip {% if selected_status == 'ALL' %}is-active{% endif %}" 
+                                    {% if selected_status == 'ALL' %}aria-current="page" {% endif %}>
+                                    Todas
+                                    <span>{{ filter_counts.ALL }}</span>
+                                </a>
+
+                                <a href="?status=CANCELLED"
+                                    class="owner-filter-chip {% if selected_status == 'CANCELLED' %}is-active{% endif %}"
+                                    {% if selected_status == 'CANCELLED' %}aria-current="page" {% endif %}>
+                                    Canceladas
+                                    <span>{{ filter_counts.CANCELLED }}</span>
+                                </a>
+
+                                <a href="?status=EXPIRED"
+                                    class="owner-filter-chip {% if selected_status == 'EXPIRED' %}is-active{% endif %}"
+                                    {% if selected_status == 'EXPIRED' %}aria-current="page" {% endif %}>
+                                    Caducadas
+                                    <span>{{ filter_counts.EXPIRED }}</span>
+                                </a>
+
+                            </nav>
+
+                            <div class="owner-property-footer">
+                                <span>
+                                    {{ page_obj.paginator.count }} resultado(s)
+                                </span>
+
+                                <a href="{% url 'property_availability' property.id %}"
+                                    class="owner-availability-button">
+                                    <i class="bi bi-calendar3"></i>
+                                    Ver disponibilidad
+                                </a>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- Listado de reservas -->
+    <section class="owner-bookings-results mt-5">
+
+        <h3 class="owner-bookings-heading">Reservas</h3>
+
+        {% for booking in bookings %}
+
+        <article class="owner-booking-card">
+
+            <div class="owner-booking-main">
+                <div class="owner-booking-guest">
+
+                    <p class="owner-booking-tenant mt-1">
+                        Huésped:
+                        <i class="bi bi-person-fill"></i>
+                        {{ booking.tenant }}
+                    </p>
+                </div>
+
+                <span class="owner-booking-status
+                        {% if booking.status == 'PENDING' %}
+                            status-pending
+                        {% elif booking.status == 'CONFIRMED' %}
+                            status-confirmed
+                        {% elif booking.status == 'CANCELLED' %}
+                            status-cancelled
+                        {% elif booking.status == 'EXPIRED' %}
+                            status-expired
+                        {% endif %}">
+                    {{ booking.get_status_display }}
+                </span>
+            </div>
+
+            <div class="owner-booking-info">
+
+                <div class="owner-booking-detail">
+                    <span>Entrada</span>
+                    <strong>{{ booking.initial_date|date:"d M Y" }}</strong>
+                </div>
+
+                <div class="owner-booking-detail">
+                    <span>Salida</span>
+                    <strong>{{ booking.final_date|date:"d M Y" }}</strong>
+                </div>
+
+                <div class="owner-booking-detail">
+                    <span>Huéspedes</span>
+                    <strong>{{ booking.guest_count }}</strong>
+                </div>
+
+                <div class="owner-booking-detail owner-booking-price">
+                    <span>Precio total</span>
+                    <strong>{{ booking.calculated_total|floatformat:2 }} €</strong>
+                    <small>
+                        {{ booking.nights.count }}
+                        {% if booking.nights.count == 1 %}noche{% else %}noches{% endif %}
+                    </small>
+                </div>
+
+            </div>
+
+            {% if booking.status == "PENDING" or booking.status == "CONFIRMED" %}
+            <div class="owner-booking-actions">
+                <a href="{% url 'booking_change_form' booking.id %}" class="owner-booking-edit-button">
+                    <i class="bi bi-pencil-square"></i>
+                    Proponer cambio
+                </a>
+
+                <a href="{% url 'booking_cancellation_form' booking.id %}" class="owner-booking-edit-button">
+                    <i class="bi bi-calendar-x"></i>
+                    Solicitar cancelación
+                </a>
+
+                {% if request.user.is_authenticated and request.user.is_staff %}
+                <form method="post" action="{% url 'delete_booking' booking.id %}"
+                    onsubmit="return confirm('¿Eliminar definitivamente esta reserva? Esta acción no se puede deshacer.');"
+                    style="display: inline;">
+                    {% csrf_token %}
+                    <button type="submit" class="owner-booking-edit-button"
+                        style="background-color: #dc3545; color: white; border-color: #dc3545;">
+                        <i class="bi bi-trash"></i>
+                        Eliminar reserva
+                    </button>
+                </form>
+                {% endif %}
+            </div>
+            {% endif %}
+
+        </article>
+
+        {% empty %}
+
+        <div class="owner-booking-empty">
+            <i class="bi bi-calendar-x"></i>
+
+            {% if selected_status == "ACTIVE" %}
+            <h4>No hay reservas activas</h4>
+            <p>Las reservas pendientes y confirmadas aparecerán aquí.</p>
+            {% elif selected_status == "CANCELLED" %}
+            <h4>No hay reservas canceladas</h4>
+            <p>No hay reservas canceladas para esta vivienda.</p>
+            {% elif selected_status == "EXPIRED" %}
+            <h4>No hay reservas caducadas</h4>
+            <p>No hay reservas caducadas para esta vivienda.</p>
+            {% else %}
+            <h4>Aún no hay reservas</h4>
+            <p>Cuando alguien reserve esta vivienda, aparecerá aquí.</p>
+            {% endif %}
+
+            {% if selected_status != "ACTIVE" %}
+            <a href="?status=ACTIVE" class="owner-booking-edit-button">
+                Ver reservas activas
+            </a>
+            {% endif %}
+        </div>
+
+        {% endfor %}
+
+    </section>
+
+    <!-- Paginación -->
+    {% if page_obj.paginator.num_pages > 1 %}
+    <nav class="owner-booking-pagination" aria-label="Paginación de reservas">
+
+        {% if page_obj.has_previous %}
+        <a href="?status={{ selected_status }}&page={{ page_obj.previous_page_number }}">
+            ← Anterior
+        </a>
+        {% else %}
+        <span class="is-disabled">← Anterior</span>
+        {% endif %}
+
+        <div class="owner-pagination-numbers">
+            {% for num in page_obj.paginator.page_range %}
+
+            {% if page_obj.number == num %}
+            <span class="is-current" aria-current="page">{{ num }}</span>
+
+            {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %} <a
+                href="?status={{ selected_status }}&page={{ num }}">{{ num }}</a>
+                {% endif %}
+
+                {% endfor %}
+        </div>
+
+        {% if page_obj.has_next %}
+        <a href="?status={{ selected_status }}&page={{ page_obj.next_page_number }}">
+            Siguiente →
+        </a>
+        {% else %}
+        <span class="is-disabled">Siguiente →</span>
+        {% endif %}
+
+    </nav>
+
+    <p class="owner-pagination-caption">
+        Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}
+    </p>
+    {% endif %}
+
+</div>
+
+{% endblock %}

@@ -1,38 +1,280 @@
 {% extends "bookings/layout.html" %}
 {% load crispy_forms_tags %}
+{% load static %}
 
 {% block body %}
-<div class="d-flex justify-content-center mt-5">
-    <div class="card text-bg-light shadow-sm" style="width: 100%; max-width: 500px; margin-bottom: 30px;">
-        <div class="card-header text-center py-3">
-            {% if request.user.is_authenticated %}
-            <h2 class="mb-0">Editar Perfil</h2>
+<div class="form-page">
+    <div class="form-card">
+
+        <header class="form-card-header">
+            <div class="form-header-icon" aria-hidden="true">
+                {% if not request.user.is_authenticated %}
+                    <i class="bi bi-person-plus"></i>
+                {% elif editing_other_user %}
+                    <i class="bi bi-person-gear"></i>
+                {% else %}
+                    <i class="bi bi-person-circle"></i>
+                {% endif %}
+            </div>
+
+            {% if not request.user.is_authenticated %}
+                <span class="form-eyebrow">BIENVENIDO/A</span>
+                <h1>Crear una cuenta</h1>
+                <p>Regístrate para empezar a disfrutar de la plataforma.</p>
+
+            {% elif editing_other_user %}
+                <span class="form-eyebrow">ADMINISTRACIÓN</span>
+                <h1>Editar usuario</h1>
+                <p>Actualiza la información de la cuenta seleccionada.</p>
+
             {% else %}
-            <h2 class="mb-0">Registrarse</h2>
+                <span class="form-eyebrow">TU CUENTA</span>
+                <h1>Editar perfil</h1>
+                <p>Mantén tus datos personales actualizados.</p>
             {% endif %}
-        </div>
-        <div class="card-body p-4">
-            {% if request.user.is_authenticated %}
-            <form action="{% url 'edit_profile' %}" method="post">
-            {% else %}
-            <form action="{% url 'register' %}" method="post">
-            {% endif %}
+        </header>
+
+        <div class="form-card-body">
+            <form method="post" id="user-profile-form">
                 {% csrf_token %}
-                {{ form|crispy }}
-                <div class="d-grid gap-2 mb-3">
-                    {% if request.user.is_authenticated %}
-                    <button class="primary-button" type="submit" value="Edit">Confirmar</button>
+
+                {% for field in form %}
+                    {% if field.name == "phone_number" %}
+                        <div class="mb-3">
+                            <label for="guest-phone-local" class="form-label">
+                                {{ field.label }}
+                                {% if field.field.required %}
+                                    <span class="text-dark-emphasis">*</span>
+                                {% endif %}
+                            </label>
+
+                            <input
+                                type="tel"
+                                id="guest-phone-local"
+                                class="form-control{% if field.errors %} is-invalid{% endif %}"
+                                placeholder="612 345 678"
+                                autocomplete="tel"
+                                inputmode="tel"
+                                {% if field.field.required %}required{% endif %}
+                                aria-invalid="{% if field.errors %}true{% else %}false{% endif %}"
+                                {% if field.errors %}
+                                    aria-describedby="phone-number-errors"
+                                {% endif %}
+                            >
+
+                            <input
+                                type="hidden"
+                                id="guest-phone"
+                                name="{{ field.html_name }}"
+                                value="{{ field.value|default_if_none:'' }}"
+                            >
+
+                            {% if field.errors %}
+                                <div
+                                    id="phone-number-errors"
+                                    class="invalid-feedback d-block fw-bold"
+                                >
+                                    {% for error in field.errors %}
+                                        {{ error }}
+                                        {% if not forloop.last %}<br>{% endif %}
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+
+                    {% elif field.name == "account_type" %}
+                        <fieldset class="account-type-field mb-4">
+                            <legend class="account-type-label">
+                                {{ field.label }}
+                                {% if field.field.required %}
+                                    <span class="text-dark-emphasis">*</span>
+                                {% endif %}
+                            </legend>
+
+                            <p class="account-type-help">
+                                Elige el tipo de cuenta que mejor se adapte a ti.
+                            </p>
+
+                            <div class="account-type-options">
+                                {% for choice in field %}
+                                    <label
+                                        class="account-type-option"
+                                        for="{{ choice.id_for_label }}"
+                                    >
+                                        {{ choice.tag }}
+
+                                        <span class="account-type-option-content">
+                                            {% if choice.data.value == "customer" %}
+                                                <i
+                                                    class="bi bi-person-circle account-type-icon"
+                                                    aria-hidden="true"
+                                                ></i>
+                                                <span class="account-type-option-title">
+                                                    Huésped
+                                                </span>
+                                                <span class="account-type-option-description">
+                                                    Busca alojamientos y gestiona tus reservas.
+                                                </span>
+
+                                            {% elif choice.data.value == "owner" %}
+                                                <i
+                                                    class="bi bi-house-door account-type-icon"
+                                                    aria-hidden="true"
+                                                ></i>
+                                                <span class="account-type-option-title">
+                                                    Propietario
+                                                </span>
+                                                <span class="account-type-option-description">
+                                                    Gestiona tus alojamientos y disfruta también
+                                                    de las funcionalidades de huésped.
+                                                </span>
+
+                                            {% else %}
+                                                <span class="account-type-option-title">
+                                                    {{ choice.choice_label }}
+                                                </span>
+                                            {% endif %}
+                                        </span>
+                                    </label>
+                                {% endfor %}
+                            </div>
+
+                            {% if field.errors %}
+                                {% for error in field.errors %}
+                                    <p class="field-error">{{ error }}</p>
+                                {% endfor %}
+                            {% endif %}
+                        </fieldset>
+
                     {% else %}
-                    <button class="primary-button" type="submit" value="Register">Registrarse</button>
+                        {{ field|as_crispy_field }}
                     {% endif %}
+                {% endfor %}
+
+                <div class="form-actions">
+                    <button class="primary-button" type="submit">
+                        {% if not request.user.is_authenticated %}
+                            <i class="bi bi-person-plus me-2" aria-hidden="true"></i>
+                            Crear cuenta
+                        {% else %}
+                            <i class="bi bi-check-circle me-2" aria-hidden="true"></i>
+                            Guardar cambios
+                        {% endif %}
+                    </button>
                 </div>
             </form>
-            {% if not request.user.is_authenticated %}
-            <p class="text-center mb-0">
-                ¿Ya tienes cuenta? <a href="{% url 'login' %}">Inicia sesión aquí.</a>
-            </p>
+
+            {% if request.user.is_authenticated and not editing_other_user and not request.user.is_staff %}
+                <section class="owner-section">
+                    <div class="owner-section-heading">
+                        <div class="owner-icon" aria-hidden="true">
+                            <i class="bi bi-house-door"></i>
+                        </div>
+
+                        <div>
+                            <h2>Cuenta de propietario</h2>
+                            <p>
+                                Gestiona el acceso a las funcionalidades para propietarios.
+                            </p>
+                        </div>
+                    </div>
+
+                    {% if owner_profile %}
+                        {% if owner_profile.status == "PENDING" %}
+                            <div class="owner-status status-pending">
+                                <i class="bi bi-clock-history" aria-hidden="true"></i>
+                                <span>Solicitud pendiente</span>
+                            </div>
+
+                            <p class="owner-description">
+                                Tu solicitud está pendiente de revisión.
+                                Te notificaremos cuando el administrador tome una decisión.
+                            </p>
+
+                        {% elif owner_profile.status == "APPROVED" %}
+                            <div class="owner-status status-approved">
+                                <i class="bi bi-check-circle" aria-hidden="true"></i>
+                                <span>Propietario autorizado</span>
+                            </div>
+
+                            <p class="owner-description">
+                                Tienes permisos de propietario y puedes acceder
+                                a las funcionalidades correspondientes.
+                            </p>
+
+                        {% elif owner_profile.status == "REJECTED" %}
+                            <div class="owner-status status-inactive">
+                                <i class="bi bi-info-circle" aria-hidden="true"></i>
+                                <span>Solicitud no aprobada</span>
+                            </div>
+
+                            <p class="owner-description">
+                                Tu solicitud anterior no fue aprobada.
+                                Puedes enviar una nueva solicitud si lo deseas.
+                            </p>
+
+                        {% elif owner_profile.status == "REVOKED" %}
+                            <div class="owner-status status-inactive">
+                                <i class="bi bi-shield-exclamation" aria-hidden="true"></i>
+                                <span>Permisos retirados</span>
+                            </div>
+
+                            <p class="owner-description">
+                                Tus permisos de propietario han sido retirados.
+                                Puedes volver a solicitar el acceso.
+                            </p>
+                        {% endif %}
+
+                    {% else %}
+                        <p class="owner-description">
+                            ¿Quieres gestionar tus propias viviendas?
+                            Solicita permisos de propietario para acceder a estas funcionalidades.
+                        </p>
+                    {% endif %}
+
+                    {% if not owner_profile or owner_profile.status == "REJECTED" or owner_profile.status == "REVOKED" %}
+                        <form method="post" action="{% url 'request_owner_status' %}">
+                            {% csrf_token %}
+
+                            <button class="primary-button owner-submit" type="submit">
+                                <i
+                                    class="bi bi-arrow-right-circle me-2"
+                                    aria-hidden="true"
+                                ></i>
+
+                                {% if owner_profile %}
+                                    Volver a solicitar permisos
+                                {% else %}
+                                    Solicitar permisos de propietario
+                                {% endif %}
+                            </button>
+                        </form>
+                    {% endif %}
+                </section>
             {% endif %}
+
+            <footer class="user-card-footer">
+                {% if not request.user.is_authenticated %}
+                    <span>¿Ya tienes una cuenta?</span>
+                    <a href="{% url 'login' %}">Inicia sesión</a>
+
+                {% elif editing_other_user %}
+                    <a href="{% url 'manage_users' %}">
+                        <i class="bi bi-arrow-left me-1" aria-hidden="true"></i>
+                        Volver a gestión de usuarios
+                    </a>
+                {% endif %}
+            </footer>
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block script %}
+<link
+    rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/intl-tel-input@25/build/css/intlTelInput.css"
+>
+<script src="https://cdn.jsdelivr.net/npm/intl-tel-input@25/build/js/intlTelInput.min.js"></script>
+<script src="{% static 'bookings/booking_phone.js' %}"></script>
 {% endblock %}

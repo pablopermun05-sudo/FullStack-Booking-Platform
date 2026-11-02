@@ -1,0 +1,265 @@
+
+{% extends "bookings/layout.html" %}
+{% load static %}
+
+{% block body %}
+<div class="container pt-5 pb-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card shadow-sm">
+                <div class="card-header fondo text-white p-3">
+                    <h3 class="fw-bold mb-0">
+                        <i class="bi bi-calendar-x me-2"></i>
+                        Cancelar reserva
+                    </h3>
+                </div>
+
+                <div class="card-body p-3 p-lg-5">
+                    <div class="mb-4">
+                        <h4 class="fw-bold">{{ booking.property.title }}</h4>
+                        <p class="text-body-secondary mb-0">
+                            <i class="bi bi-geo-alt-fill text-danger me-1"></i>
+                            {{ booking.property.location }}
+                        </p>
+                    </div>
+
+                    <hr>
+
+                    <h5 class="fw-bold mb-3">Reserva actual</h5>
+
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-6">
+                            <div class="border rounded p-3 h-100">
+                                <small class="text-body-secondary d-block">
+                                    Fecha de entrada
+                                </small>
+                                <strong>{{ booking.initial_date|date:"d/m/Y" }}</strong>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="border rounded p-3 h-100">
+                                <small class="text-body-secondary d-block">
+                                    Fecha de salida
+                                </small>
+                                <strong>{{ booking.final_date|date:"d/m/Y" }}</strong>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="border rounded p-3 h-100">
+                                <small class="text-body-secondary d-block">
+                                    Número de huéspedes
+                                </small>
+                                <strong>{{ booking.guest_count }}</strong>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="border rounded p-3 h-100">
+                                <small class="text-body-secondary d-block">
+                                    Precio total de la reserva
+                                </small>
+                                <strong>{{ booking.total_price|floatformat:2 }} €</strong>
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr>
+
+                    <form
+                        id="booking-cancellation-form"
+                        method="post"
+                        enctype="multipart/form-data"
+                        data-proposal-url="{% url 'propose_booking_cancellation' booking.id %}"
+                        data-force-url="{% url 'force_booking_cancellation' booking.id %}"
+                    >
+                        {% csrf_token %}
+
+                        {% if request.user.is_staff %}
+                        <div class="mb-4">
+                            <h5 class="fw-bold mb-3">Modalidad de cancelación</h5>
+
+                            <div class="form-check mb-2">
+                                <input
+                                    class="form-check-input"
+                                    type="radio"
+                                    name="cancellation_mode"
+                                    id="mode-proposal"
+                                    value="proposal"
+                                    checked
+                                >
+                                <label class="form-check-label" for="mode-proposal">
+                                    Solicitar confirmación al cliente
+                                </label>
+                            </div>
+
+                            <div class="form-check">
+                                <input
+                                    class="form-check-input"
+                                    type="radio"
+                                    name="cancellation_mode"
+                                    id="mode-forced"
+                                    value="forced"
+                                >
+                                <label class="form-check-label" for="mode-forced">
+                                    Forzar la cancelación directamente
+                                </label>
+                            </div>
+                        </div>
+
+                        <div
+                            id="forced-cancellation-fields"
+                            class="border rounded p-3 mb-4 d-none"
+                        >
+                            <h5 class="fw-bold">Cancelación administrativa directa</h5>
+
+                            <div class="form-check">
+                                <input
+                                    class="form-check-input"
+                                    type="checkbox"
+                                    id="force-confirmation"
+                                    name="force_confirmation"
+                                >
+                                <label class="form-check-label" for="force-confirmation">
+                                    Confirmo que deseo cancelar la reserva sin
+                                    esperar la respuesta del cliente.
+                                </label>
+                            </div>
+                        </div>
+                        {% else %}
+                        <input
+                            type="hidden"
+                            name="cancellation_mode"
+                            value="proposal"
+                        >
+
+                        <h5 class="fw-bold mb-3">Propuesta de cancelación</h5>
+                        <p class="text-body-secondary mb-4">
+                            La cancelación se enviará al huésped para que
+                            pueda aceptarla o rechazarla.
+                        </p>
+                        {% endif %}
+
+                        <div class="mb-4">
+                            <label for="cancellation-reason" class="form-label fw-bold">
+                                Motivo de la cancelación
+                            </label>
+
+                            <textarea
+                                id="cancellation-reason"
+                                name="reason"
+                                class="form-control"
+                                rows="3"
+                                maxlength="1000"
+                                required
+                                placeholder="Explica por qué propones cancelar la reserva."
+                            ></textarea>
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">
+                                Documentación adjunta (opcional)
+                            </label>
+
+                            <div class="booking-attachments-field">
+                                <label
+                                    for="booking-attachments"
+                                    class="booking-attachments-label"
+                                >
+                                    <i
+                                        class="bi bi-file-earmark-text booking-attachment-icon"
+                                        aria-hidden="true"
+                                    ></i>
+                                    Documentos adjuntos
+                                </label>
+
+                                <p class="booking-attachments-help">
+                                    Añade documentos que ayuden a explicar
+                                    la cancelación. Máximo 5 archivos, hasta
+                                    10 MB cada uno.
+                                </p>
+
+                                <label
+                                    for="booking-attachments"
+                                    class="booking-attachments-dropzone"
+                                >
+                                    <span class="booking-attachments-upload-icon">
+                                        <i class="bi bi-cloud-arrow-up"
+                                           aria-hidden="true"></i>
+                                    </span>
+
+                                    <span class="booking-attachments-dropzone-title">
+                                        Haz clic para seleccionar archivos
+                                    </span>
+
+                                    <span class="booking-attachments-dropzone-description">
+                                        PDF, imágenes, documentos y hojas de cálculo
+                                    </span>
+
+                                    <span class="booking-attachments-browse">
+                                        Examinar archivos
+                                    </span>
+                                </label>
+
+                                <input
+                                    type="file"
+                                    id="booking-attachments"
+                                    name="attachments"
+                                    class="booking-attachments-input"
+                                    multiple
+                                    accept=".pdf,.jpg,.jpeg,.png,.webp,.docx,.xlsx,.pptx,.txt,.csv"
+                                >
+
+                                <div id="booking-attachments-list" aria-live="polite"></div>
+                            </div>
+
+                            <div class="form-text">
+                                Puedes adjuntar hasta 5 archivos. Máximo
+                                10 MB por archivo.
+                            </div>
+                        </div>
+
+                        <div
+                            id="booking-cancellation-message"
+                            class="alert d-none"
+                            role="alert"
+                            aria-live="polite"
+                        ></div>
+
+                        <div class="d-grid gap-2">
+                            <button
+                                type="submit"
+                                id="submit-cancellation"
+                                class="btn btn-dark rounded-pill py-2"
+                            >
+                                <i class="bi bi-send me-1"></i>
+                                <span id="submit-cancellation-text">
+                                    Enviar propuesta de cancelación
+                                </span>
+                            </button>
+
+                            <a
+                                href="{% url 'property_bookings' booking.property.id %}"
+                                class="btn btn-outline-secondary rounded-pill py-2"
+                            >
+                                Volver a las reservas
+                            </a>
+                        </div>
+
+                        <p class="text-body-secondary small mt-3 mb-0">
+                            Una propuesta no cancela automáticamente la reserva.
+                            La cancelación forzada, disponible únicamente para
+                            administradores, se ejecuta inmediatamente.
+                        </p>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block script %}
+<script src="{% static 'bookings/booking_cancellation.js' %}"></script>
+{% endblock %}

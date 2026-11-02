@@ -40,6 +40,76 @@ let blockedDates = [];
 let minStayUnavailableDates = [];
 let maxCheckoutDate = null;
 
+function showDateAlert(message) {
+    const alertBox = document.getElementById('alert-booking-date');
+
+    if (!alertBox) {
+        console.warn('No se encuentra #alert-booking-date');
+        return;
+    }
+
+    alertBox.textContent = message;
+    alertBox.classList.remove('no-display', 'd-none');
+}
+
+function hideDateAlert() {
+    const alertBox = document.getElementById('alert-booking-date');
+
+    if (alertBox) {
+        alertBox.classList.add('no-display');
+    }
+}
+
+function clearCurrentBookingSelection() {
+    const changeForm = document.getElementById('booking-change-form');
+
+    if (changeForm) {
+        document.getElementById('start-date').value = '';
+        document.getElementById('end-date').value = '';
+        document.getElementById('proposed-initial-date').value = '';
+        document.getElementById('proposed-final-date').value = '';
+
+        resetProposedBookingPrice();
+    } else if (typeof window.clearBookingSelection === 'function') {
+        window.clearBookingSelection();
+    }
+}
+
+function resetProposedBookingPrice() {
+    const changeForm = document.getElementById('booking-change-form');
+
+    // No modificar el flujo de las reservas nuevas.
+    if (!changeForm) {
+        return;
+    }
+
+    const totalLabel = document.getElementById('proposed-total-price-label');
+    const totalElement = document.getElementById('proposed-total-price');
+    const priceBreakdown = document.getElementById('price-breakdown');
+    const priceContainer = document.getElementById('proposed-price-container');
+    const priceCard = document.getElementById('proposed-price');
+
+    if (totalLabel) {
+        totalLabel.textContent = '-';
+    }
+
+    if (totalElement) {
+        totalElement.textContent = '';
+    }
+
+    if (priceBreakdown) {
+        priceBreakdown.replaceChildren();
+    }
+
+    if (priceContainer) {
+        priceContainer.classList.add('d-none');
+    }
+
+    if (priceCard) {
+        priceCard.classList.remove('show');
+    }
+}
+
 function getPreviousDate(dateStr) {
     const date = new Date(`${dateStr}T00:00:00`);
     date.setDate(date.getDate() - 1);
@@ -56,6 +126,141 @@ function isClosed(dateStr) {
 
 function isAvailableNight(dateStr) {
     return !isBooked(dateStr) && !isClosed(dateStr);
+}
+
+function updateProposedBookingPrice(startStr, endStr) {
+    // Limitar los cambios a la modificación de reservas.
+    const changeForm = document.getElementById('booking-change-form');
+
+    if (!changeForm) {
+        return;
+    }
+
+    const totalLabel = document.getElementById('proposed-total-price-label');
+    const totalElement = document.getElementById('proposed-total-price');
+    const priceBreakdown = document.getElementById('price-breakdown');
+    const priceContainer = document.getElementById('proposed-price-container');
+    const priceCard = document.getElementById('proposed-price');
+
+    if (!totalElement || !priceBreakdown || !priceContainer) {
+        return;
+    }
+
+    // Restablecer la cotización antes de calcular un nuevo rango.
+    priceContainer.classList.add('d-none');
+
+    if (totalLabel) {
+        totalLabel.textContent = '-';
+    }
+
+    totalElement.textContent = '';
+    priceBreakdown.replaceChildren();
+
+    if (priceCard) {
+        priceCard.classList.remove('show');
+    }
+
+    // Si no hay un rango completo, no mostrar la cotización.
+    if (!startStr || !endStr) {
+        return;
+    }
+
+    const currentDate = new Date(`${startStr}T00:00:00`);
+    const checkoutDate = new Date(`${endStr}T00:00:00`);
+
+    if (
+        Number.isNaN(currentDate.getTime()) ||
+        Number.isNaN(checkoutDate.getTime()) ||
+        currentDate >= checkoutDate
+    ) {
+        return;
+    }
+
+    // Generar fechas YYYY-MM-DD independientemente del idioma del navegador.
+    function formatDateKey(date) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+
+        return `${year}-${month}-${day}`;
+    }
+
+    const nights = [];
+    let total = 0;
+
+    // La entrada se incluye y la salida se excluye.
+    while (currentDate < checkoutDate) {
+        const dateStr = formatDateKey(currentDate);
+        const nightData = availabilityData[dateStr];
+
+        if (
+            !nightData ||
+            nightData.pricePerNight == null ||
+            !Number.isFinite(Number(nightData.pricePerNight))
+        ) {
+            console.error('No se ha encontrado el precio de una noche:', {
+                fecha: dateStr,
+                datosEncontrados: nightData
+            });
+
+            return;
+        }
+
+        const nightlyPrice = Number(nightData.pricePerNight);
+
+        nights.push({
+            date: dateStr,
+            price: nightlyPrice
+        });
+
+        total += nightlyPrice;
+        currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    // Crear el desglose por noche.
+    const fragment = document.createDocumentFragment();
+
+    nights.forEach(night => {
+        const [year, month, day] = night.date.split('-');
+        const row = document.createElement('div');
+
+        row.className = 'd-flex justify-content-between align-items-center mb-2';
+
+        const dateLabel = document.createElement('span');
+        dateLabel.textContent = `Noche del ${day}/${month}/${year}`;
+
+        const priceLabel = document.createElement('span');
+        priceLabel.textContent = `${night.price.toLocaleString('es-ES', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        })} €`;
+
+        row.append(dateLabel, priceLabel);
+        fragment.appendChild(row);
+    });
+
+    priceBreakdown.appendChild(fragment);
+
+    const formattedTotal = `${total.toLocaleString('es-ES', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    })} €`;
+
+    totalElement.textContent = formattedTotal;
+
+    if (totalLabel) {
+        totalLabel.textContent = formattedTotal;
+    }
+
+    // Mostrar la cotización únicamente tras un cálculo correcto.
+    priceContainer.classList.remove('d-none');
+
+    console.log('Cotización calculada:', {
+        entrada: startStr,
+        salida: endStr,
+        noches: nights.length,
+        total
+    });
 }
 
 const minBookingDate = new Date();
@@ -232,7 +437,7 @@ function initializePicker() {
                     alertBox.classList.remove('no-display');
 
                     picker.clearSelection();
-                    window.clearBookingSelection();
+                    clearCurrentBookingSelection();
                     return;
                 }
 
@@ -245,24 +450,34 @@ function initializePicker() {
                     alertBox.classList.remove('no-display');
 
                     picker.clearSelection();
-                    window.clearBookingSelection();
+                    clearCurrentBookingSelection();
                     return;
                 }
 
                 if (checkoutOnlyDates.includes(startStr)) {
                     picker.clearSelection();
-                    window.clearBookingSelection();
+                    clearCurrentBookingSelection();
                     return;
                 }
 
                 if (minStayUnavailableDates.includes(startStr)) {
-                    const minNights = availabilityData[startStr]?.minNights || defaultMinNights;
+                    const minNights =
+                        availabilityData[startStr]?.minNights || defaultMinNights;
 
                     picker.clearSelection();
-                    window.clearBookingSelection();
 
-                    alertBox.textContent = `Estancia mínima de ${minNights} noches.`;
-                    alertBox.classList.remove('no-display');
+                    clearCurrentBookingSelection();
+
+                    if (typeof showDateAlert === 'function') {
+                        showDateAlert(`Estancia mínima de ${minNights} noches.`);
+                    } else {
+                        const alertBox = document.getElementById('alert-booking-date');
+
+                        if (alertBox) {
+                            alertBox.textContent = `Estancia mínima de ${minNights} noches.`;
+                            alertBox.classList.remove('no-display', 'd-none');
+                        }
+                    }
 
                     return;
                 }
@@ -320,20 +535,32 @@ function initializePicker() {
                         // Guardamos el día que estaba seleccionado
                         const selectedDate = date.toJSDate();
 
-                        // Cancelar la selección y limpiar el estado de reserva
-                        picker.clearSelection();
-                        window.clearBookingSelection();
-
+                        // Restablecer primero las restricciones del calendario
                         maxCheckoutDate = null;
+                        selectedMinNights = defaultMinNights;
 
                         picker.setOptions({
                             maxDate: null
                         });
 
-                        // Restaurar la estancia mínima por defecto
-                        selectedMinNights = defaultMinNights;
+                        picker.clearSelection();
 
-                        // Volver al mes donde estaba el usuario
+                        // Restablecer la cotización al deseleccionar las fechas.
+                        resetProposedBookingPrice();
+
+                        picker.gotoDate(selectedDate);
+
+                        // Limpiar los campos según el formulario actual
+                        if (document.getElementById('booking-change-form')) {
+                            document.getElementById('start-date').value = '';
+                            document.getElementById('end-date').value = '';
+                            document.getElementById('proposed-initial-date').value = '';
+                            document.getElementById('proposed-final-date').value = '';
+                        } else if (typeof window.clearBookingSelection === 'function') {
+                            clearCurrentBookingSelection();
+                        }
+
+                        // Mantener el calendario en el mes actual
                         picker.gotoDate(selectedDate);
                     });
                 }
@@ -378,26 +605,27 @@ function initializePicker() {
                 dayDate.setHours(0, 0, 0, 0);
 
                 if (dayDate < today) {
-                    dayElement.addEventListener('click', () => {
-                        const alertBox = document.getElementById('alert-booking-date');
+                    dayElement.addEventListener('click', (event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
 
                         picker.clearSelection();
-                        window.clearBookingSelection();
-
-                        alertBox.textContent = 'Fecha pasada.';
-                        alertBox.classList.remove('no-display');
+                        clearCurrentBookingSelection();
+                        showDateAlert('Fecha pasada.');
                     });
                 } else if (dayDate < minBookingDate) {
-                    dayElement.addEventListener('click', () => {
-                        const alertBox = document.getElementById('alert-booking-date');
+                    dayElement.addEventListener('click', (event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+
                         const dayText = noticePeriodDays === 1 ? 'día' : 'días';
 
                         picker.clearSelection();
-                        window.clearBookingSelection();
+                        clearCurrentBookingSelection();
 
-                        alertBox.textContent =
-                            `Debes reservar con al menos ${noticePeriodDays} ${dayText} de antelación.`;
-                        alertBox.classList.remove('no-display');
+                        showDateAlert(
+                            `Debes reservar con al menos ${noticePeriodDays} ${dayText} de antelación.`
+                        );
                     });
                 }
             });
@@ -422,7 +650,7 @@ function initializePicker() {
                             'El rango seleccionado contiene una noche no disponible.';
                         alertBox.classList.remove('no-display');
                         picker.clearSelection();
-                        window.clearBookingSelection();
+                        clearCurrentBookingSelection();
                         return;
                     }
 
@@ -437,7 +665,7 @@ function initializePicker() {
                         'La combinación de fechas no es válida: revisa el día marcado en rojo en diagonal.';
                     alertBox.classList.remove('no-display');
                     picker.clearSelection();
-                    window.clearBookingSelection();
+                    clearCurrentBookingSelection();
                     return;
                 }
 
@@ -455,7 +683,18 @@ function initializePicker() {
                 startInput.value = startStr;
                 endInput.value = endStr;
 
-                window.validateBooking();
+                const changeForm = document.getElementById('booking-change-form');
+
+                if (changeForm) {
+                    document.getElementById('proposed-initial-date').value = startStr;
+                    document.getElementById('proposed-final-date').value = endStr;
+
+                    updateProposedBookingPrice(startStr, endStr);
+
+                    changeForm.dispatchEvent(new Event('bookingDatesChanged'));
+                } else if (typeof window.validateBooking === 'function') {
+                    window.validateBooking();
+                }
             });
         }
     });

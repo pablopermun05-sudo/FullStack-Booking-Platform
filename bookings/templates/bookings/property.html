@@ -24,16 +24,12 @@
         </div>
         <div class="col-lg-4">
         {% if request.user != property.owner %}
-            <div class="card booking-card mb-4">
+            <div class="card booking-card mb-4" id="card-estancia">
                 <div class="card-header bg-warning fs-5 fw-bold text-white text-center">
                     <i class="bi bi-calendar-check me-1"></i>
                     Selecciona tu estancia
                 </div>
-
                 <div class="card-body">
-
-                    {% if user.is_authenticated %}
-
                         <div
                             class="alert alert-danger mb-0 no-display"
                             id="alert-booking-date"
@@ -54,41 +50,58 @@
                         <input type="hidden" id="start-date">
                         <input type="hidden" id="end-date">
 
+                        {% if not request.user.is_authenticated %}
+                            <div id="guest-data-form" class="no-display mt-3">
+                                <div class="mb-3">
+                                    <label for="guest-first-name" class="form-label">
+                                        Nombre
+                                    </label>
+                                    <input
+                                        type="text"
+                                        id="guest-first-name"
+                                        class="form-control"
+                                        maxlength="150"
+                                        autocomplete="given-name"
+                                    >
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="guest-last-name" class="form-label">
+                                        Apellidos
+                                    </label>
+                                    <input
+                                        type="text"
+                                        id="guest-last-name"
+                                        class="form-control"
+                                        maxlength="150"
+                                        autocomplete="family-name"
+                                    >
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="guest-email" class="form-label">
+                                        Email
+                                    </label>
+                                    <input
+                                        type="email"
+                                        id="guest-email"
+                                        class="form-control"
+                                        maxlength="254"
+                                        autocomplete="email"
+                                    >
+                                </div>
+                            </div>
+                        {% endif %}
+
                         <div class="mb-0 {% if not request.GET.initial_date or not request.GET.final_date %}no-display{% endif %}" id="booking-button">
                         {% if request.GET.initial_date and request.GET.final_date %}
                             <button
                                 id="confirm-booking-button"
                                 class="btn btn-dark w-100 rounded-pill mt-3 mb-3 py-2">
-                                Confirmar Reserva
+                                Crear Reserva
                             </button>
                         {% endif %}
                         </div>
-
-                    {% else %}
-
-                        <div class="text-center">
-                            <i class="bi bi-person-lock fs-1"></i>
-
-                            <div class="py-3">
-                                <h6 class="fw-bold fs-5">
-                                    Inicia sesión para reservar
-                                </h6>
-
-                                <p class="text-secondary fw-light small">
-                                    Necesitas una cuenta para completar el proceso.
-                                </p>
-                            </div>
-
-                            <a
-                                href="{% url 'login' %}"
-                                class="primary-button d-block w-100 mb-3"
-                                id="login-button">
-                                Iniciar Sesión
-                            </a>
-                        </div>
-
-                    {% endif %}
-
                 </div>
             </div>
         {% endif %}
@@ -153,7 +166,7 @@
 {% block script %}
 {% if request.user != property.owner %}
 <script src="https://cdn.jsdelivr.net/npm/litepicker/dist/litepicker.js"></script>
-<script src="{% static 'bookings/property.js' %}"></script>
+<script src="{% static 'bookings/booking_calendar.js' %}"></script>
 <script src="{% static 'bookings/booking.js' %}"></script>
 {% endif %}
 {% endblock %}

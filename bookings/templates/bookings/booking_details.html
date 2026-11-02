@@ -1,0 +1,521 @@
+{% extends "bookings/layout.html" %}
+{% load static %}
+
+{% block title %}Completar reserva | Alojamiento Vacacional{% endblock %}
+
+{% block body %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/intl-tel-input@25/build/css/intlTelInput.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flag-icons@7.5.0/css/flag-icons.min.css">
+
+<div class="container booking-checkout-wrapper">
+
+    <!-- Progreso -->
+    <div class="b-stepper" aria-label="Progreso de la reserva">
+        <div class="b-step completed">
+            <span class="b-step-badge" aria-label="Completado">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                    <path d="M13.5 4.5L6.5 11.5L2.5 7.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"
+                        stroke-linejoin="round" />
+                </svg>
+            </span>
+            <span>Tu selección</span>
+        </div>
+
+        <div class="b-step-divider"></div>
+
+        <div class="b-step active" aria-current="step">
+            <span class="b-step-badge">2</span>
+            <span>Tus datos</span>
+        </div>
+
+        <div class="b-step-divider"></div>
+
+        <div class="b-step inactive">
+            <span class="b-step-badge">3</span>
+            <span>Terminar reserva</span>
+        </div>
+    </div>
+
+    <div class="row g-4 align-items-start">
+
+        <!-- COLUMNA IZQUIERDA -->
+        <div class="col-lg-4">
+
+            <!-- Alojamiento -->
+            <div class="b-card mb-3">
+                {% if property.image %}
+                <img src="{{ property.image.url }}" alt="{{ property.title }}" class="b-property-image">
+                {% endif %}
+
+                <div class="p-3">
+
+                    <h1 class="fw-bold mb-2" style="font-size: 1.12rem; letter-spacing: -.03em;">
+                        {{ property.title }}
+                    </h1>
+
+                    <p class="b-property-location">
+                        <i class="bi bi-geo-alt me-1" aria-hidden="true"></i>
+                        {{ property.location }}
+                    </p>
+
+                    <div class="b-property-highlight">
+                        <i class="bi bi-check-circle me-1" aria-hidden="true"></i>
+                        Excelente ubicación
+                    </div>
+
+                    <div class="b-property-capacity">
+                        <span>
+                            <i class="bi bi-door-open me-1" aria-hidden="true"></i>
+                            {% if property.rooms == 1 %}
+                            1 habitación
+                            {% else %}
+                            {{ property.rooms }} habitaciones
+                            {% endif %}
+                        </span>
+                        <span aria-hidden="true">·</span>
+                        <span>
+                            <i class="bi bi-people me-1" aria-hidden="true"></i>
+                            Capacidad máx. {{ max_guests }} personas
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Fechas -->
+            <div class="b-card p-3 mb-3">
+                <h2 class="b-sidebar-title">
+                    <i class="bi bi-calendar3 me-2" style="color: var(--b-blue);" aria-hidden="true"></i>
+                    Los datos de tu reserva
+                </h2>
+
+                <div class="row g-0 pb-3 mb-3 border-bottom">
+                    <div class="col-6 pe-2 border-end">
+                        <div class="small text-secondary mb-1">Entrada</div>
+                        <div class="fw-bold booking-date">
+                            {{ start_date|date:"D, j M Y"|default:initial_date }}
+                        </div>
+                        <div class="small text-secondary mt-1">Desde las 15:00</div>
+                    </div>
+
+                    <div class="col-6 ps-3">
+                        <div class="small text-secondary mb-1">Salida</div>
+                        <div class="fw-bold booking-date">
+                            {{ end_date|date:"D, j M Y"|default:final_date }}
+                        </div>
+                        <div class="small text-secondary mt-1">Hasta las 11:00</div>
+                    </div>
+
+                    <div class="col-12 mt-3">
+                        <div class="flexibility-note">
+                            <span class="flexibility-icon">✦</span>
+                            <span>
+                                <strong>¿Necesitas flexibilidad?</strong>
+                                <span class="d-block flexibility-text">
+                                    Seremos flexibles siempre que sea posible.
+                                </span>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-3 pb-3 border-bottom">
+                    <div class="small text-secondary">
+                        Duración de la estancia
+                    </div>
+                    <div class="fw-bold small mt-2">
+                        <i class="bi bi-moon me-1" style="color: var(--b-blue);" aria-hidden="true"></i>
+                        {{ total_nights }}
+                        noche{% if total_nights != 1 %}s{% endif %}
+                    </div>
+                </div>
+
+                <div>
+                    <a href="{% url 'property' property.id %}" class="b-link-action">
+                        <i class="bi bi-pencil me-1" aria-hidden="true"></i>
+                        Cambiar selección
+                    </a>
+                </div>
+            </div>
+
+            <!-- Precio -->
+            <div class="b-card p-3 mb-3">
+                <h2 class="b-sidebar-title">
+                    <i class="bi bi-receipt me-2" style="color: var(--b-blue);" aria-hidden="true"></i>
+                    Desglose del precio
+                </h2>
+
+                <div class="b-price-banner my-2">
+                    <div class="d-flex justify-content-between align-items-baseline gap-2">
+                        <span class="fw-bold" style="font-size: 1.05rem;">Total</span>
+                        <span class="b-price-total">
+                            {{ total_price|floatformat:2 }} €
+                        </span>
+                    </div>
+                    <div class="b-price-caption">
+                        Precio total de la estancia
+                    </div>
+                </div>
+
+                <div class="pt-3">
+                    <div class="fw-bold small mb-3">Información sobre el precio</div>
+
+                    <div class="d-flex justify-content-between align-items-center gap-3 small mb-2 text-secondary">
+                        <span>Duración</span>
+                        <span class="text-end">
+                            {{ total_nights }} noche{% if total_nights != 1 %}s{% endif %}
+                        </span>
+                    </div>
+
+                    <div class="d-flex justify-content-between align-items-center gap-3 small text-secondary">
+                        <span>IVA incluido (10%)</span>
+                        <span class="text-end">{{ included_vat|floatformat:2 }} €</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Retención -->
+            <div class="b-card-Alert mb-3">
+                <div class="d-flex gap-3 align-items-start">
+                    <div class="flex-shrink-0 mt-1" style="color: #b45309;">
+                        <i class="bi bi-clock-history" style="font-size: 1.25rem;" aria-hidden="true"></i>
+                    </div>
+                    <div>
+                        <div class="b-alert-title">
+                            Disponibilidad bloqueada temporalmente
+                        </div>
+                        <div class="b-alert-description">
+                            Completa tus datos antes de que expire la retención para mantener estas fechas.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- COLUMNA DERECHA -->
+        <div class="col-lg-8">
+
+            <form id="booking-details-form" data-create-url="{% url 'create_booking' property.id %}"
+                data-release-url="{% url 'release_booking_hold' property.id %}"
+                data-cancel-url="{% url 'property' property.id %}">
+                {% csrf_token %}
+
+                <input type="hidden" name="start" value="{{ initial_date }}">
+                <input type="hidden" name="end" value="{{ final_date }}">
+                <input type="hidden" id="booking-hold-token" value="{{ hold_token }}">
+
+                <!-- Datos principales -->
+                <div class="b-card p-4 mb-3">
+                    <h2 class="b-section-title">Introduce tus datos</h2>
+
+                    <div class="b-info-strip mb-4">
+                        <i class="bi bi-shield-check flex-shrink-0" style="font-size: 1.15rem; color: var(--b-blue);"
+                            aria-hidden="true"></i>
+                        <span>
+                            ¡Ya casi estás! Completa los campos marcados con
+                            <span class="text-danger fw-bold">*</span>.
+                            Tus datos se utilizarán para gestionar la reserva.
+                        </span>
+                    </div>
+
+                    <div class="row g-3">
+
+                        <div class="col-md-6">
+                            <label for="guest-first-name" class="b-label">
+                                Nombre <span class="text-danger">*</span>
+                            </label>
+                            <input id="guest-first-name" name="guest_first_name" class="form-control b-input"
+                                maxlength="150" autocomplete="given-name"
+                                value="{{ request.user.first_name|default:'' }}" required>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label for="guest-last-name" class="b-label">
+                                Apellidos <span class="text-danger">*</span>
+                            </label>
+                            <input id="guest-last-name" name="guest_last_name" class="form-control b-input"
+                                maxlength="150" autocomplete="family-name"
+                                value="{{ request.user.last_name|default:'' }}" required>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label for="guest-email" class="b-label">
+                                Correo electrónico <span class="text-danger">*</span>
+                            </label>
+                            <input id="guest-email" name="guest_email" type="email" class="form-control b-input"
+                                autocomplete="email" value="{{ request.user.email|default:'' }}" required>
+                            <div class="small mt-2" style="color: var(--b-green); font-size: .78rem;">
+                                <i class="bi bi-envelope-check me-1" aria-hidden="true"></i>
+                                Recibirás la confirmación en esta dirección
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label for="guest-count" class="b-label">
+                                Número de huéspedes <span class="text-danger">*</span>
+                            </label>
+                            <input id="guest-count" name="guest_count" type="number" class="form-control b-input"
+                                min="1" max="{{ max_guests|default:10 }}" value="1" required>
+                            <div class="small mt-2 text-secondary" style="font-size: .78rem;">
+                                Máximo permitido: {{ max_guests }} personas
+                            </div>
+                        </div>
+
+                        <!-- País de residencia -->
+                        <div class="col-md-6">
+                            <label for="guest-residence-country" class="b-label">
+                                País de residencia
+                                <span class="text-danger">*</span>
+                            </label>
+
+                            <select id="guest-residence-country" name="guest_country" class="form-control b-input"
+                                required>
+                                <option value="ES" selected>España</option>
+                            </select>
+
+                            <small class="b-phone-help">
+                                Selecciona tu país de residencia habitual.
+                            </small>
+                        </div>
+
+                        <!-- Teléfono -->
+                        <div class="col-md-6">
+                            <label for="guest-phone-local" class="b-label">
+                                Teléfono de contacto
+                                <span class="text-danger">*</span>
+                            </label>
+
+                            <input type="tel" id="guest-phone-local" class="form-control b-input"
+                                placeholder="612 345 678" autocomplete="tel" inputmode="tel" required>
+
+                            <input type="hidden" id="guest-phone" name="guest_phone_number">
+
+                            <small class="b-phone-help">
+                                Elige el prefijo correspondiente a tu teléfono.
+                            </small>
+                        </div>
+                        <!-- Dirección -->
+                        <div class="col-md-8">
+                            <label for="guest-address" class="b-label">
+                                Dirección <span class="text-danger">*</span>
+                            </label>
+                            <input id="guest-address" name="guest_address" class="form-control b-input" maxlength="255"
+                                placeholder="Calle, número, piso..." autocomplete="street-address" required>
+                        </div>
+
+                        <div class="col-md-4">
+                            <label for="guest-city" class="b-label">
+                                Ciudad <span class="text-danger">*</span>
+                            </label>
+                            <input id="guest-city" name="guest_city" class="form-control b-input" maxlength="100"
+                                autocomplete="address-level2" required>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label for="guest-region" class="b-label">
+                                Región o provincia
+                                <span class="text-muted fw-normal">(opcional)</span>
+                            </label>
+                            <input id="guest-region" name="guest_region" class="form-control b-input" maxlength="100"
+                                autocomplete="address-level1">
+                        </div>
+
+                        <div class="col-md-6">
+                            <label for="guest-postal-code" class="b-label">
+                                Código postal
+                                <span class="text-muted fw-normal">(opcional)</span>
+                            </label>
+                            <input id="guest-postal-code" name="guest_postal_code" class="form-control b-input"
+                                maxlength="20" autocomplete="postal-code">
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+
+                    <!-- Para quién es -->
+                    <div class="mb-4">
+                        <div class="b-label mb-3">
+                            ¿Para quién es esta reserva?
+                            <span class="text-muted fw-normal">(opcional)</span>
+                        </div>
+
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="for_whom_ui" id="for-self-radio"
+                                value="self" checked>
+                            <label class="form-check-label" for="for-self-radio">
+                                La reserva es para mí
+                            </label>
+                        </div>
+
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="for_whom_ui" id="for-other-radio"
+                                value="other">
+                            <label class="form-check-label" for="for-other-radio">
+                                La reserva es para otra persona
+                            </label>
+                        </div>
+
+                        <input id="is-for-self" name="is_for_self" type="checkbox" class="d-none" checked>
+                    </div>
+
+                    <!-- Viaje de trabajo -->
+                    <div>
+                        <div class="b-label mb-3">
+                            ¿Viajas por trabajo?
+                            <span class="text-muted fw-normal">(opcional)</span>
+                        </div>
+
+                        <div class="d-flex gap-4">
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="business_trip_ui"
+                                    id="business-yes-radio" value="yes">
+                                <label class="form-check-label" for="business-yes-radio">Sí</label>
+                            </div>
+
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="business_trip_ui"
+                                    id="business-no-radio" value="no" checked>
+                                <label class="form-check-label" for="business-no-radio">No</label>
+                            </div>
+                        </div>
+
+                        <input id="is-business-trip" name="is_business_trip" type="checkbox" class="d-none">
+
+                        <!-- CIF -->
+                        <div id="tax-id-container" class="mt-3 pt-3 border-top" style="display: none;">
+                            <div class="col-md-6">
+                                <label for="tax-id" class="b-label">
+                                    Identificación fiscal (CIF / NIF)
+                                    <span class="text-danger">*</span>
+                                </label>
+                                <input id="tax-id" name="tax_id" class="form-control b-input" maxlength="50"
+                                    placeholder="Ej. B12345678">
+                                <div class="small mt-2 text-secondary" style="font-size: .78rem;">
+                                    Obligatorio para emitir factura en reservas de empresa.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Peticiones especiales -->
+                <div class="b-card p-4 mb-3">
+                    <h2 class="b-section-title">
+                        <i class="bi bi-chat-left-text me-2" style="color: var(--b-blue);" aria-hidden="true"></i>
+                        Peticiones especiales
+                    </h2>
+
+                    <p class="small text-secondary mb-3" style="line-height: 1.7;">
+                        Las peticiones especiales no se pueden garantizar, pero el alojamiento hará todo lo posible por
+                        satisfacerlas.
+                        También puedes enviar tus peticiones después de realizar la reserva.
+                    </p>
+
+                    <label for="special-requests" class="b-label">
+                        ¿Necesitas algo especial?
+                        <span class="text-muted fw-normal">(opcional)</span>
+                    </label>
+
+                    <textarea id="special-requests" name="special_requests" class="form-control b-input" rows="3"
+                        placeholder="Escribe aquí tus preferencias o necesidades..."></textarea>
+                </div>
+
+                <!-- Hora de llegada -->
+                <div class="b-card p-4 mb-3">
+                    <h2 class="b-section-title">
+                        <i class="bi bi-clock me-2" style="color: var(--b-blue);" aria-hidden="true"></i>
+                        Tu hora de llegada
+                    </h2>
+
+                    <div class="b-info-strip mb-3">
+                        <i class="bi bi-check-circle flex-shrink-0" style="font-size: 1.1rem; color: var(--b-green);"
+                            aria-hidden="true"></i>
+                        <span>El alojamiento estará listo para el check-in a partir de las 15:00.</span>
+                    </div>
+
+                    <div class="col-md-6 mt-3">
+                        <label for="arrival-time" class="b-label">
+                            Hora aproximada de llegada <span class="text-danger">*</span>
+                        </label>
+                        <input id="arrival-time" name="arrival_time" type="time" class="form-control b-input" required>
+                        <div class="small mt-2 text-secondary" style="font-size: .78rem;">
+                            Utiliza la hora local del alojamiento.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Normas -->
+                <div class="b-card p-4 mb-4">
+                    <h2 class="b-section-title">
+                        <i class="bi bi-house-check me-2" style="color: var(--b-blue);" aria-hidden="true"></i>
+                        Normas de la casa
+                    </h2>
+
+                    <p class="small text-secondary mb-3">
+                        Antes de continuar, revisa las normas de tu alojamiento.
+                    </p>
+
+                    <ul class="list-unstyled small mb-3" style="line-height: 2;">
+                        <li>
+                            <i class="bi bi-check-circle-fill me-2" style="color: var(--b-green);"
+                                aria-hidden="true"></i>
+                            No se puede fumar.
+                        </li>
+                        <li>
+                            <i class="bi bi-check-circle-fill me-2" style="color: var(--b-green);"
+                                aria-hidden="true"></i>
+                            No se pueden celebrar fiestas o eventos.
+                        </li>
+                        <li>
+                            <i class="bi bi-check-circle-fill me-2" style="color: var(--b-green);"
+                                aria-hidden="true"></i>
+                            No se puede hacer ruido de 22:00 a 09:00.
+                        </li>
+                        <li>
+                            {% if property.allow_pets %}
+                            <i class="bi bi-check-circle-fill me-2" style="color: var(--b-green);"
+                                aria-hidden="true"></i>
+                            Se admiten mascotas.
+                            {% else %}
+                            <i class="bi bi-x-circle me-2 text-secondary" aria-hidden="true"></i>
+                            No se admiten mascotas.
+                            {% endif %}
+                        </li>
+                    </ul>
+
+                    <div class="small fw-semibold" style="color: #334155;">
+                        Al continuar, confirmas que has leído las normas de la casa.
+                    </div>
+                </div>
+
+                <!-- Errores -->
+                <div id="booking-form-error" class="alert alert-danger rounded-3" role="alert" aria-live="polite"
+                    hidden></div>
+
+                <!-- Acciones -->
+                <div class="checkout-footer d-flex justify-content-between align-items-center gap-3 pt-2">
+                    <button id="cancel-booking-details" type="button" class="b-btn-secondary">
+                        <i class="bi bi-arrow-left me-1" aria-hidden="true"></i>
+                        <span id="cancel-booking-details-text">Cancelar y volver</span>
+                    </button>
+
+                    <button id="submit-booking-details" type="submit" class="b-btn-primary">
+                        <span id="submit-booking-details-text">Siguiente paso</span>
+                        <i class="bi bi-arrow-right" aria-hidden="true"></i>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block script %}
+<script src="https://cdn.jsdelivr.net/npm/intl-tel-input@25/build/js/intlTelInput.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
+
+<script src="{% static 'bookings/booking_phone.js' %}"></script>
+<script src="{% static 'bookings/booking_country.js' %}"></script>
+<script src="{% static 'bookings/booking_details.js' %}"></script>
+{% endblock %}

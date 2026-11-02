@@ -5,7 +5,8 @@
 
 <head>
     <title>{% block title %}Alojamiento Vacacional{% endblock %}</title>
-    <link href="{% static 'bookings/styles.css' %}" rel="stylesheet">
+    <link href="{% static 'bookings/CSS/styles.css' %}" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'bookings/CSS/property-cards.css' %}">
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet"
         integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
@@ -23,25 +24,30 @@
                 aria-labelledby="offcanvasNavbarLabel">
                 <div class="offcanvas-header">
                     <a class="navbar-brand d-flex align-items-center" href="{% url 'index' %}">
-                        <img src="{% static 'bookings/alojamientovacacional.png' %}" alt="Logo" class="logo-custom-display">
+                        <img src="{% static 'bookings/alojamientovacacional.png' %}" alt="Logo"
+                            class="logo-custom-display">
                     </a>
                     <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
                 </div>
                 <div class="offcanvas-body">
                     <ul class="navbar-nav mx-auto pe-3 align-items-center">
-                        
+
                         <div class="solo-movil mt-0">
                             {% if user.is_authenticated %}
-                                <a href="{% url 'edit_profile' %}" class="primary-button text-nowrap" id="edit-button" style="margin-bottom: 10px;">Editar Perfil</a>
-                                <form method="post" action="{% url 'logout' %}">
-                                    {% csrf_token %}
-                                    <button type="submit" class="primary-button text-nowrap" id="log-out-button" style="margin-bottom: 10px;">
-                                        Cerrar Sesión
-                                    </button>
-                                </form>
+                            <a href="{% url 'edit_profile' %}" class="primary-button text-nowrap" id="edit-button"
+                                style="margin-bottom: 10px;">Editar Perfil</a>
+                            <form method="post" action="{% url 'logout' %}">
+                                {% csrf_token %}
+                                <button type="submit" class="primary-button text-nowrap" id="log-out-button"
+                                    style="margin-bottom: 10px;">
+                                    Cerrar Sesión
+                                </button>
+                            </form>
                             {% else %}
-                                <a href="{% url 'login' %}" class="primary-button text-nowrap" id="login-button" style="margin-bottom: 10px;">Iniciar Sesión</a>
-                                <a href="{% url 'register' %}" class="primary-button text-nowrap" id="sign-up-button" style="margin-bottom: 10px;">Registrarse</a>
+                            <a href="{% url 'login' %}" class="primary-button text-nowrap" id="login-button"
+                                style="margin-bottom: 10px;">Iniciar Sesión</a>
+                            <a href="{% url 'register' %}" class="primary-button text-nowrap" id="sign-up-button"
+                                style="margin-bottom: 10px;">Registrarse</a>
                             {% endif %}
                         </div>
 
@@ -50,18 +56,86 @@
                         </li>
 
                         {% if user.is_authenticated %}
+
+                        {% if user.is_staff %}
                         <li class="nav-item dropdown">
-                            <button class="nav-link dropdown-toggle mx-lg-2" data-bs-toggle="dropdown" aria-expanded="false">
-                                Viviendas
+                            <button class="nav-link dropdown-toggle mx-lg-2" type="button" data-bs-toggle="dropdown"
+                                aria-expanded="false">
+                                Usuarios
                             </button>
+
                             <ul class="dropdown-menu">
-                                <li><a class="dropdown-item" href="{% url 'create_property' %}">Registrar Vivienda</a></li>
-                                <li><a class="dropdown-item" href="{% url 'my_properties' %}">Mis Viviendas</a></li>
+                                <li>
+                                    <a class="dropdown-item" href="{% url 'manage_users' %}">
+                                        Gestionar Usuarios
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item" href="{% url 'manage_owner_requests' %}">
+                                        Solicitudes de propietarios
+                                    </a>
+                                </li>
                             </ul>
                         </li>
-                        <li class="nav-item">
-                            <a class="nav-link mx-lg-2" href="{% url 'my_bookings' %}">Mis Reservas</a>
+                        {% endif %}
+
+                        {% if user.is_approved_owner or user.is_staff %}
+                        <li class="nav-item dropdown">
+                            <button class="nav-link dropdown-toggle mx-lg-2" data-bs-toggle="dropdown"
+                                aria-expanded="false">
+                                Viviendas
+                            </button>
+
+                            <ul class="dropdown-menu">
+
+                                {% if user.is_staff %}
+                                <li>
+                                    <a class="dropdown-item" href="{% url 'manage_properties' %}">
+                                        Gestionar Viviendas
+                                    </a>
+                                </li>
+                                {% endif %}
+                                <li>
+                                    <a class="dropdown-item" href="{% url 'my_properties' %}">
+                                        Mis Viviendas
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item" href="{% url 'create_property' %}">
+                                        Registrar Vivienda
+                                    </a>
+                                </li>
+                            </ul>
                         </li>
+                        {% endif %}
+
+                        {% if user.is_staff %}
+                        <li class="nav-item dropdown">
+                            <button class="nav-link dropdown-toggle mx-lg-2" data-bs-toggle="dropdown"
+                                aria-expanded="false">
+                                Reservas
+                            </button>
+                            <ul class="dropdown-menu">
+                                <li>
+                                    <a class="dropdown-item" href="{% url 'manage_bookings' %}">
+                                        Gestionar Reservas
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item" href="{% url 'my_bookings' %}">
+                                        Mis Reservas
+                                    </a>
+                                </li>
+                            </ul>
+                        </li>
+                        {% else %}
+                        <li class="nav-item">
+                            <a class="nav-link mx-lg-2" href="{% url 'my_bookings' %}">
+                                Mis Reservas
+                            </a>
+                        </li>
+                        {% endif %}
+
                         {% endif %}
                     </ul>
                 </div>
@@ -69,23 +143,23 @@
             <div class="d-flex align-items-center buttons-container">
                 <div class="solo-pc">
                     {% if user.is_authenticated %}
-                        <a href="{% url 'edit_profile' %}" class="primary-button text-nowrap" id="edit-button">
-                            Editar Perfil
-                        </a>
+                    <a href="{% url 'edit_profile' %}" class="primary-button text-nowrap" id="edit-button">
+                        Editar Perfil
+                    </a>
 
-                        <form method="post" action="{% url 'logout' %}">
-                            {% csrf_token %}
-                            <button type="submit" class="primary-button text-nowrap" id="log-out-button">
-                                Cerrar Sesión
-                            </button>
-                        </form>
+                    <form method="post" action="{% url 'logout' %}">
+                        {% csrf_token %}
+                        <button type="submit" class="primary-button text-nowrap" id="log-out-button">
+                            Cerrar Sesión
+                        </button>
+                    </form>
                     {% else %}
-                        <a href="{% url 'login' %}" class="primary-button text-nowrap" id="login-button">
-                            Iniciar Sesión
-                        </a>
-                        <a href="{% url 'register' %}" class="primary-button text-nowrap" id="sign-up-button">
-                            Registrarse
-                        </a>
+                    <a href="{% url 'login' %}" class="primary-button text-nowrap" id="login-button">
+                        Iniciar Sesión
+                    </a>
+                    <a href="{% url 'register' %}" class="primary-button text-nowrap" id="sign-up-button">
+                        Registrarse
+                    </a>
                     {% endif %}
                 </div>
                 <button class="navbar-toggler" type="button" data-bs-toggle="offcanvas"

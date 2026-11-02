@@ -1,124 +1,97 @@
-let successBooking = false;
+
 let bookingReady = false;
 
-document.addEventListener('DOMContentLoaded', () => {
-    const propertyId = document.querySelector('#property-id').value;
-
-    const alertDiv = document.querySelector('#alert-booking-date');
-    const buttonDiv = document.querySelector('#booking-button');
-
-    const startDate = document.querySelector('#start-date');
-    const endDate = document.querySelector('#end-date');
-
-    function getCookie(name) {
-        let cookieValue = null;
-
-        if (document.cookie && document.cookie !== '') {
-            const cookies = document.cookie.split(';');
-
-            for (let i = 0; i < cookies.length; i++) {
-                const cookie = cookies[i].trim();
-
-                if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                    cookieValue = decodeURIComponent(
-                        cookie.substring(name.length + 1)
-                    );
-                    break;
-                }
-            }
-        }
-
-        return cookieValue;
-    }
+document.addEventListener("DOMContentLoaded", () => {
+    const propertyId = document.querySelector("#property-id").value;
+    const alertDiv = document.querySelector("#alert-booking-date");
+    const buttonDiv = document.querySelector("#booking-button");
+    const startDate = document.querySelector("#start-date");
+    const endDate = document.querySelector("#end-date");
 
     function showError(message) {
         bookingReady = false;
-        buttonDiv.classList.add('no-display');
+        buttonDiv.classList.add("no-display");
         alertDiv.textContent = message;
-        alertDiv.classList.remove('no-display');
+        alertDiv.classList.remove("no-display");
     }
 
     window.clearBookingSelection = function () {
         bookingReady = false;
-
         startDate.value = "";
         endDate.value = "";
-
-        buttonDiv.classList.add('no-display');
-
+        buttonDiv.classList.add("no-display");
         alertDiv.textContent = "";
-        alertDiv.classList.add('no-display');
+        alertDiv.classList.add("no-display");
     };
 
-    const csrftoken = getCookie('csrftoken');
-
-    function confirmBooking(start, end) {
-        if (successBooking || !bookingReady) {
-            return;
-        }
-
-        const url = `/confirm_booking/${propertyId}`;
-
-        fetch(url, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': csrftoken
-            },
-            body: JSON.stringify({
-                start: start,
-                end: end
-            })
-        })
-            .then(response => {
-                if (!response.ok) {
-                    return response.json().then(err => {
-                        throw err;
-                    });
-                }
-
-                return response.json();
-            })
-            .then(data => {
-                if (data.success) {
-                    successBooking = true;
-                    window.location.href = "/my_bookings";
-                }
-            })
-            .catch(error => {
-                showError(error.error || "Error al procesar la reserva.");
-            });
-    }
-
     function attachBookingButton(button) {
-        button.addEventListener('click', () => {
-            if (!bookingReady) {
-                return;
-            }
-
+        button.addEventListener("click", async () => {
+            if (!bookingReady) return;
+            
             button.disabled = true;
-            button.textContent = "Procesando...";
 
-            confirmBooking(
-                startDate.value,
-                endDate.value
-            );
+            try {
+                const response = await fetch(`/booking/${propertyId}/hold`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "X-CSRFToken": getCookie("csrftoken"),
+                    },
+                    body: JSON.stringify({
+                        start: startDate.value,
+                        end: endDate.value,
+                    }),
+                });
+
+                const result = await response.json();
+
+                if (!response.ok || !result.success) {
+                    alert(result.error || "No se pudieron retener las fechas.");
+                    return;
+                }
+
+                const params = new URLSearchParams({
+                    initial_date: startDate.value,
+                    final_date: endDate.value,
+                    hold_token: result.token,
+                });
+
+                window.location.href =
+                    `/booking/${propertyId}/details?${params.toString()}`;
+            } catch (error) {
+                alert("Error de conexión al intentar retener las fechas.");
+            } finally {
+                button.disabled = false;
+            }
         });
     }
 
+    function getCookie(name) {
+        const cookies = document.cookie ? document.cookie.split(";") : [];
+
+        for (const cookie of cookies) {
+            const item = cookie.trim();
+
+            if (item.startsWith(`${name}=`)) {
+                return decodeURIComponent(item.substring(name.length + 1));
+            }
+        }
+
+        return null;
+    }
+
     function createBookingButton() {
-        buttonDiv.classList.remove('no-display');
+        buttonDiv.classList.remove("no-display");
         buttonDiv.textContent = "";
 
-        const button = document.createElement('button');
-
-        button.textContent = "Confirmar Reserva";
-        button.id = 'confirm-booking-button';
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = "Crear reserva";
+        button.id = "confirm-booking-button";
         button.className =
             "btn btn-dark w-100 rounded-pill mt-3 mb-3 py-2";
 
         attachBookingButton(button);
-
         buttonDiv.appendChild(button);
 
         return button;
@@ -127,12 +100,12 @@ document.addEventListener('DOMContentLoaded', () => {
     window.validateBooking = function () {
         bookingReady = false;
 
-        if (startDate.value === "" || endDate.value === "") {
-            buttonDiv.classList.add('no-display');
+        if (!startDate.value || !endDate.value) {
+            buttonDiv.classList.add("no-display");
             return;
         }
 
-        buttonDiv.classList.remove('no-display');
+        buttonDiv.classList.remove("no-display");
 
         const initialDate = new Date(startDate.value);
         const finalDate = new Date(endDate.value);
@@ -141,48 +114,65 @@ document.addEventListener('DOMContentLoaded', () => {
         today.setHours(0, 0, 0, 0);
 
         if (initialDate < today) {
-            showError("La fecha de entrada no puede ser anterior al día de hoy.");
+            showError(
+                "La fecha de entrada no puede ser anterior al día de hoy."
+            );
             return;
         }
 
         if (initialDate >= finalDate) {
-            showError("La fecha de salida debe ser posterior a la de entrada.");
+            showError(
+                "La fecha de salida debe ser posterior a la de entrada."
+            );
             return;
         }
 
-        alertDiv.classList.add('no-display');
-        
-        let button = document.querySelector('#confirm-booking-button');
+        alertDiv.textContent = "";
+        alertDiv.classList.add("no-display");
+
+        let button = document.querySelector("#confirm-booking-button");
 
         if (!button) {
             button = createBookingButton();
         }
 
-        const url = `/booking/${propertyId}/?start=${startDate.value}&end=${endDate.value}`;
+        button.disabled = true;
 
-        fetch(url)
-            .then(response => {
+        const params = new URLSearchParams({
+            start: startDate.value,
+            end: endDate.value
+        });
+
+        fetch(`/booking/${propertyId}/?${params.toString()}`)
+            .then(async (response) => {
+                const data = await response.json();
+
                 if (!response.ok) {
-                    return response.json().then(err => {
-                        throw err;
-                    });
+                    throw new Error(
+                        data.error || "No se pudieron validar las fechas."
+                    );
                 }
 
-                return response.json();
+                return data;
             })
-            .then(data => {
+            .then((data) => {
                 if (data.available) {
                     bookingReady = true;
                 } else {
-                    showError("Las fechas seleccionadas ya no están disponibles.");
+                    showError(
+                        "Las fechas seleccionadas ya no están disponibles."
+                    );
                 }
             })
-            .catch(error => {
-                showError(error.error || "Error inesperado.");
+            .catch((error) => {
+                showError(error.message || "Error inesperado.");
+            })
+            .finally(() => {
+                button.disabled = false;
             });
-    }
+    };
 
-    const initialButton = document.querySelector('#confirm-booking-button');
+    const initialButton = document.querySelector("#confirm-booking-button");
 
     if (initialButton) {
         attachBookingButton(initialButton);

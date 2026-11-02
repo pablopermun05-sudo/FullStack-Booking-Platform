@@ -1,15 +1,32 @@
 from django.contrib.auth.models import AbstractUser
 from django.conf import settings
-from django.db import models
+from django.db import OperationalError, models, transaction
 from phonenumber_field.modelfields import PhoneNumberField
 from django.core.exceptions import ValidationError
 from datetime import date, timedelta
+from django.utils import timezone
+from builtins import property as python_property
+from decimal import Decimal, InvalidOperation
+from django.db.models import Q, DateTimeField, F, Func, Value
+from django.contrib.postgres.constraints import ExclusionConstraint
+from django.contrib.postgres.fields import DateRangeField, DateTimeRangeField, RangeOperators
+import random
+import time
+import uuid
+from django.core.validators import FileExtensionValidator
+from .storage import private_attachment_storage
+from .validators import validate_booking_attachment
+import os
+
+def booking_attachment_upload_to(instance, filename):
+    extension = os.path.splitext(filename)[1].lower()
+    return f"booking_attachments/{uuid.uuid4().hex}{extension}"
 
 class User(AbstractUser):
     first_name = models.CharField("Nombre", max_length=150, blank=False)
     last_name = models.CharField("Apellidos", max_length=150, blank=False)
     email = models.EmailField(unique=True)
-    phone_number = PhoneNumberField(null=True, blank=True, unique=True)
+    phone_number = PhoneNumberField(unique=True)
 
     class Meta:
         verbose_name = "Usuario"
@@ -17,6 +34,43 @@ class User(AbstractUser):
 
     def __str__(self):
         return self.username
+
+    @property
+    def is_approved_owner(self):
+        return hasattr(self, "owner_profile") and self.owner_profile.status == "APPROVED"
+
+class OwnerProfile(models.Model):
+    STATUS_CHOICES = [
+        ("PENDING", "Pendiente"),
+        ("APPROVED", "Aprobado"),
+        ("REJECTED", "Rechazado"),
+        ("REVOKED", "Permiso retirado"),
+    ]
+
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="owner_profile",
+    )
+    status = models.CharField(
+        max_length=10,
+        choices=STATUS_CHOICES,
+        default="PENDING",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "Perfil de propietario"
+        verbose_name_plural = "Perfiles de propietarios"
+
+    def __str__(self):
+        return f"{self.user} - {self.get_status_display()}"
+
+def can_manage_properties(user):
+    if not user.is_authenticated:
+        return False
+    return user.is_staff or user.is_approved_owner
 
 class Property(models.Model):
     title = models.CharField(max_length=255)
@@ -50,19 +104,400 @@ class Property(models.Model):
             raise ValidationError("El número de habitaciones no puede ser 0")
 
     def save(self, *args, **kwargs):
+        if self.location:
+            self.location = " ".join(self.location.split())
+
         self.full_clean()
         super().save(*args, **kwargs)
 
+class BookingDateRange(Func):
+    function = "DATERANGE"
+    output_field = DateRangeField()
+
+    def __init__(self, start, end, **extra):
+        super().__init__(
+            start,
+            end,
+            Value("[)"),
+            **extra,
+        )
+
+class BookingInventoryRange(Func):
+    output_field = DateTimeRangeField()
+
+    def __init__(
+        self,
+        created_at="created_at",
+        expires_at="expires_at",
+        status="status",
+        **extra,
+    ):
+        super().__init__(
+            F(created_at),
+            F(expires_at),
+            F(status),
+            **extra,
+        )
+
+    def as_sql(self, compiler, connection, **extra_context):
+        created_at, expires_at, status = self.source_expressions
+
+        created_sql, created_params = compiler.compile(created_at)
+        expires_sql, expires_params = compiler.compile(expires_at)
+        status_sql, status_params = compiler.compile(status)
+
+        sql = (
+            "CASE "
+            f"WHEN {status_sql} = 'CONFIRMED' "
+            f"THEN TSTZRANGE("
+            f"{created_sql}, "
+            f"'infinity'::timestamptz, "
+            f"'[)'"
+            f") "
+            f"WHEN {status_sql} = 'PENDING' "
+            f"AND {expires_sql} IS NOT NULL "
+            f"AND {expires_sql} > {created_sql} "
+            f"THEN TSTZRANGE("
+            f"{created_sql}, "
+            f"{expires_sql}, "
+            f"'[)'"
+            f") "
+            "ELSE TSTZRANGE(NULL, NULL, '[)') "
+            "END"
+        )
+
+        params = (
+            *created_params,
+            *expires_params,
+            *status_params,
+        )
+
+        return sql, params
+
+class BookingHoldInventoryRange(Func):
+    output_field = DateTimeRangeField()
+
+    def __init__(
+        self,
+        created_at="created_at",
+        expires_at="expires_at",
+        **extra,
+    ):
+        super().__init__(
+            F(created_at),
+            F(expires_at),
+            **extra,
+        )
+
+    def as_sql(self, compiler, connection, **extra_context):
+        created_at, expires_at = self.source_expressions
+
+        created_sql, created_params = compiler.compile(created_at)
+        expires_sql, expires_params = compiler.compile(expires_at)
+
+        sql = (
+            "CASE "
+            f"WHEN {expires_sql} > {created_sql} "
+            f"THEN TSTZRANGE("
+            f"{created_sql}, {expires_sql}, '[)'"
+            f") "
+            "ELSE TSTZRANGE(NULL, NULL, '[)') "
+            "END"
+        )
+
+        params = (
+            *expires_params,
+            *created_params,
+            *created_params,
+            *expires_params,
+        )
+
+        return sql, params
+        
 class Booking(models.Model):
-    tenant = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="bookings")
+    STATUS_CHOICES = [
+        ("PENDING", "Pendiente"),
+        ("CONFIRMED", "Confirmada"),
+        ("CANCELLED", "Cancelada"),
+        ("EXPIRED", "Expirada"),
+    ]
+
+    ACTIVE_STATUSES = ("PENDING", "CONFIRMED")
+
+    tenant = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="bookings",
+        null=True,
+        blank=True,
+    )
+
+    guest_first_name = models.CharField("Nombre del huésped", max_length=150)
+    guest_last_name = models.CharField("Apellidos del huésped", max_length=150)
+    guest_email = models.EmailField("Email del huésped")
+    guest_phone_number = PhoneNumberField("Teléfono del huésped")
+
+    guest_country = models.CharField("País del huésped", max_length=100)
+    guest_region = models.CharField("Región del huésped", max_length=100, blank=True)
+    guest_city = models.CharField("Ciudad del huésped", max_length=100)
+    guest_postal_code = models.CharField("Código postal del huésped", max_length=20, blank=True)
+    guest_address = models.CharField("Dirección del huésped", max_length=255)
+
+    is_for_self = models.BooleanField("La reserva es para sí mismo", default=True)
+    is_business_trip = models.BooleanField("Viaje de trabajo", default=False)
+
+    tax_id = models.CharField("CIF", max_length=50, blank=True)
+
+    guest_count = models.PositiveIntegerField("Número de huéspedes", default=1)
+
+    special_requests = models.TextField("Peticiones especiales", blank=True)
+    arrival_time = models.TimeField("Hora de llegada")
     property = models.ForeignKey(Property, on_delete=models.CASCADE, related_name="bookings")
     initial_date = models.DateField()
     final_date = models.DateField()
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(default=timezone.now, editable=False)
+    status = models.CharField(
+        max_length=10,
+        choices=STATUS_CHOICES,
+        default="PENDING",
+    )
+    expires_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    def is_expired(self):
+        if self.status != "PENDING":
+            return False
+        if self.expires_at is None:
+            return False
+        return self.expires_at <= timezone.now()
+
+    def confirm(self):
+        with transaction.atomic():
+            booking = type(self).objects.select_for_update().get(pk=self.pk)
+
+            if booking.status != "PENDING":
+                self.status = booking.status
+                return False
+
+            if booking.is_expired():
+                booking.status = "EXPIRED"
+                booking.save_base(update_fields=["status"])
+                self.status = booking.status
+                return False
+
+            booking.status = "CONFIRMED"
+            booking.save(update_fields=["status"])
+            self.status = booking.status
+
+            return True
+
+    def expire(self):
+        with transaction.atomic():
+            booking = type(self).objects.select_for_update().get(pk=self.pk)
+
+            if not booking.is_expired():
+                self.status = booking.status
+                return False
+
+            booking.status = "EXPIRED"
+            booking.save_base(update_fields=["status"])
+
+            self.status = booking.status
+            return True
+
+    def cancel(self):
+        with transaction.atomic():
+            booking = type(self).objects.select_for_update().get(
+                pk=self.pk
+            )
+
+            if booking.status not in ("PENDING", "CONFIRMED"):
+                self.status = booking.status
+                return False
+
+            booking.status = "CANCELLED"
+            booking.save(update_fields=["status"])
+
+            self.status = booking.status
+            return True
+    
+    @classmethod
+    def expire_pending_bookings(cls):
+        now = timezone.now()
+
+        return cls.objects.filter(
+            status="PENDING",
+            expires_at__isnull=False,
+            expires_at__lte=now,
+        ).update(status="EXPIRED")
+
+    @classmethod
+    def create_pending(cls, *, tenant, property, initial_date, final_date, expires_at, guest_first_name, guest_last_name, guest_email, guest_phone_number, guest_country, guest_city, guest_address, guest_count, arrival_time, guest_region="", guest_postal_code="", is_for_self=True, is_business_trip=False, tax_id="", special_requests="", hold_token=None):
+        max_retries = 3
+
+        for attempt in range(max_retries):
+            try:
+                with transaction.atomic():
+                    locked_property = Property.objects.select_for_update().get(
+                        pk=property.pk
+                    )
+
+                    now = timezone.now()
+
+                    if expires_at <= now:
+                        raise ValidationError(
+                            "La retención ha caducado. Selecciona las fechas de nuevo."
+                        )
+
+                    if not hold_token:
+                        raise ValidationError(
+                            "Es necesaria una retención válida para crear la reserva."
+                        )
+
+                    hold = BookingHold.objects.select_for_update().filter(
+                        token=hold_token,
+                        property=locked_property,
+                        initial_date=initial_date,
+                        final_date=final_date,
+                        expires_at__gt=now,
+                    ).first()
+
+                    if hold is None:
+                        raise ValidationError(
+                            "La retención ha caducado o ya no es válida."
+                        )
+
+                    if hold.expires_at != expires_at:
+                        raise ValidationError(
+                            "El vencimiento de la retención no coincide."
+                        )
+
+                    holds = BookingHold.objects.filter(
+                        property=locked_property,
+                        initial_date__lt=final_date,
+                        final_date__gt=initial_date,
+                        expires_at__gt=now,
+                    ).exclude(token=hold.token)
+
+                    if holds.exists():
+                        raise ValidationError(
+                            "Estas fechas están retenidas por otra sesión."
+                        )
+
+                    booking = cls(
+                        tenant=tenant,
+                        property=locked_property,
+                        initial_date=initial_date,
+                        final_date=final_date,
+                        status="PENDING",
+                        expires_at=expires_at,
+                        guest_first_name=guest_first_name,
+                        guest_last_name=guest_last_name,
+                        guest_email=guest_email,
+                        guest_phone_number=guest_phone_number,
+                        guest_country=guest_country,
+                        guest_region=guest_region,
+                        guest_city=guest_city,
+                        guest_postal_code=guest_postal_code,
+                        guest_address=guest_address,
+                        is_for_self=is_for_self,
+                        is_business_trip=is_business_trip,
+                        tax_id=tax_id,
+                        guest_count=guest_count,
+                        special_requests=special_requests,
+                        arrival_time=arrival_time,
+                    )
+
+                    booking.full_clean()
+                    booking.save()
+
+                    availability = PropertyAvailability.get_for_range(
+                        locked_property,
+                        initial_date,
+                        final_date,
+                    )
+
+                    BookingNight.objects.bulk_create(
+                        [
+                            BookingNight(
+                                booking=booking,
+                                date=night["date"],
+                                price_per_night=night["price_per_night"],
+                            )
+                            for night in availability
+                        ]
+                    )
+
+                    return booking
+
+            except OperationalError as exc:
+                # PostgreSQL: 40P01 = deadlock_detected
+                cause = exc.__cause__
+
+                sqlstate = (
+                    getattr(cause, "sqlstate", None)
+                    or getattr(cause, "pgcode", None)
+                )
+
+                if sqlstate != "40P01":
+                    raise
+
+                if attempt == max_retries - 1:
+                    raise
+
+                # Pequeña espera aleatoria para evitar que ambos hilos
+                # vuelvan a chocar inmediatamente.
+                time.sleep(random.uniform(0.05, 0.20))
+
+    @python_property
+    def total_price(self):
+        return sum(
+            (night.price_per_night for night in self.nights.all()),
+            Decimal("0"),
+        )
 
     class Meta:
         verbose_name = "Reserva"
         verbose_name_plural = "Reservas"
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(initial_date__lt=F("final_date")),
+                name="booking_valid_date_range",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    ~Q(status="PENDING")
+                    | Q(expires_at__isnull=False)
+                ),
+                name="booking_pending_requires_expiration",
+            ),
+            ExclusionConstraint(
+                name="booking_no_concurrent_inventory_overlap",
+                condition=(
+                    Q(initial_date__lt=F("final_date"))
+                    & Q(status__in=["PENDING", "CONFIRMED"])
+                ),
+                expressions=[
+                    (
+                        BookingDateRange(
+                            "initial_date",
+                            "final_date",
+                        ),
+                        RangeOperators.OVERLAPS,
+                    ),
+                    (
+                        F("property"),
+                        RangeOperators.EQUAL,
+                    ),
+                    (
+                        BookingInventoryRange(),
+                        RangeOperators.OVERLAPS,
+                    ),
+                ],
+            ),
+        ]
 
     def __str__(self):
         return f"Reserva de {self.tenant} en {self.property.title}"
@@ -81,8 +516,16 @@ class Booking(models.Model):
             raise ValidationError("La fecha de entrada debe cumplir con la antelación exigida por el propietario de la vivienda.")
 
         # El dueño no puede reservar su propiedad
-        if self.tenant == self.property.owner:
+        if self.tenant is not None and self.tenant == self.property.owner:
             raise ValidationError("No puedes reservar tu propia vivienda.")
+
+        if self.guest_count < 1:
+            raise ValidationError("El número de huéspedes debe ser al menos 1.")
+
+        if self.is_business_trip and not self.tax_id:
+            raise ValidationError(
+                "El CIF es obligatorio para las reservas por viaje de trabajo."
+            )
 
         total_nights = (self.final_date - self.initial_date).days
 
@@ -114,23 +557,569 @@ class Booking(models.Model):
                 f"{arrival_availability['min_nights']} noches."
             )
 
-        # Buscamos reservas existentes que choquen
+        if self.status == "PENDING":
+            if self.expires_at is None:
+                raise ValidationError(
+                    "Una reserva pendiente debe tener una fecha de expiración."
+                )
+
+            if self.expires_at <= timezone.now():
+                raise ValidationError(
+                    "La fecha de expiración debe ser posterior al momento actual."
+                )
+
+            if self.expires_at <= self.created_at:
+                raise ValidationError(
+                    "La fecha de expiración debe ser posterior a la fecha de creación."
+                )
+
+        # Buscamos reservas existentes que choquen.
+        # Una reserva CONFIRMED siempre bloquea.
+        # Una reserva PENDING solo bloquea mientras no haya expirado.
+        now = timezone.now()
+
         bookings = Booking.objects.filter(
             property=self.property,
             initial_date__lt=self.final_date,
-            final_date__gt=self.initial_date
+            final_date__gt=self.initial_date,
+        ).filter(
+            Q(status="CONFIRMED")
+            |
+            Q(
+                status="PENDING",
+                expires_at__gt=now,
+            )
         )
 
-        # Si el objeto ya existe en la BD (es una edición), lo excluimos del chequeo
         if self.pk:
             bookings = bookings.exclude(pk=self.pk)
 
         if bookings.exists():
-            raise ValidationError("Ya hay una reserva en esas fechas")
+            raise ValidationError(
+                "Ya hay una reserva en esas fechas"
+            )
+
+    def validate_constraints(self, exclude=None):
+        exclude = exclude or set()
+
+        for constraint in self._meta.constraints:
+            # Django no puede validar correctamente esta ExclusionConstraint
+            # dinámica en Python sobre instancias nuevas. PostgreSQL la aplica
+            # como garantía definitiva de concurrencia.
+            if constraint.name == "booking_no_concurrent_inventory_overlap":
+                continue
+
+            constraint.validate(
+                self.__class__,
+                self,
+                exclude=exclude,
+            )
     
+    def save(self, *args, **kwargs):
+        update_fields = kwargs.get("update_fields")
+
+        # Si solo se actualizan campos de estado o expiración,
+        # no es necesario validar de nuevo todos los datos de la reserva.
+        if update_fields is not None and set(update_fields).issubset(
+            {"status", "expires_at"}
+        ):
+            super().save(*args, **kwargs)
+            return
+
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+class BookingChangeProposal(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "PENDING", "Pending"
+        ACCEPTED = "ACCEPTED", "Accepted"
+        REJECTED = "REJECTED", "Rejected"
+        EXPIRED = "EXPIRED", "Expired"
+        CANCELLED = "CANCELLED", "Cancelled"
+        
+    original_booking_snapshot = models.JSONField(
+        null=True,
+        blank=True,
+    )
+    booking = models.ForeignKey(
+        Booking,
+        on_delete=models.CASCADE,
+        related_name="change_proposals",
+    )
+    reason = models.TextField(
+        max_length=1000,
+        blank=True,
+        default="",
+    )
+    proposed_initial_date = models.DateField()
+    proposed_final_date = models.DateField()
+    proposed_guest_count = models.PositiveIntegerField()
+    proposed_total_price = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal("0.00"),
+    )
+
+    proposed_nightly_prices = models.JSONField(default=list, blank=True)
+
+    access_token_hash = models.CharField(
+        max_length=64,
+        unique=True,
+        null=True,
+        blank=True,
+        editable=False,
+    )
+
+    status = models.CharField(
+        max_length=10,
+        choices=Status.choices,
+        default=Status.PENDING,
+    )
+    created_at = models.DateTimeField(
+        default=timezone.now,
+        editable=False,
+    )
+    expires_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["booking"],
+                condition=Q(status="PENDING"),
+                name="one_pending_change_proposal_per_booking",
+            ),
+            models.CheckConstraint(
+                condition=Q(proposed_initial_date__lt=models.F("proposed_final_date")),
+                name="change_proposal_valid_date_range",
+            ),
+            models.CheckConstraint(
+                condition=Q(proposed_guest_count__gte=1),
+                name="change_proposal_positive_guest_count",
+            ),
+        ]
+        ordering = ["-created_at"]
+
+    def clean(self):
+        super().clean()
+
+        errors = {}
+
+        if (
+            self.proposed_initial_date
+            and self.proposed_final_date
+            and self.proposed_initial_date >= self.proposed_final_date
+        ):
+            errors["proposed_final_date"] = (
+                "The check-out date must be after the check-in date."
+            )
+
+        if self.proposed_guest_count is not None:
+            if self.proposed_guest_count < 1:
+                errors["proposed_guest_count"] = (
+                    "At least one guest is required."
+                )
+            elif self.booking_id and self.booking.property_id:
+                property_obj = self.booking.property
+                capacity = property_obj.adults + property_obj.children
+
+                if self.proposed_guest_count > capacity:
+                    errors["proposed_guest_count"] = (
+                        f"This property accommodates at most {capacity} guests."
+                    )
+
+        if self.created_at and self.expires_at:
+            if self.expires_at <= self.created_at:
+                errors["expires_at"] = (
+                    "The expiration time must be after the creation time."
+                )
+
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        if self.created_at is None:
+            self.created_at = timezone.now()
+
+        if self.expires_at is None:
+            self.expires_at = self.created_at + timedelta(hours=48)
+
+        # Al cambiar únicamente el estado de una propuesta existente,
+        # no volver a validar la fecha de caducidad.
+        update_fields = kwargs.get("update_fields")
+        if update_fields is not None:
+            update_fields = set(update_fields)
+            kwargs["update_fields"] = update_fields
+
+            if update_fields.issubset({"status"}):
+                return super().save(*args, **kwargs)
+
+        self.full_clean()
+        super().save(*args, **kwargs)
+    
+    def calculate_price_snapshot(self):
+        nightly_rates = PropertyAvailability.get_for_range(
+            self.booking.property,
+            self.proposed_initial_date,
+            self.proposed_final_date,
+        )
+
+        nightly_prices = [
+            {
+                "date": item["date"].isoformat(),
+                "price_per_night": str(item["price_per_night"]),
+            }
+            for item in nightly_rates
+        ]
+
+        total = sum(
+            (item["price_per_night"] for item in nightly_rates),
+            Decimal("0.00"),
+        )
+
+        return nightly_prices, total
+
+    def is_expired(self):
+        return (
+            self.status == self.Status.PENDING
+            and self.expires_at is not None
+            and timezone.now() >= self.expires_at
+        )
+
+    @classmethod
+    def expire_pending_proposals(cls):
+        now = timezone.now()
+
+        # Solo obtenemos candidatas; el estado definitivo se valida después de adquirir los bloqueos.
+        proposal_ids = list(
+            cls.objects.filter(
+                status=cls.Status.PENDING,
+                expires_at__isnull=False,
+                expires_at__lte=now,
+            ).values_list("pk", flat=True)
+        )
+
+        expired_count = 0
+
+        for proposal_id in proposal_ids:
+            with transaction.atomic():
+                # Leer la FK sin bloquear la propuesta para mantener el orden Booking -> BookingChangeProposal.
+                booking_id = (
+                    cls.objects.filter(pk=proposal_id)
+                    .values_list("booking_id", flat=True)
+                    .first()
+                )
+
+                if booking_id is None:
+                    continue
+
+                booking = (
+                    Booking.objects.select_for_update()
+                    .filter(pk=booking_id)
+                    .first()
+                )
+
+                if booking is None:
+                    continue
+
+                proposal = (
+                    cls.objects.select_for_update()
+                    .filter(pk=proposal_id)
+                    .first()
+                )
+
+                if proposal is None:
+                    continue
+
+                # Revalidar tras esperar por los bloqueos.
+                if (
+                    proposal.status != cls.Status.PENDING
+                    or proposal.expires_at is None
+                    or proposal.expires_at > timezone.now()
+                ):
+                    continue
+
+                proposal.status = cls.Status.EXPIRED
+                proposal.save(update_fields=["status"])
+                expired_count += 1
+
+        return expired_count
+
+    def __str__(self):
+        return f"Change proposal for booking {self.booking_id} ({self.status})"
+
+class BookingAttachment(models.Model):
+    change_proposal = models.ForeignKey(
+        "BookingChangeProposal",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="attachments",
+    )
+    change_audit = models.ForeignKey(
+        "BookingChangeAudit",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="attachments",
+    )
+    cancellation_request = models.ForeignKey(
+        "BookingCancellationRequest",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="attachments",
+    )
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="booking_attachments",
+    )
+    file = models.FileField(
+        storage=private_attachment_storage,
+        upload_to=booking_attachment_upload_to,
+        validators=[
+            FileExtensionValidator(
+                allowed_extensions=[
+                    "pdf",
+                    "jpg",
+                    "jpeg",
+                    "png",
+                    "webp",
+                    "docx",
+                    "xlsx",
+                    "pptx",
+                    "txt",
+                    "csv",
+                ]
+            ),
+            validate_booking_attachment,
+        ],
+    )
+    original_filename = models.CharField(max_length=255)
+    size = models.PositiveBigIntegerField()
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["uploaded_at"]
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    (
+                        Q(change_proposal__isnull=False)
+                        & Q(change_audit__isnull=True)
+                        & Q(cancellation_request__isnull=True)
+                    )
+                    | (
+                        Q(change_proposal__isnull=True)
+                        & Q(change_audit__isnull=False)
+                        & Q(cancellation_request__isnull=True)
+                    )
+                    | (
+                        Q(change_proposal__isnull=True)
+                        & Q(change_audit__isnull=True)
+                        & Q(cancellation_request__isnull=False)
+                    )
+                ),
+                name="booking_attachment_exactly_one_parent",
+            ),
+        ]
+
+    def clean(self):
+        super().clean()
+
+        parent_count = sum(
+            (
+                self.change_proposal_id is not None,
+                self.change_audit_id is not None,
+                self.cancellation_request_id is not None,
+            )
+        )
+
+        if parent_count != 1:
+            raise ValidationError(
+                "El archivo debe pertenecer exactamente a una acción de reserva."
+            )
+
+        if self.file and self.file.size > 10 * 1024 * 1024:
+            raise ValidationError(
+                "Cada archivo puede ocupar como máximo 10 MB."
+            )
+
+        if self.file and not self.original_filename:
+            self.original_filename = os.path.basename(self.file.name)[:255]
+
+    def save(self, *args, **kwargs):
+        if self.file:
+            self.size = self.file.size
+
+        if self.file and not self.original_filename:
+            self.original_filename = os.path.basename(self.file.name)[:255]
+
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.original_filename
+
+class BookingChangeAudit(models.Model):
+    booking = models.ForeignKey(
+        Booking,
+        on_delete=models.PROTECT,
+        related_name="change_audits",
+    )
+    actor = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name="booking_change_audits",
+        null=True,
+        blank=True,
+    )
+    reason = models.TextField(
+        max_length=1000,
+        blank=True,
+        default="",
+    )
+    changed_at = models.DateTimeField(auto_now_add=True)
+    before_values = models.JSONField()
+    after_values = models.JSONField()
+
+    class Meta:
+        ordering = ["-changed_at"]
+
+    def __str__(self):
+        return (
+            f"Booking change audit #{self.pk} "
+            f"for booking #{self.booking_id}"
+        )
+
+class BookingCancellationRequest(models.Model):
+    class RequestType(models.TextChoices):
+        OWNER_REQUEST = "OWNER_REQUEST", "Owner cancellation request"
+        ADMIN_PROPOSAL = "ADMIN_PROPOSAL", "Admin cancellation proposal"
+        ADMIN_FORCED = "ADMIN_FORCED", "Admin forced cancellation"
+        CUSTOMER_REQUEST = "CUSTOMER_REQUEST", "Customer cancellation request"
+
+    class Status(models.TextChoices):
+        PENDING = "PENDING", "Pending"
+        ACCEPTED = "ACCEPTED", "Accepted"
+        REJECTED = "REJECTED", "Rejected"
+        CANCELLED = "CANCELLED", "Cancelled"
+        EXPIRED = "EXPIRED", "Expired"
+        EXECUTED = "EXECUTED", "Executed directly"
+
+    booking = models.ForeignKey(
+        Booking,
+        on_delete=models.PROTECT,
+        related_name="cancellation_requests",
+    )
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="booking_cancellation_requests",
+    )
+    request_type = models.CharField(
+        max_length=20,
+        choices=RequestType.choices,
+    )
+    status = models.CharField(
+        max_length=10,
+        choices=Status.choices,
+        default=Status.PENDING,
+    )
+
+    # Hash del token utilizado para acceder a la solicitud desde el correo.
+    # Solo se utilizará en solicitudes que requieran respuesta del cliente.
+    access_token_hash = models.CharField(
+        max_length=64,
+        unique=True,
+        null=True,
+        blank=True,
+        editable=False,
+    )
+
+    reason = models.TextField(max_length=1000)
+
+    created_at = models.DateTimeField(
+        default=timezone.now,
+        editable=False,
+    )
+    responded_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+    expires_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["booking"],
+                condition=models.Q(status="PENDING"),
+                name="one_pending_cancellation_request_per_booking",
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(reason=""),
+                name="cancellation_request_reason_not_empty",
+            ),
+        ]
+
+    def clean(self):
+        super().clean()
+        errors = {}
+
+        if not self.reason or not self.reason.strip():
+            errors["reason"] = "A cancellation reason is required."
+
+        if (
+            self.created_at
+            and self.expires_at
+            and self.expires_at <= self.created_at
+        ):
+            errors["expires_at"] = (
+                "The expiration time must be after the creation time."
+            )
+
+        if errors:
+            raise ValidationError(errors)
+
     def save(self, *args, **kwargs):
         self.full_clean()
         super().save(*args, **kwargs)
+
+    def __str__(self):
+        return (
+            f"Cancellation request for booking #{self.booking_id} "
+            f"({self.status})"
+        )
+
+class BookingNight(models.Model):
+    booking = models.ForeignKey(
+        Booking,
+        on_delete=models.CASCADE,
+        related_name="nights",
+    )
+    date = models.DateField()
+    price_per_night = models.DecimalField(
+        max_digits=7,
+        decimal_places=2,
+    )
+
+    def __str__(self):
+        return f"{self.booking} - {self.date}"
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["booking", "date"],
+                name="unique_booking_night_date",
+            ),
+        ]
 
 class PropertyAvailability(models.Model):
     STATUS_CHOICES = [
@@ -222,21 +1211,104 @@ class PropertyAvailability(models.Model):
         return availability
 
     def clean(self):
-        if self.price_per_night <= 0:
-            raise ValidationError(
+        super().clean()
+
+        errors = {}
+
+        if self.price_per_night in (None, ""):
+            errors["price_per_night"] = (
                 "El precio por noche debe ser mayor que 0"
             )
+        else:
+            try:
+                price = Decimal(str(self.price_per_night))
+                if not price.is_finite() or price <= 0:
+                    errors["price_per_night"] = (
+                        "El precio por noche debe ser mayor que 0"
+                    )
+            except (InvalidOperation, TypeError, ValueError):
+                errors["price_per_night"] = (
+                    "Introduce un precio por noche válido"
+                )
 
-        if self.min_nights < 1:
-            raise ValidationError(
+        if isinstance(self.min_nights, bool):
+            errors["min_nights"] = (
                 "El número mínimo de noches debe ser al menos 1"
             )
+        else:
+            try:
+                min_nights = int(self.min_nights)
+                if str(min_nights) != str(self.min_nights).strip() or min_nights < 1:
+                    errors["min_nights"] = (
+                        "El número mínimo de noches debe ser al menos 1"
+                    )
+            except (TypeError, ValueError):
+                errors["min_nights"] = (
+                    "El número mínimo de noches debe ser al menos 1"
+                )
 
-        if self.date < date.today():
-            raise ValidationError(
+        if self.date is not None and self.date < date.today():
+            errors["date"] = (
                 "No se puede configurar la disponibilidad de una fecha pasada"
             )
+
+        if errors:
+            raise ValidationError(errors)
 
     def save(self, *args, **kwargs):
         self.full_clean()
         super().save(*args, **kwargs)
+
+class BookingHold(models.Model):
+    property = models.ForeignKey(
+        Property,
+        on_delete=models.CASCADE,
+        related_name="booking_holds",
+    )
+    initial_date = models.DateField()
+    final_date = models.DateField()
+    token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    created_at = models.DateTimeField(default=timezone.now, editable=False)
+    expires_at = models.DateTimeField()
+
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["property", "expires_at"]),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(initial_date__lt=F("final_date")),
+                name="booking_hold_valid_date_range",
+            ),
+            ExclusionConstraint(
+                name="booking_hold_no_concurrent_overlap",
+                condition=Q(initial_date__lt=F("final_date")),
+                expressions=[
+                    (
+                        BookingDateRange(
+                            "initial_date",
+                            "final_date",
+                        ),
+                        RangeOperators.OVERLAPS,
+                    ),
+                    (
+                        F("property"),
+                        RangeOperators.EQUAL,
+                    ),
+                    (
+                        BookingHoldInventoryRange(),
+                        RangeOperators.OVERLAPS,
+                    ),
+                ],
+            ),
+        ]
+
+    def is_expired(self):
+        return self.expires_at <= timezone.now()
+
+    def __str__(self):
+        return (
+            f"Retención {self.property_id}: "
+            f"{self.initial_date} - {self.final_date}"
+        )

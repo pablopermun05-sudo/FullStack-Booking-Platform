@@ -1,0 +1,1073 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Solicitud de cancelación de reserva</title>
+
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            background: #f3f5f7;
+            color: #263238;
+            font-family: Arial, Helvetica, sans-serif;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 850px;
+            margin: 40px auto;
+            padding: 0 18px;
+        }
+
+        .header {
+            background: #173f35;
+            color: #ffffff;
+            padding: 30px;
+            border-radius: 14px 14px 0 0;
+        }
+
+        .header h1 {
+            margin: 5px 0;
+            font-size: 28px;
+            line-height: 1.3;
+        }
+
+        .header p {
+            margin-bottom: 0;
+            color: #d5e8df;
+        }
+
+        .content {
+            background: #ffffff;
+            padding: 30px;
+            border-radius: 0 0 14px 14px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.06);
+        }
+
+        .section {
+            margin-top: 28px;
+        }
+
+        .section h2 {
+            margin: 0 0 14px;
+            color: #263b32;
+            font-size: 19px;
+            line-height: 1.4;
+        }
+
+        .status {
+            display: inline-block;
+            padding: 6px 12px;
+            margin-top: 15px;
+            border-radius: 20px;
+            background: #fff0cc;
+            color: #805c13;
+            font-size: 13px;
+            font-weight: bold;
+        }
+
+        .status-final {
+            background: #e9eeeb;
+            color: #43534c;
+        }
+
+        .notice {
+            margin-bottom: 20px;
+            padding: 18px;
+            border-radius: 9px;
+            background: #f7f9f8;
+            border: 1px solid #e5ebe7;
+            overflow-wrap: anywhere;
+        }
+
+        .notice p {
+            margin: 0;
+        }
+
+        .notice p+p {
+            margin-top: 8px;
+        }
+
+        .notice strong {
+            color: #263b32;
+        }
+
+        .muted {
+            color: #65716c;
+            font-size: 13px;
+        }
+
+        .details {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+        }
+
+        .detail {
+            min-width: 0;
+            padding: 16px;
+            background: #f7f9f8;
+            border: 1px solid #e5ebe7;
+            border-radius: 9px;
+        }
+
+        .detail span {
+            display: block;
+            margin-bottom: 5px;
+            color: #65716c;
+            font-size: 13px;
+        }
+
+        .detail strong {
+            font-size: 16px;
+            overflow-wrap: anywhere;
+        }
+
+        .cancellation-info-card {
+            min-width: 0;
+            padding: 22px;
+            background: #f7f9f8;
+            border: 1px solid #e5ebe7;
+            border-radius: 12px;
+        }
+
+        .cancellation-info-heading {
+            display: flex;
+            align-items: center;
+            gap: 13px;
+            padding-bottom: 18px;
+            border-bottom: 1px solid #e3e9e5;
+        }
+
+        .cancellation-info-heading>div {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .cancellation-info-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            width: 44px;
+            height: 44px;
+            border-radius: 10px;
+            background: #e6efe9;
+            color: #173f35;
+            font-size: 20px;
+        }
+
+        .cancellation-info-heading h3 {
+            margin: 0;
+            color: #263b32;
+            font-size: 16px;
+            font-weight: 700;
+            line-height: 1.4;
+        }
+
+        .cancellation-info-subtitle {
+            margin: 4px 0 0;
+            color: #65716c;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .cancellation-reason-content {
+            margin-top: 18px;
+            padding: 17px 19px;
+            background: #ffffff;
+            border: 1px solid #e5ebe7;
+            border-left: 3px solid #527c68;
+            border-radius: 6px 9px 9px 6px;
+        }
+
+        .cancellation-reason-content p {
+            margin: 0;
+            color: #34443c;
+            font-size: 15px;
+            line-height: 1.8;
+            overflow-wrap: anywhere;
+            word-break: normal;
+        }
+
+        .cancellation-reason-content .empty-message {
+            color: #65716c;
+            font-style: italic;
+        }
+
+        .attachment-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin: 18px 0 0;
+            padding: 0;
+            list-style: none;
+        }
+
+        .attachment-item {
+            display: flex;
+            align-items: center;
+            gap: 13px;
+            min-width: 0;
+            padding: 14px;
+            background: #ffffff;
+            border: 1px solid #e3e9e5;
+            border-radius: 9px;
+            transition:
+                border-color 0.2s ease,
+                background-color 0.2s ease,
+                box-shadow 0.2s ease;
+        }
+
+        .attachment-item:hover {
+            border-color: #b8cec0;
+            background: #fcfdfc;
+            box-shadow: 0 2px 8px rgba(23, 63, 53, 0.04);
+        }
+
+        .attachment-file-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            width: 42px;
+            height: 46px;
+            border-radius: 8px;
+            background: #edf4ef;
+            color: #285b43;
+            font-size: 22px;
+        }
+
+        .attachment-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .attachment-link {
+            display: inline-block;
+            max-width: 100%;
+            color: #214f3b;
+            font-size: 14px;
+            font-weight: 700;
+            line-height: 1.5;
+            text-decoration: none;
+            overflow-wrap: anywhere;
+            word-break: break-word;
+        }
+
+        .attachment-link:hover {
+            color: #173f35;
+            text-decoration: underline;
+            text-underline-offset: 3px;
+        }
+
+        .attachment-link:focus-visible,
+        .attachment-download:focus-visible,
+        .button:focus-visible,
+        .back-link:focus-visible {
+            outline: 2px solid #527c68;
+            outline-offset: 3px;
+        }
+
+        .attachment-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 3px;
+            margin-top: 4px;
+            color: #758078;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+
+        .attachment-download {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            width: 38px;
+            height: 38px;
+            border: 1px solid #dce6df;
+            border-radius: 8px;
+            background: #f7faf8;
+            color: #285b43;
+            text-decoration: none;
+            font-size: 16px;
+            transition:
+                background-color 0.2s ease,
+                border-color 0.2s ease;
+        }
+
+        .attachment-download:hover {
+            background: #e6efe9;
+            border-color: #b8cec0;
+        }
+
+        .empty-attachments {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            padding: 26px 16px 8px;
+            color: #65716c;
+            text-align: center;
+        }
+
+        .empty-attachments>i {
+            color: #8a9c90;
+            font-size: 28px;
+        }
+
+        .empty-attachments p {
+            margin: 0;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .expiry {
+            margin-top: 25px;
+            padding: 18px;
+            background: #fff8e8;
+            color: #775b20;
+            border-radius: 9px;
+        }
+
+        .expiry strong {
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        .expiry p {
+            margin-bottom: 0;
+        }
+
+        .expiry-expired {
+            background: #fff0f0;
+            color: #8b3030;
+        }
+
+        .actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-top: 25px;
+        }
+
+        .actions form {
+            flex: 1;
+            display: flex;
+            min-width: 0;
+        }
+
+        .button {
+            display: inline-block;
+            flex: 1;
+            min-width: 180px;
+            padding: 14px 20px;
+            border: 0;
+            border-radius: 7px;
+            text-align: center;
+            text-decoration: none;
+            font-family: inherit;
+            font-size: 15px;
+            font-weight: bold;
+            line-height: 1.5;
+            cursor: pointer;
+            transition:
+                background-color 0.2s ease,
+                border-color 0.2s ease,
+                transform 0.15s ease;
+        }
+
+        .button:active {
+            transform: translateY(1px);
+        }
+
+        .accept {
+            color: #ffffff;
+            background: #173f35;
+        }
+
+        .accept:hover {
+            background: #245747;
+        }
+
+        .reject {
+            color: #a12c2c;
+            background: #ffffff;
+            border: 1px solid #d9bcbc;
+        }
+
+        .reject:hover {
+            background: #fff5f5;
+            border-color: #c99595;
+        }
+
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 22px;
+            color: #214f3b;
+            font-size: 14px;
+            font-weight: bold;
+            text-decoration: none;
+        }
+
+        .back-link:hover {
+            text-decoration: underline;
+            text-underline-offset: 3px;
+        }
+
+        a {
+            overflow-wrap: anywhere;
+        }
+
+        button,
+        input {
+            font-family: inherit;
+        }
+
+        @media (max-width: 560px) {
+            .container {
+                margin: 16px auto;
+                padding: 0 10px;
+            }
+
+            .header,
+            .content {
+                padding: 22px 18px;
+            }
+
+            .header {
+                border-radius: 12px 12px 0 0;
+            }
+
+            .content {
+                border-radius: 0 0 12px 12px;
+            }
+
+            .header h1 {
+                font-size: 23px;
+            }
+
+            .details {
+                grid-template-columns: 1fr;
+            }
+
+            .detail {
+                padding: 14px;
+            }
+
+            .actions {
+                flex-direction: column;
+            }
+
+            .actions form {
+                width: 100%;
+            }
+
+            .button {
+                width: 100%;
+                min-width: 0;
+            }
+
+            .cancellation-info-card {
+                padding: 16px;
+            }
+
+            .cancellation-info-heading {
+                gap: 10px;
+                padding-bottom: 15px;
+            }
+
+            .cancellation-info-icon {
+                width: 39px;
+                height: 39px;
+                font-size: 18px;
+            }
+
+            .cancellation-info-heading h3 {
+                font-size: 15px;
+            }
+
+            .cancellation-info-subtitle {
+                font-size: 12px;
+            }
+
+            .cancellation-reason-content {
+                margin-top: 14px;
+                padding: 14px;
+            }
+
+            .cancellation-reason-content p {
+                font-size: 14px;
+                line-height: 1.75;
+            }
+
+            .attachment-list {
+                margin-top: 14px;
+                gap: 9px;
+            }
+
+            .attachment-item {
+                gap: 10px;
+                padding: 11px;
+            }
+
+            .attachment-file-icon {
+                width: 36px;
+                height: 40px;
+                font-size: 19px;
+            }
+
+            .attachment-link {
+                font-size: 13px;
+            }
+
+            .attachment-meta {
+                font-size: 11px;
+            }
+
+            .attachment-download {
+                width: 34px;
+                height: 34px;
+                font-size: 14px;
+            }
+
+            .empty-attachments {
+                padding: 22px 8px 6px;
+            }
+
+            .expiry {
+                padding: 15px;
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+
+            *,
+            *::before,
+            *::after {
+                scroll-behavior: auto !important;
+                transition-duration: 0.01ms !important;
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+            }
+        }
+
+        /* =========================================
+   DOCUMENTACIÓN ADJUNTA - SOLICITUD CANCELACIÓN
+   Mismo diseño que la propuesta de cambio
+   ========================================= */
+
+        .booking-proposal-attachments {
+            min-width: 0;
+        }
+
+        .proposal-info-card {
+            min-width: 0;
+            padding: 22px;
+            background: #f7f9f8;
+            border: 1px solid #e5ebe7;
+            border-radius: 12px;
+        }
+
+        .proposal-info-heading {
+            display: flex;
+            align-items: center;
+            gap: 13px;
+            padding-bottom: 18px;
+            border-bottom: 1px solid #e3e9e5;
+        }
+
+        .proposal-info-heading>div {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .proposal-info-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            width: 44px;
+            height: 44px;
+            border-radius: 10px;
+            background: #e6efe9;
+            color: #173f35;
+            font-size: 20px;
+        }
+
+        .proposal-info-heading h3 {
+            margin: 0;
+            color: #263b32;
+            font-size: 16px;
+            font-weight: 700;
+            line-height: 1.4;
+        }
+
+        .proposal-info-subtitle {
+            margin: 4px 0 0;
+            color: #65716c;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .proposal-attachments-card {
+            background: #f7f9f8;
+        }
+
+        .proposal-attachment-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin: 18px 0 0;
+            padding: 0;
+            list-style: none;
+        }
+
+        .proposal-attachment-item {
+            display: flex;
+            align-items: center;
+            gap: 13px;
+            min-width: 0;
+            padding: 14px;
+            background: #ffffff;
+            border: 1px solid #e3e9e5;
+            border-radius: 9px;
+            transition:
+                border-color 0.2s ease,
+                background-color 0.2s ease,
+                box-shadow 0.2s ease;
+        }
+
+        .proposal-attachment-item:hover {
+            border-color: #b8cec0;
+            background: #fcfdfc;
+            box-shadow: 0 2px 8px rgba(23, 63, 53, 0.04);
+        }
+
+        .proposal-attachment-file-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            width: 42px;
+            height: 46px;
+            border-radius: 8px;
+            background: #edf4ef;
+            color: #285b43;
+            font-size: 22px;
+        }
+
+        .proposal-attachment-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .proposal-attachment-link {
+            display: inline-block;
+            max-width: 100%;
+            color: #214f3b;
+            font-size: 14px;
+            font-weight: 700;
+            line-height: 1.5;
+            text-decoration: none;
+            overflow-wrap: anywhere;
+            word-break: break-word;
+        }
+
+        .proposal-attachment-link:hover {
+            color: #173f35;
+            text-decoration: underline;
+            text-underline-offset: 3px;
+        }
+
+        .proposal-attachment-link:focus-visible,
+        .proposal-attachment-download:focus-visible {
+            outline: 2px solid #527c68;
+            outline-offset: 3px;
+        }
+
+        .proposal-attachment-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 3px;
+            margin-top: 4px;
+            color: #758078;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+
+        .proposal-attachment-size {
+            color: #758078;
+        }
+
+        .proposal-attachment-download {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            width: 38px;
+            height: 38px;
+            border: 1px solid #dce6df;
+            border-radius: 8px;
+            background: #f7faf8;
+            color: #285b43;
+            text-decoration: none;
+            font-size: 16px;
+            transition:
+                background-color 0.2s ease,
+                border-color 0.2s ease;
+        }
+
+        .proposal-attachment-download:hover {
+            background: #e6efe9;
+            border-color: #b8cec0;
+        }
+
+        .proposal-empty-attachments {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            padding: 26px 16px 8px;
+            color: #65716c;
+            text-align: center;
+        }
+
+        .proposal-empty-attachments>i {
+            color: #8a9c90;
+            font-size: 28px;
+        }
+
+        .proposal-empty-attachments p {
+            margin: 0;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        @media (max-width: 560px) {
+            .proposal-info-card {
+                padding: 16px;
+            }
+
+            .proposal-info-heading {
+                gap: 10px;
+                padding-bottom: 15px;
+            }
+
+            .proposal-info-icon {
+                width: 39px;
+                height: 39px;
+                font-size: 18px;
+            }
+
+            .proposal-info-heading h3 {
+                font-size: 15px;
+            }
+
+            .proposal-info-subtitle {
+                font-size: 12px;
+            }
+
+            .proposal-attachment-list {
+                margin-top: 14px;
+                gap: 9px;
+            }
+
+            .proposal-attachment-item {
+                gap: 10px;
+                padding: 11px;
+            }
+
+            .proposal-attachment-file-icon {
+                width: 36px;
+                height: 40px;
+                font-size: 19px;
+            }
+
+            .proposal-attachment-link {
+                font-size: 13px;
+            }
+
+            .proposal-attachment-meta {
+                font-size: 11px;
+            }
+
+            .proposal-attachment-download {
+                width: 34px;
+                height: 34px;
+                font-size: 14px;
+            }
+
+            .proposal-empty-attachments {
+                padding: 22px 8px 6px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+
+        {% if invalid_link %}
+
+        <div class="header">
+            <h1>Enlace no válido</h1>
+            <p>No se puede acceder a esta solicitud de cancelación.</p>
+        </div>
+
+        <div class="content">
+            <p>
+                El enlace es incorrecto, ha caducado o la solicitud ya no está disponible.
+            </p>
+        </div>
+
+        {% else %}
+
+        <div class="header">
+            <div>GESTIÓN DE RESERVA</div>
+
+            <h1>Solicitud de cancelación</h1>
+
+            <p>{{ property.title }}</p>
+
+            <div class="status {% if not can_respond %}status-final{% endif %}">
+                {% if can_respond %}
+                Pendiente de respuesta
+                {% else %}
+                {{ cancellation.get_status_display }}
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="content">
+
+            {% if messages %}
+            <div class="notice">
+                {% for message in messages %}
+                <p>{{ message }}</p>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            {% if status_message %}
+            <div class="notice">
+                <strong>{{ status_message }}</strong>
+
+                <p class="muted">
+                    Ya no puedes responder a esta solicitud desde esta página.
+                </p>
+            </div>
+            {% endif %}
+
+            <!-- Datos de la reserva -->
+            <section class="section">
+                <h2>Datos de la reserva</h2>
+
+                <div class="details">
+                    <div class="detail">
+                        <span>Fecha de entrada</span>
+                        <strong>{{ booking.initial_date|date:"d/m/Y" }}</strong>
+                    </div>
+
+                    <div class="detail">
+                        <span>Fecha de salida</span>
+                        <strong>{{ booking.final_date|date:"d/m/Y" }}</strong>
+                    </div>
+
+                    <div class="detail">
+                        <span>Número de huéspedes</span>
+                        <strong>{{ booking.guest_count }}</strong>
+                    </div>
+
+                    <div class="detail">
+                        <span>Precio total de la reserva</span>
+                        <strong>{{ booking.total_price|floatformat:2 }} €</strong>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Motivo de la cancelación -->
+            <section class="section cancellation-reason">
+                <h2>Motivo de la cancelación</h2>
+
+                <div class="cancellation-info-card">
+                    <div class="cancellation-info-heading">
+                        <span class="cancellation-info-icon" aria-hidden="true">
+                            <i class="bi bi-chat-left-text"></i>
+                        </span>
+
+                        <div>
+                            <h3>Motivo indicado por el alojamiento</h3>
+
+                            <p class="cancellation-info-subtitle">
+                                Explicación proporcionada para solicitar la cancelación
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="cancellation-reason-content">
+                        {% if cancellation.reason %}
+                        <p>{{ cancellation.reason|linebreaksbr }}</p>
+                        {% else %}
+                        <p class="empty-message">
+                            No se ha especificado un motivo para esta solicitud.
+                        </p>
+                        {% endif %}
+                    </div>
+                </div>
+            </section>
+
+            <!-- Documentación adjunta -->
+            <section class="section booking-proposal-attachments">
+                <h2>Documentación adjunta</h2>
+
+                <div class="proposal-info-card proposal-attachments-card">
+
+                    <div class="proposal-info-heading">
+                        <span class="proposal-info-icon" aria-hidden="true">
+                            <i class="bi bi-paperclip"></i>
+                        </span>
+
+                        <div>
+                            <h3>Archivos de la solicitud</h3>
+
+                            <p class="proposal-info-subtitle">
+                                Documentación proporcionada por el alojamiento
+                            </p>
+                        </div>
+                    </div>
+
+                    {% if attachments %}
+
+                    <ul class="proposal-attachment-list">
+                        {% for attachment in attachments %}
+
+                        <li class="proposal-attachment-item">
+
+                            <span class="proposal-attachment-file-icon" aria-hidden="true">
+                                <i class="bi bi-file-earmark-text"></i>
+                            </span>
+
+                            <div class="proposal-attachment-info">
+
+                                <a class="proposal-attachment-link"
+                                    href="{% url 'download_booking_cancellation_attachment' attachment.id %}?token={{ access_token|urlencode }}">
+                                    {{ attachment.original_filename|default:"Descargar adjunto" }}
+                                </a>
+
+                                <div class="proposal-attachment-meta">
+                                    <span>Documento adjunto</span>
+
+                                    {% if attachment.size %}
+                                    <span class="proposal-attachment-size">
+                                        · {{ attachment.size|filesizeformat }}
+                                    </span>
+                                    {% endif %}
+                                </div>
+
+                            </div>
+
+                            <a class="proposal-attachment-download"
+                                href="{% url 'download_booking_cancellation_attachment' attachment.id %}?token={{ access_token|urlencode }}"
+                                aria-label="Descargar {{ attachment.original_filename|default:'documento adjunto' }}"
+                                title="Descargar archivo">
+                                <i class="bi bi-download" aria-hidden="true"></i>
+                            </a>
+
+                        </li>
+
+                        {% endfor %}
+                    </ul>
+
+                    {% else %}
+
+                    <div class="proposal-empty-attachments">
+                        <i class="bi bi-folder2-open" aria-hidden="true"></i>
+
+                        <p>
+                            No se ha adjuntado documentación a esta solicitud.
+                        </p>
+                    </div>
+
+                    {% endif %}
+
+                </div>
+            </section>
+
+            <!-- Fecha límite para responder -->
+            <div class="expiry">
+
+                <strong>Fecha límite para responder</strong>
+
+                {{ expires_at_local|date:"d/m/Y" }}
+                a las {{ expires_at_local|date:"H:i" }}
+
+                <p class="muted">
+                    Si no respondes antes de esa fecha, la propuesta caducará.
+                </p>
+
+            </div>
+
+            <!-- Acciones -->
+            {% if can_respond %}
+
+            <section class="section">
+                <h2>¿Qué deseas hacer?</h2>
+
+                <p>
+                    Si aceptas la solicitud, la reserva se cancelará.
+                    Si la rechazas, la reserva continuará activa, siempre que
+                    no exista otra causa que modifique su estado.
+                </p>
+
+                <div class="actions">
+
+                    <form method="post" action="{% url 'accept_booking_cancellation' cancellation.id %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="token" value="{{ access_token }}">
+                        <button class="button accept" type="submit">
+                            <i class="bi bi-check-circle" aria-hidden="true"></i>
+                            Aceptar cancelación
+                        </button>
+                    </form>
+
+                    <form method="post" action="{% url 'reject_booking_cancellation' cancellation.id %}"
+                        onsubmit="return confirm('¿Seguro que quieres rechazar esta solicitud de cancelación?');">
+                        {% csrf_token %}
+                        <input type="hidden" name="token" value="{{ access_token }}">
+                        <button class="button reject" type="submit">
+                            <i class="bi bi-x-circle" aria-hidden="true"></i>
+                            Rechazar cancelación
+                        </button>
+                    </form>
+
+                </div>
+            </section>
+
+            {% endif %}
+
+            <!-- Pie -->
+            <p class="muted" style="margin-top: 30px;">
+                Notificación de reserva de {{ property.title }}.
+                Si tienes dudas, contacta con el alojamiento.
+            </p>
+
+        </div>
+
+        {% endif %}
+
+    </div>
+</body>
+
+</html>
