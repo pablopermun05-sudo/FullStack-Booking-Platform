@@ -365,8 +365,34 @@ def my_bookings(request):
 class PropertyForm(ModelForm):
     class Meta:
         model = Property
-        fields = ("title", "description", "location", "image", "notice_period_days", "default_price_per_night", "default_min_nights", "children", "adults", "rooms", "allow_pets")
+        fields = (
+            "title",
+            "description",
+            "location",
+            "image",
+            "notice_period_days",
+            "default_price_per_night",
+            "default_min_nights",
+            "children",
+            "adults",
+            "rooms",
+            "allow_pets",
+        )
 
+        labels = {
+            "title": "Título",
+            "description": "Descripción",
+            "location": "Ubicación",
+            "image": "Imagen de la propiedad",
+            "notice_period_days": "Antelación mínima para reservar (días)",
+            "default_price_per_night": "Precio por noche (€)",
+            "default_min_nights": "Estancia mínima (noches)",
+            "children": "Número de niños",
+            "adults": "Número de adultos",
+            "rooms": "Número de habitaciones",
+            "allow_pets": "¿Se admiten mascotas?",
+        }
+        
 @login_required
 def manage_property(request, property_id=None):
     if not can_manage_properties(request.user):

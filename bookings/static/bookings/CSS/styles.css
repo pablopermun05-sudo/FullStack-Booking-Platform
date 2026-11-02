@@ -5321,6 +5321,21 @@ textarea.b-input {
     margin-bottom: 0;
 }
 
+/* Antelación mínima y estancia mínima */
+.property-page #div_id_notice_period_days,
+.property-page #div_id_default_min_nights {
+    display: flex;
+    flex-direction: column;
+}
+
+/* Etiquetas con la misma altura */
+.property-page #div_id_notice_period_days > label,
+.property-page #div_id_default_min_nights > label {
+    min-height: 48px;
+    display: block;
+    margin-bottom: 8px;
+}
+
 /* En tabletas y móviles, quitar el margen */
 @media (max-width: 600px) {
     .property-page .property-fields-row #div_id_allow_pets {
